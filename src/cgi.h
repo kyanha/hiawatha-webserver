@@ -63,11 +63,11 @@ char *find_cgi_header(char *buffer, char *header);
 
 /* FastCGI server loadbalancer
  */
-void init_load_balancer(t_fcgi_server *fcgi_server);
+int init_load_balancer(t_fcgi_server *fcgi_server);
 t_connect_to *select_connect_to(t_fcgi_server *fcgi_server, t_ip_addr *client_ip);
 t_fcgi_server *fcgi_server_match(t_fcgi_server *fcgi_server, t_charlist *fastcgi, char *extension);
 t_fcgi_server *find_fcgi_server(t_fcgi_server *fcgi_server, char *id);
-void check_load_balancer(t_config *config, time_t now);
+void manage_load_balancer(t_config *config, time_t now);
 
 /* Normal CGI
  */

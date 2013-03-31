@@ -1,3 +1,26 @@
+hiawatha (9.0) stable; urgency=low
+
+  * Clients handled via thread pool instead of creating threads on the fly.
+  * ThreadPoolSize option added.
+  * Header option added to URL Toolkit.
+  * Improved client SSL certificate handling. Environment variables renamed.
+  * PolarSSL updated to version 1.2.6.
+  * Improved Reverse Proxy caching support for requests with URL parameters.
+  * CacheMinFilesize option removed.
+  * DenyBot option removed. Use UrlToolkit's Header option instead.
+  * OldBrowser option removed from URL Toolkit. Use Header option instead.
+  * Improved UrlToolkit rule testing in wigwam.
+  * Small bugfixes and improvements.
+
+ -- Hugo Leisink <hugo@leisink.net>  Thu, 28 Mar 2013 11:46:52 +0100
+
+hiawatha (8.8.1) stable; urgency=medium
+
+  * Bugfix: Incorrect size of buffer for poll() can lead to a crash
+    when using Tomahawk.
+
+ -- Hugo Leisink <hugo@leisink.net>  Tue,  5 Mar 2013 15:27:01 +0100
+
 hiawatha (8.8) stable; urgency=low
 
   * Caching for Reverse Proxy. CacheRProxyExtensions option added.
@@ -101,7 +124,7 @@ hiawatha (8.0) stable; urgency=low
   * Replaced Autoconf with CMake. Many thanks to Sander Niemeijer.
   * Replaced OpenSSL with PolarSSL. Many thanks to Paul Bakker.
   * AllowedCiphers and DHparameters options removed.
-  * Added IE7 to UrlToolkit's OldBrowser list, removed IE5.
+  * Added IE7 to URL Toolkit's OldBrowser list, removed IE5.
   * MaxUrlLength option added, can return 414 Request-URI Too Long.
   * Changed default value of TriggerOnCGIstatus to 'no'.
   * Equalized format of logfiles.
@@ -151,7 +174,7 @@ hiawatha (7.6) stable; urgency=low
 
 hiawatha (7.5) stable; urgency=low
 
-  * OldBrowser option added to URL toolkit.
+  * OldBrowser option added to URL Toolkit.
   * Improved mimetype configuration.
   * Do-not-track HTTP header support.
   * Password file entries can now be created with Wigwam.
@@ -190,8 +213,8 @@ hiawatha (7.3) stable; urgency=low
 
 hiawatha (7.2) stable; urgency=low
 
-  * URL toolkit code restructured.
-  * UseSSL option added to URL toolkit.
+  * URL Toolkit code restructured.
+  * UseSSL option added to URL Toolkit.
   * Digest HTTP authentication works with htdigest(1) created password files.
   * Small improvements.
 
@@ -220,7 +243,7 @@ hiawatha (7.0) stable; urgency=low
 
 hiawatha (6.19) stable; urgency=low
 
-  * Expire option added to URL toolkit.
+  * Expire option added to URL Toolkit.
   * HideProxy option added.
   * UNIX socket support for connections to FastCGI daemons.
   * ExploitLogfile option added.
@@ -231,9 +254,9 @@ hiawatha (6.19) stable; urgency=low
 hiawatha (6.18) stable; urgency=low
 
   * DenyBody and BanOnDeniedBody options added.
-  * PreventCMDi and BanOnCMDi options removed. DenyBody and UrlToolkit offer
+  * PreventCMDi and BanOnCMDi options removed. DenyBody and URL Toolkit offer
     better functionality.
-  * Ban option added to URL toolkit.
+  * Ban option added to URL Toolkit.
   * UseGZfile now first looks for .gz file instead of after requested file
     does not exist.
   * Changed duplicate hostnames in configuration from blocking error to
@@ -347,9 +370,9 @@ hiawatha (6.9) stable; urgency=low
 hiawatha (6.8) stable; urgency=low
 
   * XSLT parameter support.
-  * 'URL rewriting' has been renamed to 'URL toolkit' (because rewriting
+  * 'URL rewriting' has been renamed to 'URL Toolkit' (because rewriting
     is just one of the four options of this feature).
-  * FastCGI option added to URL toolkit.
+  * FastCGI option added to URL Toolkit.
   * WaitForCGI option added.
   * Small bugfixes and improvements.
 

@@ -48,7 +48,7 @@ typedef struct type_admin {
 void increment_counter(int counter);
 void increment_transfer(int counter, long bytes);
 
-void init_tomahawk_module(void);
+int  init_tomahawk_module(void);
 int  add_admin(int sock);
 void remove_admin(int sock);
 void check_admin_list(void);

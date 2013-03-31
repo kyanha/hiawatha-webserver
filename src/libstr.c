@@ -547,18 +547,30 @@ bool hostname_match(char *hostname, char *pattern) {
 }
 
 bool extension_from_uri(char *line, char *extension, size_t size) {
-	char *dot, *qmark;
+	char *c, *dot = NULL, *qmark = NULL;
 	size_t len;
 
-	if ((dot = strrchr(line, '.')) == NULL) {
+	if ((line == NULL) || (extension == NULL)) {
 		return false;
 	}
-	dot++;
 
-	if ((qmark = strchr(dot, '?')) == NULL) {
+	c = line;
+	while (*c != '\0') {
+		if (*c == '?') {
+			qmark = c;
+			break;
+		} else if (*c == '.') {
+			dot = c + 1;
+		}
+		c++;
+	}
+
+	if (dot == NULL) {
+		return false;
+	} else if (qmark == NULL) {
 		len = strlen(dot);
 	} else {
-		len = qmark - line;
+		len = qmark - dot;
 	}
 
 	if (len >= size) {

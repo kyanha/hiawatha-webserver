@@ -26,6 +26,7 @@
 #include "global.h"
 #include "alternative.h"
 #include "libstr.h"
+#include "liblist.h"
 #include "libfs.h"
 #include "libip.h"
 #ifdef ENABLE_TOOLKIT
@@ -557,11 +558,38 @@ int check_main_config(char *config_dir) {
 }
 
 #ifdef ENABLE_TOOLKIT
+int add_header(t_http_header **headers, char *env_key, char *header_key) {
+	char *env_value;
+	t_http_header *new;
+
+	if ((env_value = getenv(env_key)) == NULL) {
+		return 0;
+	}
+
+	if ((new = (t_http_header*)malloc(sizeof(t_http_header))) == NULL) {
+		return -1;
+	}
+
+	new->value_offset = strlen(header_key) + 2;
+	new->length = new->value_offset + strlen(env_value) + 1;
+	if ((new->data = (char*)malloc(new->length)) == NULL) {
+		free(new);
+		return -1;
+	}
+	sprintf(new->data, "%s: %s", header_key, env_value);
+	new->next = *headers;
+
+	*headers = new;
+	
+	return 0;
+}
+
 void check_url_toolkit(char *config_dir, char **toolkit_id) {
 	t_line *config = NULL;
 	char input[MAX_INPUT_SIZE + 1], **id, *url, current_dir[MAX_PATH];
 	t_url_toolkit *url_toolkit, *toolkit = NULL, *new_toolkit;
 	t_toolkit_options options;
+	t_http_header *http_headers;
 	bool in_rule_section = false;
 	int result = 0;
 
@@ -642,6 +670,13 @@ void check_url_toolkit(char *config_dir, char **toolkit_id) {
 		id++;
 	} while (*id != NULL);
 
+	/* HTTP headers
+	 */
+	http_headers = NULL;
+	add_header(&http_headers, "HTTP_HOST", "Host");
+	add_header(&http_headers, "HTTP_REFERER", "Referer");
+	add_header(&http_headers, "HTTP_USER_AGENT", "User-Agent");
+
 	/* Start testing
 	 */
 	input[MAX_INPUT_SIZE] = '\0';
@@ -660,9 +695,9 @@ void check_url_toolkit(char *config_dir, char **toolkit_id) {
 		}
 
 #ifdef ENABLE_SSL
-		init_toolkit_options(&options, ".", url_toolkit, false, false, NULL);
+		init_toolkit_options(&options, ".", url_toolkit, false, false, http_headers);
 #else
-		init_toolkit_options(&options, ".", url_toolkit, false, NULL);
+		init_toolkit_options(&options, ".", url_toolkit, false, http_headers);
 #endif
 
 		id = toolkit_id;
@@ -778,9 +813,9 @@ void create_digest_password(char *username, char *realm) {
 
 void show_help(char *wigwam) {
 	printf("Usage: %s [options]\n", wigwam);
-	printf("Options: -b <username>: create password file entry for basic HTTP authentication.\n");
+	printf("Options: -b <username>: create password file entry for Basic HTTP authentication.\n");
 	printf("         -c <path>: path to where the configration files are located.\n");
-	printf("         -d <username> <realm>: create password file entry for digest HTTP authentication.\n");
+	printf("         -d <username> <realm>: create password file entry for Digest HTTP authentication.\n");
 	printf("         -h: show this information and exit.\n");
 	printf("         -q: don't print the test results.\n");
 #ifdef ENABLE_TOOLKIT

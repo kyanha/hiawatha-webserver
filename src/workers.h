@@ -9,13 +9,20 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _HTTPAUTH_H
-#define _HTTPAUTH_H
+#ifndef _WORKERS_H
+#define _WORKERS_H
 
-#include "session.h"
+#include "config.h"
 
-int  init_httpauth_module(void);
-bool group_oke(t_session *session, char *user, t_charlist *group);
-int  http_authentication_result(t_session *session, bool access_on_pwdfile_missing);
+int  start_worker(t_session *session);
+#ifdef ENABLE_THREAD_POOL
+int  init_workers_module(int pool_size);
+void manage_thread_pool(void);
+#ifdef ENABLE_TOMAHAWK
+int  count_threads_in_pool(void);
+int  count_waiting_workers(void);
+int  count_threads_marked_quit(void);
+#endif
+#endif
 
 #endif

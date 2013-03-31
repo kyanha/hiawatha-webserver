@@ -5,6 +5,14 @@ if [ ! -f /mach_kernel ]; then
 	exit
 fi
 
+# Check for CMake
+#
+cmake --version 2> /dev/null
+if [ $? != 0 ]; then
+	echo "CMake is not installed but required for building Hiawatha."
+	exit
+fi
+
 # Checking for tools required for building a MacOS X package
 #
 echo "-- Checking for required tools"

@@ -170,7 +170,9 @@ int init_monitor_module(t_config *config) {
 	stats_delay = (int)config->monitor_stats_interval / TASK_RUNNER_INTERVAL;
 	force_sync_buffer = FORCE_SYNC_BUFFER;
 
-	pthread_mutex_init(&monitor_buffer_mutex, NULL);
+	if (pthread_mutex_init(&monitor_buffer_mutex, NULL) != 0) {
+		return -1;
+	}
 
 	return 0;
 }

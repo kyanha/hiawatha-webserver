@@ -24,6 +24,7 @@
 #include "libstr.h"
 #include "tomahawk.h"
 #include "client.h"
+#include "workers.h"
 #ifdef ENABLE_CACHE
 #include "cache.h"
 #endif
@@ -66,13 +67,15 @@ static void clear_counters(void) {
 
 /* Initialize Tomahawk
  */
-void init_tomahawk_module(void) {
+int init_tomahawk_module(void) {
 	time_t t;
 	struct tm *s;
 
     adminlist = NULL;
 	current_admin = 0;
-	pthread_mutex_init(&tomahawk_mutex, NULL);
+	if (pthread_mutex_init(&tomahawk_mutex, NULL) != 0) {
+		return -1;
+	}
 
 	time(&t);
 	s = localtime(&t);
@@ -80,6 +83,8 @@ void init_tomahawk_module(void) {
 	strftime(start_time, TIMESTAMP_SIZE - 1, "%a %d %b %Y %T %z", s);
 
 	clear_counters();
+
+	return 0;
 }
 
 /* An administrator has connected to Tomahawk
@@ -94,7 +99,7 @@ int add_admin(int sock) {
 	}
 
 	fprintf(new->fp, "\n\033[02;31mWelcome to Tomahawk, the Hiawatha command shell\033[00m\n");
-	fprintf(new->fp, "Password: \0337\033[00;30;40m"); /* Save cursor position and change color to black */
+	fprintf(new->fp, "Password: \033[00;30;40m"); /* Change color to black */
 	fflush(new->fp);
 
 	new->next = adminlist;
@@ -237,6 +242,9 @@ static void show_help(FILE *fp) {
 #endif
 				"       clients     : show the connected clients\n"
 				"       status      : show general information\n"
+#ifdef ENABLE_THREAD_POOL
+				"       threads     : show thread pool information\n"
+#endif
 				"  quit/exit        : quit Tomahawk\n"
 				"  unban <ip>       : unban an IP address\n"
 				"        all        : unban all IP addresses\n");
@@ -265,6 +273,14 @@ static void show_status(FILE *fp) {
 	fprintf(fp, "  Connections denied: %7lu\n", counters[COUNTER_DENY]);
 	fprintf(fp, "  Exploit attempts  : %7lu\n", counters[COUNTER_EXPLOIT]);
 }
+
+#ifdef ENABLE_THREAD_POOL
+static void show_thread_pool(FILE *fp) {
+	fprintf(fp, "  Thread pool size: %7d\n", count_threads_in_pool());
+	fprintf(fp, "  Threads asleep  : %7d\n", count_waiting_workers());
+	fprintf(fp, "  Threads quiting : %7d\n", count_threads_marked_quit());
+}
+#endif
 
 static int run_tomahawk(char *line, FILE *fp, t_config *config) {
 	char *cmd, *param, *param2;
@@ -359,6 +375,8 @@ static int run_tomahawk(char *line, FILE *fp, t_config *config) {
 			print_client_list(fp);
 		} else if (strcmp(param, "status") == 0) {
 			show_status(fp);
+		} else if (strcmp(param, "threads") == 0) {
+			show_thread_pool(fp);
 		} else {
 			fprintf(fp, "  can't show that!\n");
 		}
@@ -419,7 +437,7 @@ int handle_admin(t_admin *admin, t_config *config) {
 		} else if (admin->authenticated) {
 			retval = run_tomahawk(remove_spaces(line), admin->fp, config);
 		} else {
-			fprintf(admin->fp, "\0338\033[A\033[K\0338\n"); /* Restore cursor position and color and erase to end of line */
+			fprintf(admin->fp, "\033[A\033[K\033[m\n"); /* Move cursor up, clear line and reset color */
 
 			pwd = remove_spaces(line);
 			md5((unsigned char*)pwd, strlen(pwd), digest);

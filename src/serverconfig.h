@@ -203,7 +203,6 @@ typedef struct type_host {
 	t_auth_method   auth_method;
 	char            *groupfile;
 	t_charlist      required_binding;
-	t_denybotlist   *deny_bot;
 	t_charlist      required_group;
 	t_charlist      alter_group;
 	t_keyvalue      *custom_headers;
@@ -265,6 +264,9 @@ typedef struct type_config {
 	t_log_format  log_format;
 	bool          wait_for_cgi;
 	t_charlist    cgi_extension;
+#ifdef ENABLE_THREAD_POOL
+	int           thread_pool_size;
+#endif
 	int           total_connections;
 	int           connections_per_ip;
 	int           socket_send_timeout;
@@ -323,7 +325,6 @@ typedef struct type_config {
 #ifdef ENABLE_CACHE
 	off_t         cache_size;
 	off_t         cache_max_filesize;
-	off_t         cache_min_filesize;
 #ifdef ENABLE_RPROXY
 	t_charlist    cache_rproxy_extensions;
 #endif

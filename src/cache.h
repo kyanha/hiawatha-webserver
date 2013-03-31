@@ -44,9 +44,9 @@ typedef struct type_cached_object {
 
 /* Generic functions
  */
-void init_cache_module(void);
+int init_cache_module(void);
 void done_with_cached_object(t_cached_object *object, bool remove_object);
-void check_cache(time_t time);
+void manage_cache(time_t time);
 int clear_cache(void);
 #ifdef ENABLE_TOMAHAWK
 void print_cache_list(FILE *fp);

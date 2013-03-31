@@ -1,23 +1,31 @@
 #!/bin/sh
 
-echo "Removing current PolarSSL library."
-rm -rf include
-rm -rf library
-
-echo "Downloading latest PolarSSL library."
-wget -qO polarssl-latest.tgz https://polarssl.org/download/latest-stable
-if [ ! -s polarssl-latest.tgz ]; then 
+if [ "$1" = "" ]; then
+	echo "Downloading latest PolarSSL library."
+	wget -qO polarssl.tgz https://polarssl.org/download/latest-stable
+else
+	echo "Downloading PolarSSL version ${1}."
+	wget -qO polarssl.tgz https://polarssl.org/download/polarssl-${1}-gpl.tgz
+fi
+if [ ! -s polarssl.tgz ]; then 
+	rm -f polarssl.tgz
 	echo "Download error."
 	exit
 fi
 
-echo "Installing PolarSSL."
-tar -xzf polarssl-latest.tgz
-dir=`tar -tzf polarssl-latest.tgz | head -n1`
+echo "Removing current PolarSSL library."
+rm -rf include
+rm -rf library
+
+echo "Installing new PolarSSL library."
+tar -xzf polarssl.tgz
+dir=`tar -tzf polarssl.tgz | head -n1`
 mv ${dir}ChangeLog .
 mv ${dir}include .
 mv ${dir}library .
 
 echo "Cleaning up."
+rm -f include/.gitignore
+rm -f library/.gitignore
 rm -rf ${dir}
-rm polarssl-latest.tgz
+rm polarssl.tgz

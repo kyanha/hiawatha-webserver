@@ -66,6 +66,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 	t_toolkit_rule *new_rule, *rule;
 	char *rest;
 	int loop, time, cflags;
+	size_t len;
 
 	if ((key == NULL) || (value == NULL) || (toolkit == NULL)) {
 		return false;
@@ -90,9 +91,10 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 	new_rule->condition = tc_none;
 	new_rule->operation = to_none;
 	new_rule->flow = tf_continue;
-	new_rule->conditional_flow = tf_continue;
 	new_rule->match_loop = 1;
+	new_rule->neg_match = false;
 	new_rule->parameter = NULL;
+	new_rule->header = NULL;
 	new_rule->value = 0;
 	new_rule->case_insensitive = false;
 	new_rule->next = NULL;
@@ -102,7 +104,120 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		key = "match";
 	}
 
-	if (strcmp(key, "match") == 0) {
+	if (strcasecmp(key, "call") == 0) {
+		/* Call
+		 */
+		new_rule->operation = to_sub;
+
+		if ((new_rule->parameter = strdup(value)) == NULL) {
+			return false;
+		}
+	} else if (strcasecmp(key, "header") == 0) {
+		/* Header
+		 */
+		new_rule->condition = tc_header;
+
+		if (split_string(value, &value, &rest, ' ') == -1) {
+			return false;
+		}
+
+		len = strlen(value);
+		if ((new_rule->header = (char*)malloc(len + 2)) == NULL) {
+			return false;
+		}
+		sprintf(new_rule->header, "%s:", value);
+
+		if ((*rest == '\'') || (*rest == '"')) {
+			value = rest + 1;
+			if ((rest = strchr(rest + 1, *rest)) == NULL) {
+				return false;
+			}
+			*rest = '\0';
+			rest = remove_spaces(rest + 1);
+		} else if (split_string(rest, &value, &rest, ' ') == -1) {
+			return false;
+		}
+		
+		if (*value == '!') {
+			new_rule->neg_match = true;
+			value++;
+		}
+		if (regcomp(&(new_rule->pattern), value, REG_EXTENDED | REG_ICASE | REG_NOSUB) != 0) {
+			return false;
+		}
+
+		split_string(rest, &value, &rest, ' ');
+
+		if (strcasecmp(value, "call") == 0) {
+			/* Header Call
+			 */
+			new_rule->operation = to_sub;
+
+			if (rest == NULL) {
+				return false;
+			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
+				return false;
+			}
+		} else if (strcasecmp(value, "denyaccess") == 0) {
+			/* Header Deny access
+			 */
+			new_rule->operation = to_deny_access;
+			new_rule->flow = tf_exit;
+		} else if (strcasecmp(value, "exit") == 0) {
+			/* Header Exit
+			 */
+			new_rule->flow = tf_exit;
+		} else if (strcasecmp(value, "goto") == 0) {
+			/* Header Goto
+			 */
+			new_rule->operation = to_sub;
+			new_rule->flow = tf_exit;
+
+			if (rest == NULL) {
+				return false;
+			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
+				return false;
+			}
+		} else if (strcasecmp(value, "redirect") == 0) {
+			/* Header Redirect
+			 */
+			new_rule->operation = to_redirect;
+			new_rule->flow = tf_exit;
+
+			if (new_rule->neg_match) {
+				return false;
+			}
+
+			if (rest == NULL) {
+				return false;
+			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
+				return false;
+			}
+		} else if (strcasecmp(value, "return") == 0) {
+			/* Header Return
+			 */
+			new_rule->flow = tf_return;
+		} else if (strcasecmp(value, "skip") == 0) {
+			/* Header Skip
+			 */
+			if ((new_rule->value = str2int(rest)) < 1) {
+				return false;
+			}
+		} else if (strcasecmp(value, "use") == 0) {
+			/* Header Use
+			 */
+			new_rule->operation = to_replace;
+			new_rule->flow = tf_exit;
+
+			if (valid_uri(rest, false) == false) {
+				return false;
+			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
+				return false;
+			}
+		} else {
+			return false;
+		}
+	} else if (strcmp(key, "match") == 0) {
 		/* Match
 		 */
 		cflags = REG_EXTENDED;
@@ -113,7 +228,12 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		new_rule->condition = tc_match;
 		if (split_string(value, &value, &rest, ' ') == -1) {
 			return false;
-		} else if (regcomp(&(new_rule->pattern), value, cflags) != 0) {
+		}
+		if (*value == '!') {
+			new_rule->neg_match = true;
+			value++;
+		}
+		if (regcomp(&(new_rule->pattern), value, cflags) != 0) {
 			return false;
 		}
 		split_string(rest, &value, &rest, ' ');
@@ -122,6 +242,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			/* Match Ban
 			 */
 			new_rule->operation = to_ban;
+
 			if ((new_rule->value = str2int(rest)) == false) {
 				return false;
 			}
@@ -129,6 +250,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			/* Match Call
 			 */
 			new_rule->operation = to_sub;
+
 			if (rest == NULL) {
 				return false;
 			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
@@ -137,7 +259,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		} else if (strcasecmp(value, "denyaccess") == 0) {
 			/* Match DenyAccess
 			 */
-			new_rule->operation = to_denyaccess;
+			new_rule->operation = to_deny_access;
 			new_rule->flow = tf_exit;
 		} else if (strcasecmp(value, "exit") == 0) {
 			/* Match Exit
@@ -147,6 +269,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			/* Match Expire
 			 */
 			new_rule->operation = to_expire;
+
 			if (split_string(rest, &value, &rest, ' ') == -1) {
 				return false;
 			}
@@ -189,6 +312,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			 */
 			new_rule->operation = to_sub;
 			new_rule->flow = tf_exit;
+
 			if (rest == NULL) {
 				return false;
 			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
@@ -199,6 +323,11 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			 */
 			new_rule->operation = to_redirect;
 			new_rule->flow = tf_exit;
+
+			if (new_rule->neg_match) {
+				return false;
+			}
+
 			if (rest == NULL) {
 				return false;
 			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
@@ -213,6 +342,10 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			 */
 			new_rule->operation = to_rewrite;
 			new_rule->flow = tf_exit;
+
+			if (new_rule->neg_match) {
+				return false;
+			}
 
 			split_string(rest, &value, &rest, ' ');
 			if (value == NULL) {
@@ -247,6 +380,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			/* Match Skip
 			 */
 			new_rule->operation = to_skip;
+
 			if ((new_rule->value = str2int(rest)) < 1) {
 				return false;
 			}
@@ -255,6 +389,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			 */
 			new_rule->operation = to_fastcgi;
 			new_rule->flow = tf_exit;
+
 			if (rest == NULL) {
 				return false;
 			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
@@ -263,38 +398,10 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		} else {
 			return false;
 		}
-	} else if (strcmp(key, "call") == 0) {
-		/* Call
-		 */
-		new_rule->operation = to_sub;
-
-		if ((new_rule->parameter = strdup(value)) == NULL) {
-			return false;
-		}
-	} else if (strcmp(key, "oldbrowser") == 0) {
-		/* Old browser
-		 */
-		new_rule->condition = tc_oldbrowser;
-		new_rule->operation = to_replace;
-		new_rule->flow = tf_exit;
-
-		if (valid_uri(value, false) == false) {
-			return false;
-		} else if ((new_rule->parameter = strdup(value)) == NULL) {
-			return false;
-		}
-	} else if (strcmp(key, "skip") == 0) {
-		/* Skip
-		 */
-		new_rule->operation = to_skip;
-
-		if ((new_rule->value = str2int(value)) < 1) {
-			return false;
-		}
-	} else if (strcmp(key, "requesturi") == 0) {
+	} else if (strcasecmp(key, "requesturi") == 0) {
 		/* RequestURI
 		 */
-		new_rule->condition = tc_requesturi;
+		new_rule->condition = tc_request_uri;
 
 		if (split_string(value, &value, &rest, ' ') == -1) {
 			return false;
@@ -311,17 +418,25 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		}
 
 		if (strcasecmp(rest, "return") == 0) {
-			new_rule->conditional_flow = tf_return;
+			new_rule->flow = tf_return;
 		} else if (strcasecmp(rest, "exit") == 0) {
-			new_rule->conditional_flow = tf_exit;
+			new_rule->flow = tf_exit;
 		} else {
+			return false;
+		}
+	} else if (strcasecmp(key, "skip") == 0) {
+		/* Skip
+		 */
+		new_rule->operation = to_skip;
+
+		if ((new_rule->value = str2int(value)) < 1) {
 			return false;
 		}
 #ifdef ENABLE_SSL
 	} else if (strcmp(key, "usessl") == 0) {
 		/* UseSSL
 		 */
-		new_rule->condition = tc_usessl;
+		new_rule->condition = tc_use_ssl;
 		split_string(value, &value, &rest, ' ');
 
 		if (strcasecmp(value, "call") == 0) {
@@ -501,9 +616,8 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 	t_toolkit_rule *rule;
 	bool condition_met, replaced = false;
 	int result, skip = 0;
-	char *file, *qmark;
+	char *file, *qmark, *header;
 	regmatch_t pmatch[REGEXEC_NMATCH];
-	char *user_agent;
 	struct stat fileinfo;
 
 	if (options == NULL) {
@@ -542,8 +656,24 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 				if (regexec(&(rule->pattern), url, REGEXEC_NMATCH, pmatch, 0) == 0) {
 					condition_met = true;
 				}
+				if (rule->neg_match) {
+					condition_met = (condition_met == false);
+				}
 				break;
-			case tc_requesturi:
+			case tc_header:
+				/* Header
+				 */
+				if ((header = get_http_header(rule->header, options->http_headers)) == NULL) {
+					break;
+				}
+				if (regexec(&(rule->pattern), header, 0, NULL, 0) == 0) {
+					condition_met = true;
+				}
+				if (rule->neg_match) {
+					condition_met = (condition_met == false);
+				}
+				break;
+			case tc_request_uri:
 				/* Request URI
 				 */
 				if (valid_uri(url, false) == false) {
@@ -562,19 +692,16 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 					switch (rule->value) {
 						case IU_EXISTS:
 							if (S_ISDIR(fileinfo.st_mode) || S_ISREG(fileinfo.st_mode)) {
-								rule->flow = rule->conditional_flow;
 								condition_met = true;
 							}
 							break;
 						case IU_ISFILE:
 							if (S_ISREG(fileinfo.st_mode)) {
-								rule->flow = rule->conditional_flow;
 								condition_met = true;
 							}
 							break;
 						case IU_ISDIR:
 							if (S_ISDIR(fileinfo.st_mode)) {
-								rule->flow = rule->conditional_flow;
 								condition_met = true;
 							}
 							break;
@@ -584,23 +711,12 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 				free(file);
 				break;
 #ifdef ENABLE_SSL
-			case tc_usessl:
+			case tc_use_ssl:
 				/* Client connections uses SSL?
 				 */
 				condition_met = options->use_ssl;
 				break;
 #endif
-			case tc_oldbrowser:
-				/* Old browser
-				 */
-				if ((user_agent = get_http_header("User-Agent:", options->http_headers)) != NULL) {
-					if (strstr(user_agent, "MSIE 7") != NULL) {
-						condition_met = true;
-					} else if (strstr(user_agent, "MSIE 6") != NULL) {
-						condition_met = true;
-					}
-				}
-				break;
 		}
 
 		/* Condition not met
@@ -677,7 +793,7 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 				 */
 				skip = rule->value;
 				break;
-			case to_denyaccess:
+			case to_deny_access:
 				/* Deny access
 				 */
 				return UT_DENY_ACCESS;

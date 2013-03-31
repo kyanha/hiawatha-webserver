@@ -34,6 +34,9 @@ Wigwam is a configuration validation tool for the Hiawatha webserver. Use it to 
 With the option -t, you can use Wigwam to test your URL toolkit rules. When testing URL toolkit rules, you should only enter the part after the hostname in the URL. For example, if you want to test the URL "http://www.mydomain.com/index.php?key=value", you should enter "/index.php?key=value". A result shown as "old: <URL>" means nothing has been changed. When a toolkit rule has been applied, the result is shown as "new: <URL>".
 .br
 
+When testing the Header UrlToolkit rule, you can set the environment variables HTTP_HOST, HTTP_REFERER and HTTP_USER_AGENT to emulate the Host, Referer en User-Agent HTTP headers.
+.br
+
 To use URL toolkit testing, Hiawatha must no have been compiled with -DENABLE_TOOLKIT=off. Use 'hiawatha -v' for compile information.
 
 

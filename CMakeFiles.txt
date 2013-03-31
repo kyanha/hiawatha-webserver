@@ -33,6 +33,7 @@ set(hiawatha_src
 	src/tomahawk.c
 	src/toolkit.c
 	src/userconfig.c
+	src/workers.c
 	src/xslt.c
 )
 if(NOT ENABLE_SSL)

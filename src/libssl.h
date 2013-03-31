@@ -33,7 +33,7 @@ typedef struct {
 	int         dh_size;
 } t_ssl_accept_data;
 
-void ssl_initialize(char *logfile);
+int  init_ssl_module(char *logfile);
 int  ssl_register_sni(t_charlist *hostname, rsa_context *private_key, x509_cert *certificate,
                   x509_cert *ca_certificate, x509_crl *ca_crl);
 int  ssl_load_key_cert(char *file, rsa_context **private_key, x509_cert **certificate);
@@ -43,7 +43,8 @@ int  ssl_accept(t_ssl_accept_data *ssl_accept_data);
 int  ssl_pending(ssl_context *ssl);
 int  ssl_receive(ssl_context *ssl, char *buffer, unsigned int maxlength);
 int  ssl_send(ssl_context *ssl, const char *buffer, unsigned int length);
-int  get_client_crt_info(ssl_context *context, char *subject, char *issuer, int length);
+bool ssl_has_peer_cert(ssl_context *context);
+int  get_peer_cert_info(ssl_context *context, char *subject_dn, char *issuer_dn, char *serial_nr, int length);
 void ssl_close(ssl_context *ssl);
 void ssl_shutdown(void);
 #ifdef ENABLE_RPROXY

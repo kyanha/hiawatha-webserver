@@ -120,11 +120,13 @@ Enable the internal cache for reverse proxy requests for these extensions.
 .br
 Example: CacheRProxyExtensions = css, gif, html, jpg, js, png
 .br
+
+(requires that Hiawatha was not compiled with -DENABLE_CACHE=off or -DENABLE_RPROXY=off)
 .TP
 .B CacheSize = <size in megabytes>
-Size of Hiawatha's internal file cache. Maximum is 50 (megabytes).
+Size of Hiawatha's internal file cache. Maximum is 100 (megabytes).
 .br
-Default = 10, example: CacheSize = 15
+Default = 10, example: CacheSize = 25
 .br
 
 (requires that Hiawatha was not compiled with -DENABLE_CACHE=off)
@@ -133,14 +135,6 @@ Default = 10, example: CacheSize = 15
 Maximum size of a file Hiawatha will store in its internal cache.
 .br
 Default = 256, example: CacheMaxFilesize = 128
-.br
-
-(requires that Hiawatha was not compiled with -DENABLE_CACHE=off)
-.TP
-.B CacheMinFilesize = <size in bytes>
-Minimum size of a file Hiawatha will store in its internal cache.
-.br
-Default = 1, example: CacheMinFilesize = 512
 .br
 
 (requires that Hiawatha was not compiled with -DENABLE_CACHE=off)
@@ -234,6 +228,9 @@ Default = mimetype.conf, example: MimetypeConfig = /etc/mime.types
 Specify the minimum SSL version Hiawatha accepts for HTTPS connections.
 .br
 Default = SSL3.0, Example: MinSSLversion = TLS1.1
+.br
+
+(requires that Hiawatha was compiled with -DENABLE_SSL=on)
 .TP
 .B MonitorServer = <ip-address>
 Specify the IP address of the monitor server. This enables logging of statistical information.
@@ -292,6 +289,11 @@ Default = 3, example: SocketSendTimeout = 10
 Logfile for all system- and errormessages.
 .br
 Default = @LOG_DIR@/system.log, example: SystemLogfile = /var/log/hiawatha.sys
+.TP
+.B ThreadPoolSize = <size>
+Initial size of the thread pool.
+.br
+Default = 25, example: ThreadPoolSize = 50
 .TP
 .B Throttle = (<main-mimetype>/[<sub-mimetype>]|.<extension>):<speed in kB/s>
 Control the upload speed of certain files.
@@ -442,11 +444,6 @@ If the request body matches the regular expression, return a 403 Forbidden.
 .br
 Example: DenyBody = ^.*%3Cscript.*%3C%2Fscript%3E.*$
 .TP
-.B DenyBot = <name bot>:<path>[, <path>, ...]
-Return a 403 Forbidden when a searchbot tries to index <path>. <name bot> must be present in the User-Agent string of the searchbot.
-.br
-Example: DenyBot = msnbot:/files
-.TP
 .B EnablePathInfo = yes|no
 Accepts URLs like /index.php/parameter if /index.php exists and the extension .php has been configured as a CGI program. '/parameter' will be placed in the environment variable PATH_INFO.
 .br
@@ -497,14 +494,8 @@ If the requested file has no extension, treat it as if the extension was equal t
 .br
 Example: NoExtension = cgi
 .TP
-.B PasswordFile = ((basic|digest):<passwordfile>)|none[,<groupfile>]
-File which contains the username and password necessary to access this directory. You can create or updated this file with wigwam(1). The format of the lines in the passwordfile for Basic HTTP authentication is:
-.br
-	<username>:<password encrypted with crypt(3)>[:user defined fields: ...]
-.br
-The file for Digest HTTP authentication can be created or updated with htdigest(1). The realm in the password file is the LoginMessage text. The format of the passwordfile is:
-.br
-	<username>:<realm>:md5(<username>:<realm>:<password>)[:user defined fields: ...]
+.B PasswordFile = ((Basic|Digest):<passwordfile>)|none[,<groupfile>]
+When this option is set, HTTP authentication is enabled. Use the full path to the password file when that password file should also be used for sub-directories. Entries for the password file can be created via the wigwam(1) tool. The realm fo Digest HTTP authentication must be equal to the text set via LoginMessage.
 .br
 The <groupfile> contains the groupnames followed by the names of the users that are a member of that group. The format of the lines in the groupfile is:
 .br
@@ -733,72 +724,28 @@ Default = 15, example: SessionTimeout = 30
 
 .\" ==========[ URL toolkit configuration ]====================================
 .SH URL TOOLKIT
-How to use the URL toolkit is explained in this chapter. To use URL toolkits, Hiawatha should not have been compiled with -DENABLE_TOOLKIT=off.
+How to use the URL toolkit is explained in this chapter. To use URL toolkits, Hiawatha should not have been compiled with -DENABLE_TOOLKIT=off. The main toolkit commands are:
 .TP
 .B Call <toolkit_id>
 Execute toolkit section <toolkit_id> and continue in the current section.
 .br
 Example: Call other_rule_set
 .TP
-.B Match <regular expression> <action>
+.B Header <key> [!]<pattern> <action>
 .br
-Perform an action when the URL matches the regular expression, where <action> can be one of the following:
+Perform an action when the HTTP header <key> matches the regular expresion <pattern>, where <action> can be one of the following:
 .br
-.B Ban <seconds>
+Call, DenyAccess, Exit, Goto, Redirect, Return, Skip and Use.
 .br
-	Ban the client for <seconds> seconds.
-.br
-.B Call <toolkit_id>
-.br
-	Execute toolkit section <toolkit_id> and continue in the current section.
-.br
-.B DenyAccess
-.br
-	Deny access to the requested file (results in a 403 error) and terminate toolkit processing.
-.br
-.B Exit
-.br
-	Terminate toolkit processing.
-.br
-.B Expire <time> seconds|minutes|hours|days|weeks|months [Exit|Return]
-.br
-	Adds an Expires HTTP header with current timestamp + <time>. The default behaviour is to continue after an Expire action.
-.br
-.B Goto <toolkit_id>
-.br
-	Execute <toolkit_id> and terminate the current URL rewriting process.
-.br
-.B Redirect <url>
-.br
-	Redirect (301) the browser to the specified URL and terminate toolkit processing.
-.br
-.B Return
-.br
-	Return from the current UrlToolkit section.
-.br
-.B Rewrite <replacement> [<max_loop>] [Continue|Return]
-.br
-	Rewrite the current URL using <replacement>. Examples:
-.br
-	"Match ^/pics/(.*) Rewrite /images/$1" will change "/pics/logo.gif" into "/images/logo.gif".
-.br
-	"Match a Rewrite b 3" will change "/aaaaa.html" into "/bbbaa.html". Default value of <max_loop> is 1, maximum is 20.
-.br
-	Rewrite will terminate toolkit processing, unless Continue or Return has been given.
-.br
-.B Skip
-<number>
-.br
-	Skip the next following <number> lines (ToolkitId excluded).
-.br
-.B UseFastCGI <fcgi_id>
-.br
-	Use FastCGI server with id <fcgi_id> and terminate toolkit processing.
+A negative pattern (leading exclamation mark) can't be used with the redirect action.
 .TP
-.B OldBrowser <url>
-If the client uses an old browser (MSIE 5/6), show <url> instead of the requested page.
+.B Match [!]<pattern> <action>
 .br
-Example: OldBrowser /ie6.html
+Perform an action when the URL matches the regular expression <pattern>, where <action> can be one of the following:
+.br
+Ban, Call, DenyAccess, Exit, Expire, Goto, Redirect, Return, Rewrite, Skip or UseFastCGI.
+.br
+Use MatchCI to perform case insensitive URL matching. A negative pattern (leading exclamation mark) can't be used with the redirect and rewrite action.
 .TP
 .B RequestURI exists|isfile|isdir Return|Exit
 If the requested URL exists on disk, don't continue with the URL toolkit.
@@ -815,29 +762,68 @@ Skip the next following <number> lines (ToolkitId excluded).
 .br
 Example: Skip 2
 .TP
-.B UseSSL
+.B UseSSL <action>
 .br
-Perform an action when the client is connection via a SSL secured connection.
+Perform an action when the client is connection via a SSL secured connection, where <action> can be one of the following:
 .br
+Call, Exit, Goto, Return or Skip.
+
+.TP
+The <action> statements mentioned above are described here:
+.TP
+.B Ban <seconds>
+.br
+Ban the client for <seconds> seconds.
+.TP
 .B Call <toolkit_id>
 .br
-	Execute toolkit section <toolkit_id> and continue in the current section.
+Execute toolkit section <toolkit_id> and continue in the current section.
+.TP
+.B DenyAccess
 .br
+Deny access to the requested file (results in a 403 error) and terminate toolkit processing.
+.TP
 .B Exit
 .br
-	Terminate toolkit processing.
+Terminate toolkit processing.
+.TP
+.B Expire <time> seconds|minutes|hours|days|weeks|months [Exit|Return]
 .br
+Adds an Expires HTTP header with current timestamp + <time>. The default behaviour is to continue after an Expire action.
+.TP
 .B Goto <toolkit_id>
 .br
-	Execute <toolkit_id> and terminate the current URL rewriting process.
+Execute <toolkit_id> and terminate the current URL rewriting process.
+.TP
+.B Redirect <url>
 .br
+Redirect (301) the browser to the specified URL and terminate toolkit processing.
+.TP
 .B Return
 .br
-	Return from the current UrlToolkit section.
+Return from the current UrlToolkit section.
+.TP
+.B Rewrite <replacement> [<max_loop>] [Continue|Return]
 .br
-.B Skip <lines>
+Rewrite the current URL using <replacement>. Examples:
 .br
-	Skip the next following <number> lines (ToolkitId excluded).
+"Match ^/pics/(.*) Rewrite /images/$1" will change "/pics/logo.gif" into "/images/logo.gif".
+.br
+"Match a Rewrite b 3" will change "/aaaaa.html" into "/bbbaa.html". Default value of <max_loop> is 1, maximum is 20.
+.br
+Rewrite will terminate toolkit processing, unless Continue or Return has been given.
+.TP
+.B Skip <number>
+.br
+Skip the next following <number> lines (ToolkitId excluded).
+.TP
+.B Use <url>
+.br
+Replace the current URL with <url> and terminate toolkit processing.
+.TP
+.B UseFastCGI <fcgi_id>
+.br
+Use FastCGI server with id <fcgi_id> and terminate toolkit processing.
 
 .TP
 The original URL is stored in the environment variable SCRIPT_URL. Before using URL toolkit rules, use the tool 'wigwam' to verify the result of your rules (see wigwam(1) for more information).

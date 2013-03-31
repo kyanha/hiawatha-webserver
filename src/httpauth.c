@@ -22,6 +22,9 @@
 #include <rpcsvc/crypt.h>
 #endif
 #include <errno.h>
+#ifndef HAVE_CRYPT_R
+#include <pthread.h>
+#endif
 #include "libstr.h"
 #include "liblist.h"
 #include "client.h"
@@ -34,6 +37,20 @@
 #define ha_DENIED    401
 #define ha_FORBIDDEN 403
 #define ha_ERROR     500
+
+#ifndef HAVE_CRYPT_R
+static pthread_mutex_t crypt_mutex;
+#endif
+
+int init_httpauth_module(void) {
+#ifndef HAVE_CRYPT_R
+	if (pthread_mutex_init(&crypt_mutex, NULL) != 0) {
+		return -1;
+	}
+#endif
+
+	return 0;
+}
 
 /* If a required_group_file exist, is a user in the right group?
  */
@@ -238,6 +255,11 @@ static int basic_http_authentication(t_session *session, char *auth_str) {
 	size_t auth_len;
 	int retval, len;
 	char *auth_user, *auth_passwd, *passwd, *encrypted, salt[21];
+#ifdef HAVE_CRYPT_R
+	struct crypt_data crypt_data;
+#else
+	int cmp_result;
+#endif
 
 	auth_len = strlen(auth_str);
 	if ((auth_user = (char*)malloc(auth_len + 1)) == NULL) {
@@ -291,11 +313,19 @@ static int basic_http_authentication(t_session *session, char *auth_str) {
 		salt[2] = '\0';
 	}
 
-	encrypted = crypt(auth_passwd, salt);
+#ifdef HAVE_CRYPT_R
+	crypt_data.initialized = 0;
+	encrypted = crypt_r(auth_passwd, salt, &crypt_data);
 
-	/* Password match?
-	 */
 	if (strcmp(encrypted, passwd) == 0) {
+#else
+	pthread_mutex_lock(&crypt_mutex);
+	encrypted = crypt(auth_passwd, salt);
+	cmp_result = strcmp(encrypted, passwd);
+	pthread_mutex_unlock(&crypt_mutex);
+
+	if (cmp_result == 0) {
+#endif
 		retval = ((session->remote_user = strdup(auth_user)) != NULL) ? ha_ALLOWED : ha_ERROR;
 	} else {
 		register_wrong_password(session);

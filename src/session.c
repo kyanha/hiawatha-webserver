@@ -465,37 +465,6 @@ int copy_directory_settings(t_session *session) {
 	return 200;
 }
 
-/* Check if User-Agent string contains deny_bot substring.
- */
-bool client_is_rejected_bot(t_session *session) {
-	int i, len;
-	char *useragent;
-	t_denybotlist *botlist;
-
-	if (session->host->deny_bot == NULL) {
-		return false;
-	} else if ((useragent = get_http_header("User-Agent:", session->http_headers)) == NULL) {
-		return false;
-	}
-
-	botlist = session->host->deny_bot;
-	while (botlist != NULL) {
-		if (strcasestr(useragent, botlist->bot) != NULL) {
-			for (i = 0; i < botlist->uri.size; i++) {
-				len = strlen(*(botlist->uri.item + i));
-				if (session->uri_len >= len) {
-					if (memcmp(*(botlist->uri.item + i), session->uri, len) == 0) {
-						return true;
-					}
-				}
-			}
-		}
-		botlist = botlist->next;
-	}
-
-	return false;
-}
-
 /* Remove port from hostname
  */
 int remove_port_from_hostname(char *hostname, t_binding *binding) {

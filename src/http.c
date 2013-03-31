@@ -621,6 +621,8 @@ const char *http_error(int code) {
 		{428, "Precondition Required"},
 		{429, "Too Many Requests"},
 		{431, "Request Header Fields Too Large"},
+		{440, "Client SSL Certificate Required"},
+		{441, "Security Threat Detected"},
 
 		/* Server error
 		 */

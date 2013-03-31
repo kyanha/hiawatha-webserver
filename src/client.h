@@ -23,7 +23,7 @@
 #define ca_TOOMUCH_TOTAL  -2
 #define ca_BANNED         -3
 
-void init_client_module(void);
+int  init_client_module(void);
 int  add_client(t_session *session);
 int  reposition_client(t_session *session, t_ip_addr *ip_address);
 int  mark_client_for_removal(t_session *session, int delay);

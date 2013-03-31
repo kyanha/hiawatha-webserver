@@ -113,7 +113,7 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 	t_http_header *http_headers;
 	t_keyvalue *envir;
 #ifdef ENABLE_SSL
-	char subject[SSL_VAR_SIZE], issuer[SSL_VAR_SIZE];
+	char subject_dn[SSL_VAR_SIZE], issuer_dn[SSL_VAR_SIZE], serial_nr[SSL_VAR_SIZE];
 #endif
 #ifdef CYGWIN
 	char *root;
@@ -283,9 +283,10 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 
 #ifdef ENABLE_SSL
 	if (session->binding->use_ssl) {
-		if (get_client_crt_info(&(session->ssl_context), subject, issuer, SSL_VAR_SIZE) == 0) {
-			add_to_environment(fcgi_buffer, "SSL_CLIENT_SUBJECT", subject);
-			add_to_environment(fcgi_buffer, "SSL_CLIENT_ISSUER", issuer);
+		if (get_peer_cert_info(&(session->ssl_context), subject_dn, issuer_dn, serial_nr, SSL_VAR_SIZE) == 0) {
+			add_to_environment(fcgi_buffer, "SSL_SUBJECT_DN", subject_dn);
+			add_to_environment(fcgi_buffer, "SSL_ISSUER_DN", issuer_dn);
+			add_to_environment(fcgi_buffer, "SSL_CERT_SERIAL", serial_nr);
 		}
 	}
 #endif

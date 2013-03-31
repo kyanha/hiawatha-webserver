@@ -13,6 +13,7 @@
 #define _GNU_SOURCE 1
 #cmakedefine CYGWIN ${CYGWIN}
 #cmakedefine CIFS ${CIFS}
+#cmakedefine MACOSX ${MACOSX}
 
 /* Hiawatha modules
  */
@@ -23,6 +24,7 @@
 #cmakedefine ENABLE_MONITOR ${ENABLE_MONITOR}
 #cmakedefine ENABLE_RPROXY ${ENABLE_RPROXY}
 #cmakedefine ENABLE_SSL ${ENABLE_SSL}
+#define ENABLE_THREAD_POOL ON
 #cmakedefine ENABLE_TOMAHAWK ${ENABLE_TOMAHAWK}
 #cmakedefine ENABLE_TOOLKIT ${ENABLE_TOOLKIT}
 #cmakedefine ENABLE_XSLT ${ENABLE_XSLT}
@@ -37,6 +39,7 @@
 
 /* Functions
  */
+#cmakedefine HAVE_CRYPT_R ${HAVE_CRYPT_R}
 #cmakedefine HAVE_SETENV ${HAVE_SETENV}
 #cmakedefine HAVE_UNSETENV ${HAVE_UNSETENV}
 #cmakedefine HAVE_CLEARENV ${HAVE_CLEARENV}

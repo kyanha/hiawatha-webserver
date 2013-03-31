@@ -103,8 +103,8 @@ case "$1" in
 		stop_hiawatha
 		;;
 	restart|force-reload)
-		stop_hiawatha
-		start_hiawatha
+		$0 stop
+		$0 start
 		;;
 	check)
 		config_check

@@ -39,8 +39,12 @@ pthread_mutex_t accesslog_mutex;
 
 /* Initialize log module
  */
-void init_log_module(void) {
-	pthread_mutex_init(&accesslog_mutex, NULL);
+int init_log_module(void) {
+	if (pthread_mutex_init(&accesslog_mutex, NULL) != 0) {
+		return -1;
+	}
+
+	return 0;
 }
 
 /* Write a timestamp to a logfile.
@@ -128,7 +132,7 @@ void log_string(char *logfile, char *mesg, ...) {
 void log_system(t_session *session, char *mesg, ...) {
 	FILE *fp;
 	va_list args;
-	char str[TIMESTAMP_SIZE + IP_ADDRESS_SIZE];
+	char str[TIMESTAMP_SIZE + IP_ADDRESS_SIZE + 2];
 
 	if (mesg == NULL) {
 		return;
@@ -154,11 +158,18 @@ void log_system(t_session *session, char *mesg, ...) {
 void log_file_error(t_session *session, char *file, char *mesg, ...) {
 	FILE *fp;
 	va_list args;
-	char str[TIMESTAMP_SIZE + IP_ADDRESS_SIZE];
+	char str[TIMESTAMP_SIZE + IP_ADDRESS_SIZE + 2];
 
-	if ((file == NULL) || (mesg == NULL)) {
+	if (mesg == NULL) {
 		return;
-	} else if ((fp = fopen(session->host->error_logfile, "a")) == NULL) {
+	}
+
+	if (session->host == NULL) {
+		fp = fopen(session->config->first_host->error_logfile, "a");
+	} else {
+		fp = fopen(session->host->error_logfile, "a");
+	}
+	if (fp == NULL) {
 		return;
 	}
 
@@ -167,7 +178,11 @@ void log_file_error(t_session *session, char *file, char *mesg, ...) {
 	ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
 	strcat(str, "|");
 	print_timestamp(str + strlen(str));
-	fprintf(fp, "%s%s|", str, file);
+	if (file == NULL) {
+		fprintf(fp, "%s", str);
+	} else {
+		fprintf(fp, "%s%s|", str, file);
+	}
 	vfprintf(fp, mesg, args);
 	fprintf(fp, EOL);
 	fclose(fp);

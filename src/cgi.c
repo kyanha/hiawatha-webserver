@@ -113,17 +113,20 @@ char *find_cgi_header(char *buffer, char *header) {
  * Load balancer
  * ==============
  */
-
-void init_load_balancer(t_fcgi_server *fcgi_server) {
+int init_load_balancer(t_fcgi_server *fcgi_server) {
 	int i;
 
 	while (fcgi_server != NULL) {
 		for (i = 0; i < 256; i++) {
 			fcgi_server->cgi_session_list[i] = NULL;
-			pthread_mutex_init(&fcgi_server->cgi_session_mutex[i], NULL);
+			if (pthread_mutex_init(&fcgi_server->cgi_session_mutex[i], NULL) != 0) {
+				return -1;
+			}
 		}
 		fcgi_server = fcgi_server->next;
 	}
+
+	return 0;
 }
 
 t_connect_to *select_connect_to(t_fcgi_server *fcgi_server, t_ip_addr *client_ip) {
@@ -197,7 +200,7 @@ t_connect_to *select_connect_to(t_fcgi_server *fcgi_server, t_ip_addr *client_ip
 	return connect_to;
 }
 
-void check_load_balancer(t_config *config, time_t now) {
+void manage_load_balancer(t_config *config, time_t now) {
 	t_fcgi_server *fcgi_server;
 	t_cgi_session *cgi_session, *last, *next = NULL;
 	t_connect_to  *connect_to = NULL;

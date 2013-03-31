@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <string.h>
 #include <time.h>
+#include <pthread.h>
 #include "global.h"
 #include "libstr.h"
 #include "rproxy.h"
@@ -39,6 +40,8 @@ static char   *rproxy_header;
 static size_t rproxy_header_len;
 static char   *rproxy_id_key = "X-Hiawatha-RProxy-ID:";
 static char   rproxy_id[33];
+
+static pthread_mutex_t resolv_mutex;
 
 extern char *hs_forwarded;
 
@@ -71,6 +74,10 @@ int init_rproxy_module(void) {
 	sprintf(rproxy_header, format, rproxy_id_key, rproxy_id);
 	rproxy_header_len = strlen(rproxy_header);
 
+	if (pthread_mutex_init(&resolv_mutex, NULL) != 0) {
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -80,6 +87,7 @@ t_rproxy *rproxy_setting(char *line) {
 	t_rproxy *rproxy;
 	size_t len;
 	char *path, *port, *timeout;
+	int resolved;
 
 	if (split_string(line, &path, &line, ' ') != 0) {
 		return NULL;
@@ -171,7 +179,11 @@ t_rproxy *rproxy_setting(char *line) {
 		}
 		rproxy->hostname_len = strlen(rproxy->hostname);
 
-		if (hostname_to_ip(line, &(rproxy->ip_addr)) == -1) {
+		pthread_mutex_lock(&resolv_mutex);
+		resolved = hostname_to_ip(line, &(rproxy->ip_addr));
+		pthread_mutex_unlock(&resolv_mutex);
+
+		if (resolved == -1) {
 			fprintf(stderr, "Can't resolve hostname '%s'\n", line);
 			return NULL;
 		}

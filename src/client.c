@@ -55,17 +55,25 @@ static int password_delay_timer = 0;
 
 /* Initialize this module.
  */
-void init_client_module(void) {
+int init_client_module(void) {
 	int i;
 
 	for (i = 0; i < 256; i++) {
 		client_list[i] = NULL;
-		pthread_mutex_init(&client_mutex[i], NULL);
+		if (pthread_mutex_init(&client_mutex[i], NULL) != 0) {
+			return -1;
+		}
 	}
 	banlist = NULL;
-	pthread_mutex_init(&ban_mutex, NULL);
+	if (pthread_mutex_init(&ban_mutex, NULL) != 0) {
+		return -1;
+	}
 	wrong_password_list = NULL;
-	pthread_mutex_init(&pwd_mutex, NULL);
+	if (pthread_mutex_init(&pwd_mutex, NULL) != 0) {
+		return -1;
+	}
+
+	return 0;
 }
 
 /* Add the session record of a client to the client_list.
@@ -74,22 +82,22 @@ int add_client(t_session *session) {
 	t_client *new;
 	unsigned char i;
 
-	if ((new = (t_client*)malloc(sizeof(t_client))) != NULL) {
-		new->session = session;
-		new->remove_deadline = TIMER_OFF;
-
-		i = index_by_ip(&(session->ip_address));
-		pthread_mutex_lock(&client_mutex[i]);
-
-		new->next = client_list[i];
-		client_list[i] = new;
-
-		pthread_mutex_unlock(&client_mutex[i]);
-
-		return 0;
-	} else {
+	if ((new = (t_client*)malloc(sizeof(t_client))) == NULL) {
 		return -1;
 	}
+
+	new->session = session;
+	new->remove_deadline = TIMER_OFF;
+
+	i = index_by_ip(&(session->ip_address));
+	pthread_mutex_lock(&client_mutex[i]);
+
+	new->next = client_list[i];
+	client_list[i] = new;
+
+	pthread_mutex_unlock(&client_mutex[i]);
+
+	return 0;
 }
 
 /* Change position in client list
@@ -390,7 +398,9 @@ int kick_client(int id) {
 
 		client = client_list[i];
 		while (client != NULL) {
-			if (client->session->client_id == id) {
+			if (client->session->force_quit) {
+				break;
+			} else if (client->session->client_id == id) {
 				client->session->force_quit = true;
 				result = 1;
 				break;
@@ -658,7 +668,7 @@ void close_client_sockets_for_cgi_run(void) {
 /* Print the list of current connections.
  */
 void print_client_list(FILE *fp) {
-	t_client *client;
+	t_client *client, *current;
 	char ip_address[MAX_IP_STR_LEN];
 	int i, count = 0;
 	time_t now;
@@ -670,26 +680,35 @@ void print_client_list(FILE *fp) {
 
 		client = client_list[i];
 		while (client != NULL) {
-			if ((client->remove_deadline == TIMER_OFF) || (now < client->remove_deadline)) {
-				fprintf(fp, "  Client ID   : %d\n", client->session->client_id);
+			current = client;
+			client = client->next;
+
+			if (current->session->force_quit) {
+				continue;
+			}
+
+			if ((current->remove_deadline != TIMER_OFF) && (now >= current->remove_deadline)) {
+				continue;
+			}
+
+			fprintf(fp, "  Client ID   : %d\n", current->session->client_id);
 #ifdef ENABLE_DEBUG
-				fprintf(fp, "  Current task: %s\n", client->session->current_task);
+			fprintf(fp, "  Current task: %s\n", current->session->current_task);
 #endif
 
-				if (inet_ntop(client->session->ip_address.family, &(client->session->ip_address.value), ip_address, MAX_IP_STR_LEN) != NULL) {
-					fprintf(fp, "  IP-address  : %s\n", ip_address);
-				}
-				if (client->session->last_host != NULL) {
-					fprintf(fp, "  Hostname    : %s\n", *(client->session->last_host->hostname.item));
-				}
-				fprintf(fp, "  Socket      : %d\n", client->session->client_socket);
-				if (client->session->remote_user != NULL) {
-					fprintf(fp, "  Remote user : %s\n", client->session->remote_user);
-				}
-				fprintf(fp, "  Kept alive  : %d\n\n", client->session->kept_alive);
-				count++;
+			if (inet_ntop(current->session->ip_address.family, &(current->session->ip_address.value), ip_address, MAX_IP_STR_LEN) != NULL) {
+				fprintf(fp, "  IP-address  : %s\n", ip_address);
 			}
-			client = client->next;
+			if (current->session->last_host != NULL) {
+				fprintf(fp, "  Hostname    : %s\n", *(current->session->last_host->hostname.item));
+			}
+			fprintf(fp, "  Socket      : %d\n", current->session->client_socket);
+			if (current->session->remote_user != NULL) {
+				fprintf(fp, "  Remote user : %s\n", current->session->remote_user);
+			}
+			fprintf(fp, "  Kept alive  : %d\n\n", current->session->kept_alive);
+
+			count++;
 		}
 
 		pthread_mutex_unlock(&client_mutex[i]);

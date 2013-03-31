@@ -31,7 +31,7 @@
 
 #define ID_NOBODY             65534
 #define MAX_LENGTH_CONFIGLINE   512
-#define MAX_CACHE_SIZE           50
+#define MAX_CACHE_SIZE          100
 #define MAX_UPLOAD_SIZE         100
 #define MONITOR_HOSTNAME  "monitor"
 
@@ -82,7 +82,6 @@ static t_host *new_host(void) {
 	host->login_message      = "Private page";
 	host->passwordfile       = NULL;
 	host->groupfile          = NULL;
-	host->deny_bot           = NULL;
 	init_charlist(&(host->required_binding));
 	init_charlist(&(host->required_group));
 	init_charlist(&(host->alter_group));
@@ -166,7 +165,10 @@ static t_directory *new_directory(void) {
 	directory->envir_str           = NULL;
 	directory->time_for_cgi        = TIMER_OFF;
 	directory->run_on_download     = NULL;
-	pthread_mutex_init(&(directory->client_mutex), NULL);
+	if (pthread_mutex_init(&(directory->client_mutex), NULL) != 0) {
+		perror("new_directory()");
+		exit(EXIT_FAILURE);
+	}
 
 	directory->next                = NULL;
 
@@ -266,6 +268,9 @@ t_config *default_config(void) {
 	config->server_string      = "Hiawatha v"VERSION;
 	init_groups(&(config->groups));
 	init_charlist(&(config->cgi_extension));
+#ifdef ENABLE_THREAD_POOL
+	config->thread_pool_size   = 25;
+#endif
 	config->total_connections  = 100;
 	config->connections_per_ip = 10;
 	config->socket_send_timeout = 3;
@@ -325,7 +330,6 @@ t_config *default_config(void) {
 #ifdef ENABLE_CACHE
 	config->cache_size         = 10 * MEGABYTE;
 	config->cache_max_filesize = 256 * KILOBYTE;
-	config->cache_min_filesize = 1;
 #ifdef ENABLE_RPROXY
 	init_charlist(&(config->cache_rproxy_extensions));
 #endif
@@ -734,10 +738,6 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			config->cache_max_filesize <<= 10 /* convert to kB */;
 			return true;
 		}
-	} else if (strcmp(key, "cacheminfilesize") == 0) {
-		if ((config->cache_min_filesize = str2int(value)) > 0) {
-			return true;
-		}
 #ifdef ENABLE_RPROXY
 	} else if (strcmp(key, "cacherproxyextensions") == 0) {
 		if (parse_charlist(value, &(config->cache_rproxy_extensions)) != -1) {
@@ -982,6 +982,12 @@ static bool system_setting(char *key, char *value, t_config *config) {
 				return true;
 			}
 		}
+#ifdef ENABLE_THREAD_POOL	
+	} else if (strcmp(key, "threadpoolsize") == 0) {
+		if ((config->thread_pool_size = str2int(value)) >= 1) {
+			return true;
+		}
+#endif
 	} else if (strcmp(key, "throttle") == 0) {
 		if (split_string(value, &rest, &value, ':') != -1) {
 			if (((*rest == '.') || (strchr(rest, '/') != NULL)) && (speed = str2int(value)) > 0) {
@@ -1181,12 +1187,10 @@ static bool user_setting(char *key, char *value, t_host *host, t_tempdata **temp
 }
 
 static bool host_setting(char *key, char *value, t_host *host) {
-	char *botname;
+	t_deny_body *deny_body;
 #ifdef ENABLE_SSL
 	char *rest;
 #endif
-	t_denybotlist *deny_bot;
-	t_deny_body *deny_body;
 #ifdef ENABLE_RPROXY
 	t_rproxy *rproxy, *list;
 #endif
@@ -1227,20 +1231,6 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			deny_body->next = NULL;
 			if (regcomp(&(deny_body->pattern), value, REG_EXTENDED | REG_ICASE | REG_NOSUB) == 0) {
 				return true;
-			}
-		}
-	} else if (strcmp(key, "denybot") == 0) {
-		if (split_string(value, &botname, &value, ':') == 0) {
-			if ((deny_bot = (t_denybotlist*)malloc(sizeof(t_denybotlist))) != NULL) {
-				deny_bot->next = host->deny_bot;
-				host->deny_bot = deny_bot;
-
-				init_charlist(&(deny_bot->uri));
-				if ((deny_bot->bot = strdup(botname)) != NULL) {
-					if (parse_charlist(value, &(deny_bot->uri)) == 0) {
-						return true;
-					}
-				}
 			}
 		}
 	} else if (strcmp(key, "enablepathinfo") == 0) {
@@ -1434,7 +1424,7 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 			directory->execute_cgiset = true;
 			return true;
 		}
-	} else if (strcmp(key, "followsymlink") == 0) {
+	} else if (strcmp(key, "followsymlinks") == 0) {
 		if (parse_yesno(value, &(directory->follow_symlinks)) == 0) {
 			directory->follow_symlinks_set = true;
 			return true;

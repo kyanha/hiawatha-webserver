@@ -5,6 +5,14 @@ if [ ! -f /etc/debian_version ]; then
 	exit
 fi
 
+# Check for CMake
+#
+cmake --version 2> /dev/null
+if [ $? != 0 ]; then
+	echo "CMake is not installed but required for building Hiawatha."
+	exit
+fi
+
 # Checking for packages required for building a Debian package
 #
 echo "-- Checking for required packages"

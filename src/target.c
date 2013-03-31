@@ -1355,7 +1355,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	t_rproxy_webserver webserver;
 	t_rproxy_result rproxy_result;
 	char buffer[RPROXY_BUFFER_SIZE + 1], *end_of_header;
-	int bytes_read, bytes_in_buffer = 0, result, code, poll_result;
+	int bytes_read, bytes_in_buffer = 0, result = 200, code, poll_result;
 	bool header_read = false, keep_reading = true;
 	struct pollfd poll_data;
 	time_t deadline;
@@ -1386,8 +1386,6 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 		}
 	}
 #endif
-
-	result = 200;
 
 	/* Intialize data structure
 	 */

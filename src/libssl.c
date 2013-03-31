@@ -13,9 +13,10 @@
 
 #ifdef ENABLE_SSL
 
-#define SSL_DEBUG_LEVEL         6
-#define TIMESTAMP_SIZE         40
-#define SNI_MAX_HOSTNAME_LEN  128
+#define SSL_DEBUG_LEVEL          6
+#define TIMESTAMP_SIZE          40
+#define SNI_MAX_HOSTNAME_LEN   128
+#define HS_TIMEOUT_CERT_SELECT  15
 
 #include <sys/types.h>
 #include <stdio.h>
@@ -94,7 +95,7 @@ static ssl_cache_context cache;
 
 /* Initialize SSL library
  */
-void ssl_initialize(char *logfile) {
+int init_ssl_module(char *logfile) {
 	ssl_error_logfile = logfile;
 
 	rsa_init(&rsa, RSA_PKCS_V15, 0);
@@ -106,8 +107,13 @@ void ssl_initialize(char *logfile) {
 	ssl_cache_init(&cache);
 	ssl_cache_set_max_entries(&cache, 100);
 
-	pthread_mutex_init(&random_mutex, NULL);
-	pthread_mutex_init(&cache_mutex, NULL);
+	if (pthread_mutex_init(&random_mutex, NULL) != 0) {
+		return -1;
+	} else if (pthread_mutex_init(&cache_mutex, NULL) != 0) {
+		return -1;
+	}
+
+	return 0;
 }
 
 /* Add SNI information to list
@@ -212,7 +218,7 @@ int ssl_load_key_cert(char *file, rsa_context **private_key, x509_cert **certifi
 	memset(*certificate, 0, sizeof(x509_cert));
 
 	if ((result = x509parse_crtfile(*certificate, file)) != 0) {
-		print_ssl_error("Error loading X509 certificates", result);
+		print_ssl_error("Error loading X.509 certificates", result);
 		return -1;
 	}
 
@@ -234,7 +240,7 @@ int ssl_load_ca_cert(char *file, x509_cert **ca_certificate) {
 	memset(*ca_certificate, 0, sizeof(x509_cert));
 
 	if ((result = x509parse_crtfile(*ca_certificate, file)) != 0) {
-		print_ssl_error("Error loading X509 CA certificate", result);
+		print_ssl_error("Error loading X.509 CA certificate", result);
 		return -1;
 	}
 
@@ -256,7 +262,7 @@ int ssl_load_ca_crl(char *file, x509_crl **ca_crl) {
 	memset(*ca_crl, 0, sizeof(x509_crl));
 
 	if ((result = x509parse_crlfile(*ca_crl, file)) != 0) {
-		print_ssl_error("Error loading X509 CA CRL", result);
+		print_ssl_error("Error loading X.509 CA CRL", result);
 		return -1;
 	}
 
@@ -265,7 +271,7 @@ int ssl_load_ca_crl(char *file, x509_crl **ca_crl) {
 
 /* Server Name Indication callback function
  */
-static int sni_callback(void UNUSED(*parameter), ssl_context *context, const unsigned char *sni_hostname, size_t len) {
+static int sni_callback(void *sad, ssl_context *context, const unsigned char *sni_hostname, size_t len) {
 	char hostname[SNI_MAX_HOSTNAME_LEN + 1];
 	t_sni_list *sni;
 	int i;
@@ -273,6 +279,7 @@ static int sni_callback(void UNUSED(*parameter), ssl_context *context, const uns
 	if (len > SNI_MAX_HOSTNAME_LEN) {
 		return -1;
 	}
+
 	memcpy(hostname, sni_hostname, len);
 	hostname[len] = '\0';
 
@@ -280,6 +287,8 @@ static int sni_callback(void UNUSED(*parameter), ssl_context *context, const uns
 	while (sni != NULL) {
 		for (i = 0; i < sni->hostname->size; i++) {
 			if (hostname_match(hostname, *(sni->hostname->item + i))) {
+				((t_ssl_accept_data*)sad)->timeout = HS_TIMEOUT_CERT_SELECT;
+
 				/* Set private key and certificate
 				 */
 				if ((sni->private_key != NULL) && (sni->certificate != NULL)) {
@@ -319,6 +328,7 @@ int ssl_accept(t_ssl_accept_data *sad) {
 	} else {
 		ssl_set_authmode(sad->context, SSL_VERIFY_REQUIRED);
 		ssl_set_ca_chain(sad->context, sad->ca_certificate, sad->ca_crl, NULL);
+		sad->timeout = HS_TIMEOUT_CERT_SELECT;
 	}
 
 	ssl_set_min_version(sad->context, SSL_MAJOR_VERSION_3, sad->min_ssl_version);
@@ -329,7 +339,7 @@ int ssl_accept(t_ssl_accept_data *sad) {
 	ssl_set_dbg(sad->context, ssl_debug, stderr);
 #endif
 	ssl_set_bio(sad->context, net_recv, sad->client_fd, net_send, sad->client_fd);
-	ssl_set_sni(sad->context, sni_callback, NULL);
+	ssl_set_sni(sad->context, sni_callback, sad);
 
 	ssl_set_session_cache(sad->context, ssl_get_cache, &cache, ssl_set_cache, &cache);
 
@@ -415,24 +425,45 @@ int ssl_send(ssl_context *ssl, const char *buffer, unsigned int length) {
 	return result;
 }
 
-/* Get information from client certificate
+/* Check if peer sent a client certificate
  */
-int get_client_crt_info(ssl_context *context, char *subject, char *issuer, int length) {
+bool ssl_has_peer_cert(ssl_context *context) {
 	if (context->session == NULL) {
-		return -1;
+		return false;
 	} else if (context->session->peer_cert == NULL) {
+		return false;
+	}
+
+	return true;
+}
+
+/* Get information from peer certificate
+ */
+int get_peer_cert_info(ssl_context *context, char *subject_dn, char *issuer_dn, char *serial_nr, int length) {
+	if (ssl_has_peer_cert(context) == false) {
 		return -1;
 	}
 
-	if (x509parse_dn_gets(subject, length, &(context->session->peer_cert->subject)) == -1) {
+	/* Subject DN
+	 */
+	if (x509parse_dn_gets(subject_dn, length, &(context->session->peer_cert->subject)) == -1) {
 		return -1;
 	}
-	subject[length - 1] = '\0';
+	subject_dn[length - 1] = '\0';
 
-	if (x509parse_dn_gets(issuer, length, &(context->session->peer_cert->issuer)) == -1) {
+	/* Issuer DN
+	 */
+	if (x509parse_dn_gets(issuer_dn, length, &(context->session->peer_cert->issuer)) == -1) {
 		return -1;
 	}
-	issuer[length - 1] = '\0';
+	issuer_dn[length - 1] = '\0';
+
+	/* Serial number
+	 */
+	if (x509parse_serial_gets(serial_nr, length, &(context->session->peer_cert->serial)) == -1) {
+		return -1;
+	}
+	serial_nr[length - 1] = '\0';
 
 	return 0;
 }

@@ -16,7 +16,7 @@
 #include "libip.h"
 #include "session.h"
 
-void init_log_module(void);
+int  init_log_module(void);
 void log_pid(t_config *config, pid_t pid, uid_t server_uid);
 void log_string(char *logfile, char *mesg, ...);
 void log_system(t_session *session, char *mesg, ...);

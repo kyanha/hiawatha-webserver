@@ -356,16 +356,22 @@ static void handle_remove_from_cache_header(t_session *session, char *buffer, t_
  *
  * Generic functions
  */
-void init_cache_module(void) {
+int init_cache_module(void) {
 	int index;
 
 	for (index = 0; index < MAX_CACHE_INDEX; index++) {
 		cache[index] = NULL;
-		pthread_mutex_init(&cache_mutex[index], NULL);
+		if (pthread_mutex_init(&cache_mutex[index], NULL) != 0) {
+			return -1;
+		}
 	}
 
-	pthread_mutex_init(&cache_size_mutex, NULL);
+	if (pthread_mutex_init(&cache_size_mutex, NULL) != 0) {
+		return -1;
+	}
 	cache_size = 0;
+
+	return 0;
 }
 
 void done_with_cached_object(t_cached_object *object, bool remove_object) {
@@ -375,7 +381,7 @@ void done_with_cached_object(t_cached_object *object, bool remove_object) {
 	object->in_use--;
 }
 
-void check_cache(time_t now) {
+void manage_cache(time_t now) {
 	t_cached_object *object;
 	int index;
 
@@ -492,7 +498,7 @@ t_cached_object *add_file_to_cache(t_session *session, char *file) {
 		return NULL;
 	} else if ((size = status.st_size) == -1) {
 		return NULL;
-	} else if ((size < session->config->cache_min_filesize) || (size > session->config->cache_max_filesize)) {
+	} else if (size > session->config->cache_max_filesize) {
 		return NULL;
 	} else if (cache_size + size > session->config->cache_size) {
 		return NULL;

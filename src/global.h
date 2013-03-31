@@ -28,6 +28,8 @@
 
 #define POLL_EVENT_BITS (POLLIN | POLLPRI | POLLHUP)
 
+#define PTHREAD_STACK_SIZE 512 * KILOBYTE
+
 #if defined(__GNUC__)
 #define UNUSED(x) x __attribute__((unused))
 #else

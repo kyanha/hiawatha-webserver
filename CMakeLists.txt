@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.4)
 project(Hiawatha C)
 
 # Compiler
-set(CMAKE_C_FLAGS "-Wall -Wextra")
+set(CMAKE_C_FLAGS "-O2 -Wall -Wextra ${CMAKE_C_FLAGS}")
 set(CMAKE_BUILD_TYPE "RelWithDebInfo")
 
 # Options
@@ -22,14 +22,16 @@ include(CheckIncludeFile)
 include(CheckIncludeFiles)
 include(CheckFunctionExists)
 include(CheckLibraryExists)
-include(FindLibXml2)
-include(FindLibXslt)
+if(ENABLE_XSLT)
+	include(FindLibXml2)
+	include(FindLibXslt)
+endif()
 include(cmake/GNUInstallDirs.cmake)
 include(cmake/CopyIfNotExists.cmake)
 
 # Settings
-set(HIAWATHA_VERSION_MAJOR 8)
-set(HIAWATHA_VERSION_MINOR 8)
+set(HIAWATHA_VERSION_MAJOR 9)
+set(HIAWATHA_VERSION_MINOR 0)
 set(HIAWATHA_VERSION_PATCH 0)
 string(TOLOWER ${CMAKE_PROJECT_NAME} PROJECT_NAME)
 if(${HIAWATHA_VERSION_PATCH} EQUAL 0)
@@ -62,6 +64,7 @@ check_function_exists(strnstr HAVE_STRNSTR)
 check_function_exists(strcasestr HAVE_STRCASESTR)
 
 check_library_exists(crypt crypt "" HAVE_CRYPT_LIBRARY)
+check_library_exists(crypt crypt_r "" HAVE_CRYPT_R)
 check_library_exists(network socket "" HAVE_NETWORK_LIBRARY)
 check_library_exists(z gzdopen "" HAVE_Z_LIBRARY)
 

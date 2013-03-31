@@ -5,8 +5,8 @@
 # GENERAL SETTINGS
 #
 #ServerId = www-data
-ConnectionsTotal = 150
-ConnectionsPerIP = 10
+ConnectionsTotal = 250
+ConnectionsPerIP = 25
 SystemLogfile = @LOG_DIR@/system.log
 GarbageLogfile = @LOG_DIR@/garbage.log
 
