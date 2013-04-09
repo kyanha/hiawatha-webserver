@@ -55,7 +55,7 @@ cp ../extra/macosx/org.hiawatha-webserver.httpd.plist root/Library/LaunchDaemons
 echo "-- Building package"
 cp -r ../extra/macosx/diskimage .
 version=`grep VERSION config.h | cut -f2 -d'"'`
-pkgbuild --root root --version ${version} --identifier org.hiawatha-webserver.httpd hiawatha.pkg
+pkgbuild --root root --scripts ../extra/macosx/scripts --version ${version} --identifier org.hiawatha-webserver.httpd hiawatha.pkg
 productbuild --distribution ../extra/macosx/Distribution.xml --resources ../extra/macosx diskimage/hiawatha-${version}.pkg 
 echo "-- Buiding disk image"
 hdiutil create ../"Hiawatha ${version}".dmg -srcfolder diskimage -volname "Hiawatha ${version}" -ov
