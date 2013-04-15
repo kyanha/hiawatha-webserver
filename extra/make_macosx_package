@@ -16,7 +16,7 @@ fi
 # Checking for tools required for building a MacOS X package
 #
 echo "-- Checking for required tools"
-tools="/usr/bin/gcc /usr/bin/pkgbuild /usr/bin/productbuild /usr/bin/hdiutil"
+tools="/usr/bin/cc /usr/bin/pkgbuild /usr/bin/productbuild /usr/bin/hdiutil"
 missing=""
 for tool in ${tools}; do
 	if [ ! -f ${tool} ]; then
@@ -55,7 +55,7 @@ cp ../extra/macosx/org.hiawatha-webserver.httpd.plist root/Library/LaunchDaemons
 echo "-- Building package"
 cp -r ../extra/macosx/diskimage .
 version=`grep VERSION config.h | cut -f2 -d'"'`
-pkgbuild --root root --version ${version} --identifier org.hiawatha-webserver.httpd hiawatha.pkg
+pkgbuild --root root --scripts ../extra/macosx/scripts --version ${version} --identifier org.hiawatha-webserver.httpd hiawatha.pkg
 productbuild --distribution ../extra/macosx/Distribution.xml --resources ../extra/macosx diskimage/hiawatha-${version}.pkg 
 echo "-- Buiding disk image"
 hdiutil create ../"Hiawatha ${version}".dmg -srcfolder diskimage -volname "Hiawatha ${version}" -ov
