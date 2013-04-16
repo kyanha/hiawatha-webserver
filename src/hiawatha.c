@@ -48,7 +48,7 @@
 #include "tomahawk.h"
 #endif
 #ifdef ENABLE_SSL
-#include "libssl.h"
+#include "ssl.h"
 #endif
 #ifdef ENABLE_CACHE
 #include "cache.h"
@@ -549,6 +549,9 @@ int run_server(t_settings *settings) {
 #ifdef ENABLE_SSL
 	t_host             *host;
 #endif
+#ifdef HAVE_ACCF
+	struct accept_filter_arg afa;
+#endif
 
 	config = default_config();
 	if (chdir(settings->config_dir) == -1) {
@@ -877,6 +880,22 @@ int run_server(t_settings *settings) {
 		monitor_server_start();
 	}
 #endif
+
+#ifdef HAVE_ACCF
+	binding = config->binding;
+	while (binding != NULL) {
+		if (binding->enable_accf && (binding->use_ssl == false)) {
+			bzero(&afa, sizeof(afa));
+			strcpy(afa.af_name, "httpready");
+			if (setsockopt(binding->socket, SOL_SOCKET, SO_ACCEPTFILTER, &afa, sizeof(afa)) == -1) {
+				fprintf(stderr, "Error while enabling HTTP accept filter. Kernel module 'accf_http' loaded?");
+				return -1;
+			}
+		}
+		binding = binding->next;
+	}
+#endif
+ 
 
 	/* Redirecting I/O to /dev/null
 	 */

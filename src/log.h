@@ -13,7 +13,7 @@
 #define _LOG_H
 
 #include "global.h"
-#include "libip.h"
+#include "ip.h"
 #include "session.h"
 
 int  init_log_module(void);

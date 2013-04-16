@@ -12,11 +12,13 @@
 #include "config.h"
 #include <sys/types.h>
 #include <stdio.h>
+#include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include "libstr.h"
-#include "libip.h"
+#include "ip.h"
 
 int default_ipv4(t_ip_addr *ip_addr) {
 	/* set to 0.0.0.0
@@ -251,4 +253,75 @@ int hostname_to_ip(char *hostname, t_ip_addr *ip) {
 	ip->size = hostinfo->h_length;
 
 	return 0;
+}
+
+int parse_iplist(char *line, t_iplist **list) {
+	char *proxy, *mask;
+	t_iplist *new;
+	bool error = false;
+
+	while (line != NULL) {
+		split_string(line, &proxy, &line, ',');
+
+		split_string(proxy, &proxy, &mask, '/');
+
+		if ((new = (t_iplist*)malloc(sizeof(t_iplist))) == NULL) {
+			error = true;
+			break;
+		}
+
+		new->next = *list;
+		*list = new;
+
+		if (parse_ip(proxy, &(new->ip)) == -1) {
+			error = true;
+			break;
+		}
+
+		if (mask != NULL) {
+			if ((new->netmask = str2int(mask)) == -1) {
+				error = true;
+				break;
+			}
+		} else if (new->ip.family == AF_INET) {
+			new->netmask = 8 * IPv4_LEN;
+#ifdef ENABLE_IPV6
+		} else if (new->ip.family == AF_INET6) {
+			new->netmask = 8 * IPv6_LEN;
+#endif
+		} else {
+			error = true;
+			break;
+		}
+	}
+
+	if (error) {
+		remove_iplist(*list);
+		*list = NULL;
+		return -1;
+	}
+
+	return 0;
+}
+
+bool in_iplist(t_iplist *list, t_ip_addr *ip) {
+	while (list != NULL) {
+		if (ip_in_subnet(ip, &(list->ip), list->netmask)) {
+			return true;
+		}
+		list = list->next;
+	}
+
+	return false;
+}
+
+void remove_iplist(t_iplist *list) {
+	t_iplist *item;
+
+	while (list != NULL) {
+		item = list;
+		list = list->next;
+
+		free(item);
+	}
 }

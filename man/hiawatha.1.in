@@ -179,7 +179,7 @@ Logfile for all misformed HTTP requests.
 .br
 Example: GarbageLogfile = @LOG_DIR@/garbage.log
 .TP
-.B HideProxy = <ip-address>[, <ip-address>, ...]
+.B HideProxy = <ip-address>[/netmask][, <ip-address>[/netmask], ...]
 A request sent from the supplied IP address will be searched for a X-Forwarded-For header. When found, the last IP address in that field will be used as the client IP address. Make sure you only allow trusted reverse proxies in this IP list. This option does not affect the ConnectionsPerIP setting.
 .br
 Example: HideProxy = 192.168.10.20
@@ -339,6 +339,11 @@ The binding ID can be used to hook a virtual host to a binding (see RequiredBind
 .br
 Example: BindingId = LAN
 .TP
+.B EnableAccf = yes|no
+Enable the HTTP accept filter. This is only available on FreeBSD. This requires the accf_http kernel module to be loaded.
+.br
+Default = no, example: EnableAccf = yes
+.TP
 .B EnableAlter = yes|no
 Enable the PUT and DELETE HTTP request method for this binding (see AlterList and UploadDirectory for more information).
 .br
@@ -464,6 +469,11 @@ Allow execution of CGI programs.
 .br
 Default = no, example: ExecuteCGI = yes
 .TP
+.B FileHashes = <file containing file hashes>
+Points Hiawatha to a file containing SHA256 hashes for every file in the webroot directory. Before serving a file, Hiawatha checks the file hash of that file. If it doesn't match, access is denied. This protects against file changes or uploading of malware. FastCGI scripts are also checked if the FastCGI server can be reached via a UNIX socket. The file hashes file can be created via the -s option of the wigwam(1) tool.
+.br
+Example: FireHashes = /etc/hiawatha/hashes/my_website.txt
+.TP
 .B FollowSymlinks = yes|no
 Allow Hiawatha to follow symlinks to files and directories. Symlinks that stay inside the webroot or are owned by root are always followed. Note that this does not apply to CGI's which are executed via FastCGI, because Hiawatha is not able to look for symlinks on remote FastCGI servers.
 .br
@@ -473,11 +483,6 @@ Default = no, example: FollowSymlinks = yes
 Name(s) of the host that Hiawatha will be serving. May start with a wildcard, except the first hostname (a valid name is required in case of a 301 error). Hostname is a required field.
 .br
 Example: Hostname = www.my-domain.com, *.my-domain.com, www.some-alias.com
-.TP
-.B ImageReferer = hostname[, hostname, ...]:<alternative image>
-If the referer of a request for an image is not one of the specified hosts, return the alternative image instead.
-.br
-Example: ImageReferer = my-domain.com:/var/www/pics/forbidden.gif
 .TP
 .B LoginMessage = <text>
 Message that will be displayed in the login window in case of HTTP authentication (see PasswordFile for more information). When using Digest HTTP authentication, the LoginMessage should not contain a ':' sign.
@@ -671,9 +676,6 @@ Default = no, example: UseGZfile = yes
 .B FollowSymlinks
 ,
 .br
-.B ImageReferer
-,
-.br
 .B PasswordFile
 ,
 .br
@@ -769,7 +771,7 @@ Perform an action when the client is connection via a SSL secured connection, wh
 Call, Exit, Goto, Return or Skip.
 
 .TP
-The <action> statements mentioned above are described here:
+An exclamation mark in front of a pattern (negative pattern matching) makes Hiawatha perform the action when the pattern does not match. The <action> statements mentioned above are described here:
 .TP
 .B Ban <seconds>
 .br

@@ -45,6 +45,7 @@ int  ssl_receive(ssl_context *ssl, char *buffer, unsigned int maxlength);
 int  ssl_send(ssl_context *ssl, const char *buffer, unsigned int length);
 bool ssl_has_peer_cert(ssl_context *context);
 int  get_peer_cert_info(ssl_context *context, char *subject_dn, char *issuer_dn, char *serial_nr, int length);
+char *ssl_version_string(ssl_context *context);
 void ssl_close(ssl_context *ssl);
 void ssl_shutdown(void);
 #ifdef ENABLE_RPROXY

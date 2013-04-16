@@ -381,10 +381,17 @@ int kick_ip(t_ip_addr *ip) {
  */
 bool client_is_flooding(t_session *session) {
 	time_t time_passed;
+	int requests_allowed;
 
-	time_passed = session->time - session->flooding_timer + 1;
+	time_passed = session->time - session->flooding_timer;
 
-	return ((session->kept_alive * session->config->flooding_time) > (session->config->flooding_count * time_passed));
+	if (time_passed < session->config->flooding_time) {
+		requests_allowed = session->config->flooding_count;
+	} else {
+		requests_allowed = (session->config->flooding_count * time_passed) / session->config->flooding_time;
+	}
+
+	return session->kept_alive > requests_allowed;
 }
 
 /* Disconnect a client.

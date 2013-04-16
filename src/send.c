@@ -26,7 +26,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #ifdef ENABLE_SSL
-#include "libssl.h"
+#include "ssl.h"
 #endif
 #include "libfs.h"
 #include "libstr.h"

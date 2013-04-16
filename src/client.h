@@ -15,7 +15,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include "global.h"
-#include "libip.h"
+#include "ip.h"
 #include "serverconfig.h"
 #include "session.h"
 

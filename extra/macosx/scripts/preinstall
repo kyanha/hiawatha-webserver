@@ -5,7 +5,7 @@ cd /usr/local/etc/hiawatha
 files="cgi-wrapper.conf hiawatha.conf index.xslt mimetype.conf"
 
 for file in $files ; do
-  if [ -f $file ]; then
-     mv $file $file.installer.backup
-  fi
+	if [ -f $file ]; then
+		mv -f $file $file.installer.backup
+	fi
 done

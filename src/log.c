@@ -21,7 +21,6 @@
 #include <pthread.h>
 #include "global.h"
 #include "liblist.h"
-#include "libip.h"
 #include "log.h"
 
 #define BUFFER_SIZE        2 * KILOBYTE

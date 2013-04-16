@@ -15,7 +15,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include "liblist.h"
-#include "libip.h"
+#include "ip.h"
 #include "session.h"
 
 #define FCGI_VERSION_1           1

@@ -21,7 +21,6 @@
 #include "global.h"
 #include "alternative.h"
 #include "libstr.h"
-#include "libip.h"
 #include "liblist.h"
 #include "session.h"
 #include "log.h"
@@ -432,11 +431,6 @@ int copy_directory_settings(t_session *session) {
 				}
 				if (dir->alter_fmode != 0) {
 					session->host->alter_fmode = dir->alter_fmode;
-				}
-				if (dir->image_referer.size > 0) {
-					session->host->image_referer.size = dir->image_referer.size;
-					session->host->image_referer.item = dir->image_referer.item;
-					session->host->imgref_replacement = dir->imgref_replacement;
 				}
 				if (dir->passwordfile != NULL) {
 					session->host->auth_method = dir->auth_method;

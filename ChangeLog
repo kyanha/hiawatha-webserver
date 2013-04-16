@@ -1,3 +1,17 @@
+hiawatha (9.1) stable; urgency=low
+
+  * FileHashes option added.
+  * PolarSSL updated to version 1.2.7. Enabled ciphersuite selection based
+    on protocol version.
+  * Enabled accf_http support for FreeBSD. Thanks to Martin Tournoij.
+  * Better handling of previous installed configuration files under MacOS X.
+    Thanks to Sander Niemeijer.
+  * ImageReferer option removed.
+  * Bugfix: incorrect BanOnFlooding behavior.
+  * Small improvements.
+
+ -- Hugo Leisink <hugo@leisink.net>  Mon, 15 Apr 2013 17:56:48 +0200
+
 hiawatha (9.0) stable; urgency=low
 
   * Clients handled via thread pool instead of creating threads on the fly.

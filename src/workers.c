@@ -33,7 +33,7 @@
 #include "tomahawk.h"
 #endif
 #ifdef ENABLE_SSL
-#include "libssl.h"
+#include "ssl.h"
 #endif
 #ifdef ENABLE_CACHE
 #include "cache.h"
@@ -52,10 +52,10 @@
 static volatile int open_connections = 0;
 #endif
 
-char *hs_forwarded   = "X-Forwarded-For:"; /* 16 */
-char *fb_filesystem  = "access denied via filesystem";
-char *fb_accesslist  = "access denied via accesslist";
-char *unknown_host   = "(unknown)";
+char *hs_forwarded  = "X-Forwarded-For:"; /* 16 */
+char *fb_filesystem = "access denied via filesystem";
+char *fb_accesslist = "access denied via accesslist";
+char *unknown_host  = "(unknown)";
 
 #ifdef ENABLE_THREAD_POOL
 typedef struct type_thread_pool {

@@ -26,7 +26,7 @@
 #include <pthread.h>
 #include <sys/socket.h>
 #include "alternative.h"
-#include "libssl.h"
+#include "ssl.h"
 #include "libstr.h"
 #include "log.h"
 #include "polarssl/ctr_drbg.h"
@@ -53,7 +53,22 @@ static int ciphersuites[] = {
 	TLS_DHE_RSA_WITH_AES_256_CBC_SHA,
 	TLS_RSA_WITH_CAMELLIA_256_CBC_SHA256,
 	TLS_RSA_WITH_AES_256_CBC_SHA256,
+	TLS_RSA_WITH_CAMELLIA_256_CBC_SHA,
+	TLS_RSA_WITH_AES_256_CBC_SHA,
+	0
+};
+
+static int ciphersuites_tls12[] = {
+	TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
+	TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
+	TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256,
+	TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA,
+	TLS_DHE_RSA_WITH_AES_256_CBC_SHA256,
+	TLS_DHE_RSA_WITH_AES_256_CBC_SHA,
 	TLS_RSA_WITH_AES_256_GCM_SHA384,
+	TLS_RSA_WITH_AES_128_GCM_SHA256,
+	TLS_RSA_WITH_CAMELLIA_256_CBC_SHA256,
+	TLS_RSA_WITH_AES_256_CBC_SHA256,
 	TLS_RSA_WITH_CAMELLIA_256_CBC_SHA,
 	TLS_RSA_WITH_AES_256_CBC_SHA,
 	0
@@ -314,7 +329,7 @@ static int sni_callback(void *sad, ssl_context *context, const unsigned char *sn
 /* Accept incoming SSL connection
  */
 int ssl_accept(t_ssl_accept_data *sad) {
-	int result, handshake, skip;
+	int result, handshake;
 	struct timeval timer;
 	time_t start_time;
 
@@ -343,12 +358,10 @@ int ssl_accept(t_ssl_accept_data *sad) {
 
 	ssl_set_session_cache(sad->context, ssl_get_cache, &cache, ssl_set_cache, &cache);
 
-	if ((sad->min_ssl_version >= SSL_MINOR_VERSION_2) && (ciphersuites[0] == TLS_RSA_WITH_RC4_128_SHA)) {
-		skip = 1;
-	} else {
-		skip = 0;
-	}
-	ssl_set_ciphersuites(sad->context, ciphersuites + skip);
+	ssl_set_ciphersuites_for_version(sad->context, ciphersuites, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_0);
+	ssl_set_ciphersuites_for_version(sad->context, ciphersuites, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1);
+	ssl_set_ciphersuites_for_version(sad->context, ciphersuites + 1, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_2);
+	ssl_set_ciphersuites_for_version(sad->context, ciphersuites_tls12, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_3);
 
 	ssl_set_own_cert(sad->context, sad->certificate, sad->private_key);
 	if (sad->dh_size == 1024) {
@@ -468,6 +481,12 @@ int get_peer_cert_info(ssl_context *context, char *subject_dn, char *issuer_dn, 
 	return 0;
 }
 
+/* Get SSL version string
+ */
+char *ssl_version_string(ssl_context *context) {
+	return (char*)ssl_get_version(context);
+}
+
 /* Close SSL connection
  */
 void ssl_close(ssl_context *ssl) {
@@ -503,7 +522,7 @@ int ssl_connect(ssl_context *ssl, int *sock, char *hostname) {
 	if (hostname != NULL) {
 		ssl_set_hostname(ssl, hostname);
 	}
-	ssl_set_ciphersuites(ssl, ciphersuites);
+	ssl_set_ciphersuites(ssl, ciphersuites + 1);
 
 	if (ssl_handshake(ssl) != 0) {
 		return -1;

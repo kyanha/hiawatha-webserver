@@ -21,7 +21,6 @@
 #include <netinet/in.h>
 #endif
 #ifdef ENABLE_SSL
-#include "libssl.h"
 #include "polarssl/ssl.h"
 #endif
 #include <regex.h>
@@ -92,7 +91,6 @@ static t_host *new_host(void) {
 	host->wrap_cgi           = NULL;
 	init_groups(&(host->groups));
 	init_charlist(&(host->volatile_object));
-	init_charlist(&(host->image_referer));
 	host->imgref_replacement = NULL;
 	host->envir_str          = NULL;
 	host->alias              = NULL;
@@ -124,6 +122,7 @@ static t_host *new_host(void) {
 	host->monitor_requests   = false;
 	host->monitor_host       = false;
 #endif
+	host->file_hashes        = NULL;
 
 	host->next               = NULL;
 
@@ -155,7 +154,6 @@ static t_directory *new_directory(void) {
 	directory->passwordfile        = NULL;
 	directory->groupfile           = NULL;
 	init_charlist(&(directory->required_group));
-	init_charlist(&(directory->image_referer));
 	init_charlist(&(directory->alter_group));
 	directory->imgref_replacement  = NULL;
 	directory->max_clients         = -1;
@@ -188,6 +186,7 @@ static t_fcgi_server *new_fcgi_server(void) {
 	fcgi_server->session_timeout  = 900;
 	fcgi_server->chroot           = NULL;
 	fcgi_server->chroot_len       = 0;
+	fcgi_server->localhost        = false;
 	init_charlist(&(fcgi_server->extension));
 
 	return fcgi_server;
@@ -214,6 +213,9 @@ static t_binding *new_binding(void) {
 	binding->ca_crl               = NULL;
 #endif
 	binding->binding_id           = NULL;
+#ifdef HAVE_ACCF
+	binding->enable_accf          = false;
+#endif 
 	binding->enable_trace         = false;
 	binding->enable_alter         = false;
 	binding->max_keepalive        = 50;
@@ -603,16 +605,21 @@ int check_configuration(t_config *config) {
 			}
 		}
 
-		if ((host->wrap_cgi != NULL) && (host->fast_cgi.size != 0)) {
-			fprintf(stderr, "The host '%s' contains both a WrapCGI and FastCGI option.\n", *(host->hostname.item));
-			return -1;
-		}
-
 		host = host->next;
 	}
 
 	fcgi_server = config->fcgi_server;
 	while (fcgi_server != NULL) {
+		fcgi_server->localhost = true;
+		connect_to = fcgi_server->connect_to;
+		while (connect_to != NULL) {
+			if (connect_to->localhost == false) {
+				fcgi_server->localhost = false;
+				break;
+			}
+			connect_to = connect_to->next;
+		}
+
 		connect_to = fcgi_server->connect_to;
 		while (connect_to->next != NULL) {
 			connect_to = connect_to->next;
@@ -1247,6 +1254,10 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		if (parse_yesno(value, &(host->execute_cgi)) == 0) {
 			return true;
 		}
+	} else if (strcmp(key, "filehashes") == 0) {
+		if ((host->file_hashes = read_file_hashes(value)) != NULL) {
+			return true;
+		}
 	} else if (strcmp(key, "followsymlinks") == 0) {
 		if (parse_yesno(value, &(host->follow_symlinks)) == 0) {
 			return true;
@@ -1260,14 +1271,6 @@ static bool host_setting(char *key, char *value, t_host *host) {
 #endif
 		if (parse_charlist(value, &(host->hostname)) == 0) {
 			return true;
-		}
-	} else if (strcmp(key, "imagereferer") == 0) {
-		if (split_string(value, &value, &(host->imgref_replacement), ':') == 0) {
-			if ((host->imgref_replacement = strdup(host->imgref_replacement)) != NULL) {
-				if (parse_charlist(value, &(host->image_referer)) == 0) {
-					return true;
-				}
-			}
 		}
 #ifdef ENABLE_MONITOR
 	} else if (strcmp(key, "monitorrequests") == 0) {
@@ -1429,14 +1432,6 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 			directory->follow_symlinks_set = true;
 			return true;
 		}
-	} else if (strcmp(key, "imagereferer") == 0) {
-		if (split_string(value, &value, &(directory->imgref_replacement), ':') == 0) {
-			if ((directory->imgref_replacement = strdup(directory->imgref_replacement)) != NULL) {
-				if (parse_charlist(value, &(directory->image_referer)) == 0) {
-					return true;
-				}
-			}
-		}
 	} else if (strcmp(key, "passwordfile") == 0) {
 		if (parse_credentialfiles(value, &(directory->auth_method), &(directory->passwordfile), &(directory->groupfile)) == 0) {
 			return true;
@@ -1526,11 +1521,18 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 static bool binding_setting(char *key, char *value, t_binding *binding) {
 	char *rest;
 
+#ifdef HAVE_ACCF
+	if (strcmp(key, "enableaccf") == 0) {
+		if (parse_yesno(value, &(binding->enable_accf)) == 0) {
+			return true;
+		}
+	} else
+#endif 
 	if (strcmp(key, "enablealter") == 0) {
 		if (parse_yesno(value, &(binding->enable_alter)) == 0) {
 			return true;
 		}
-	}else if (strcmp(key, "enabletrace") == 0) {
+	} else if (strcmp(key, "enabletrace") == 0) {
 		if (parse_yesno(value, &(binding->enable_trace)) == 0) {
 			return true;
 		}
@@ -1618,11 +1620,13 @@ static bool fcgi_server_setting(char *key, char *value, t_fcgi_server *fcgi_serv
 				if ((connect_to->unix_socket = strdup(value)) == NULL) {
 					return false;
 				}
+				connect_to->localhost = true;
 			} else {
 				connect_to->unix_socket = NULL;
 				if (parse_ip_port(value, &(connect_to->ip_addr), &(connect_to->port)) == -1) {
 					return false;
 				}
+				connect_to->localhost = false;
 			}
 			value = rest;
 		}

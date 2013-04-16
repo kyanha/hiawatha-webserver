@@ -74,11 +74,10 @@ extern char *hs_forwarded;
 /* Read a file from disk and send it to the client.
  */
 int send_file(t_session *session) {
-	char *referer, *buffer = NULL, value[VALUE_SIZE + 1], *pos, *date, *range, *range_begin, *range_end, *new_fod;
+	char *buffer = NULL, value[VALUE_SIZE + 1], *pos, *date, *range, *range_begin, *range_end;
 	long bytes_read, total_bytes, size, speed;
 	off_t file_size, send_begin, send_end, send_size;
-	int  retval, handle;
-	bool invalid_referer, prot_oke;
+	int  retval, handle = -1;
 	struct stat status;
 	struct tm *fdate;
 #ifdef ENABLE_CACHE
@@ -92,60 +91,6 @@ int send_file(t_session *session) {
 	increment_counter(COUNTER_FILE);
 #endif
 	session->mimetype = get_mimetype(session->extension, session->config->mimetype);
-
-	/* Check the referer
-	 */
-	if ((session->host->image_referer.size > 0) && (session->mimetype != NULL)) {
-		if (strncmp(session->mimetype, "image/", 6) == 0) {
-			invalid_referer = true;
-
-			if ((referer = get_http_header("Referer:", session->http_headers)) != NULL) {
-				if (strncmp(referer, "http://", 7) == 0) {
-					prot_oke = true;
-					referer += 7;
-				} else if (strncmp(referer, "https://", 8) == 0) {
-					prot_oke = true;
-					referer += 8;
-				} else {
-					prot_oke = false;
-				}
-
-				if (prot_oke) {
-					if ((pos = strchr(referer, '/')) != NULL) {
-						*pos = '\0';
-					}
-					for (size = 0; size < session->host->image_referer.size; size++) {
-						if (hostname_match(referer, *(session->host->image_referer.item + size))) {
-							invalid_referer = false;
-							break;
-						}
-					}
-					if (pos != NULL) {
-						*pos = '/';
-					}
-				}
-			}
-
-			if (invalid_referer) {
-				if ((new_fod = (char*)malloc(strlen(session->host->imgref_replacement) + 4)) == NULL) { /* + 3 for ".gz" (gzip encoding) */
-					return 500;
-				}
-
-				free(session->file_on_disk);
-				session->file_on_disk = new_fod;
-
-				strcpy(session->file_on_disk, session->host->imgref_replacement);
-
-				if (get_target_extension(session) == -1) {
-					return 500;
-				}
-
-				session->mimetype = get_mimetype(session->extension, session->config->mimetype);
-			}
-		}
-	}
-
-	handle = -1;
 
 	/* gzip content encoding
 	 */
@@ -172,6 +117,15 @@ int send_file(t_session *session) {
 				return 403;
 			}
 			return 404;
+		}
+	}
+
+	/* File hashes
+	 */
+	if (session->host->file_hashes != NULL) {
+		if (file_hash_match(session->file_on_disk, session->host->file_hashes) == false) {
+			log_file_error(session, session->file_on_disk, "invalid file hash");
+			return 403;
 		}
 	}
 
@@ -491,7 +445,7 @@ static int extract_http_code(char *data) {
 int execute_cgi(t_session *session) {
 	int retval = 200, result, handle, len;
 	char *end_of_header, *str_begin, *str_end, *code, c;
-	bool in_body = false, send_in_chunks = true, wrap_cgi;
+	bool in_body = false, send_in_chunks = true, wrap_cgi, check_file_exists;
 #ifdef CYGWIN
 	char *old_path, *win32_path;
 #endif
@@ -526,6 +480,14 @@ int execute_cgi(t_session *session) {
 	}
 
 	if ((wrap_cgi == false) && (session->cgi_type != fastcgi)) {
+		check_file_exists = true;
+	} else if ((session->cgi_type == fastcgi) && (session->fcgi_server != NULL)) {
+		check_file_exists = session->fcgi_server->localhost;
+	} else {
+		check_file_exists = false;
+	}
+
+	if (check_file_exists) {
 		if ((handle = open(session->file_on_disk, O_RDONLY)) == -1) {
 			if (errno == EACCES) {
 				log_error(session, fb_filesystem);
@@ -534,6 +496,15 @@ int execute_cgi(t_session *session) {
 			return 404;
 		} else {
 			close(handle);
+		}
+
+		/* File hashes
+		 */
+		if (session->host->file_hashes != NULL) {
+			if (file_hash_match(session->file_on_disk, session->host->file_hashes) == false) {
+				log_file_error(session, session->file_on_disk, "invalid file hash");
+				return 403;
+			}
 		}
 	}
 

@@ -26,7 +26,7 @@
 #include "global.h"
 #include "monitor.h"
 #include "libstr.h"
-#include "libip.h"
+#include "ip.h"
 
 #define MAX_MONITOR_BUFFER_SIZE 50 * KILOBYTE
 #define MAX_TIMESTAMP_SIZE      16

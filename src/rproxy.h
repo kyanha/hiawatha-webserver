@@ -20,7 +20,7 @@
 #ifdef ENABLE_SSL
 #include "polarssl/ssl.h"
 #endif
-#include "libip.h"
+#include "ip.h"
 #include "liblist.h"
 
 typedef struct type_rproxy {

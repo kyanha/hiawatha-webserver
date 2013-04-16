@@ -375,8 +375,10 @@ static int run_tomahawk(char *line, FILE *fp, t_config *config) {
 			print_client_list(fp);
 		} else if (strcmp(param, "status") == 0) {
 			show_status(fp);
+#ifdef ENABLE_THREAD_POOL
 		} else if (strcmp(param, "threads") == 0) {
 			show_thread_pool(fp);
+#endif
 		} else {
 			fprintf(fp, "  can't show that!\n");
 		}

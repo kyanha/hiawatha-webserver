@@ -22,7 +22,6 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include "libfs.h"
-#include "libip.h"
 #include "libstr.h"
 #include "session.h"
 #include "cache.h"

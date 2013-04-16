@@ -23,13 +23,12 @@
 #include <time.h>
 #include <pthread.h>
 #include "global.h"
-#include "libstr.h"
 #include "rproxy.h"
 #ifdef ENABLE_SSL
-#include "libssl.h"
+#include "ssl.h"
 #endif
+#include "libstr.h"
 #include "libfs.h"
-#include "libip.h"
 #include "polarssl/md5.h"
 
 #define RPROXY_ID_LEN   10 /* Must be smaller than 32 */

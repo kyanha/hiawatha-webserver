@@ -19,7 +19,7 @@
 #include "config.h"
 #include <stdbool.h>
 #include "global.h"
-#include "libip.h"
+#include "ip.h"
 
 #define TIME_IN_CACHE      MINUTE
 #define MAX_CACHE_TIMER      HOUR

@@ -28,10 +28,11 @@
 #include "libstr.h"
 #include "liblist.h"
 #include "libfs.h"
-#include "libip.h"
+#include "ip.h"
 #ifdef ENABLE_TOOLKIT
 #include "toolkit.h"
 #endif
+#include "filehashes.h"
 #include "polarssl/md5.h"
 
 #define MAX_INPUT_SIZE KILOBYTE
@@ -818,6 +819,7 @@ void show_help(char *wigwam) {
 	printf("         -d <username> <realm>: create password file entry for Digest HTTP authentication.\n");
 	printf("         -h: show this information and exit.\n");
 	printf("         -q: don't print the test results.\n");
+	printf("         -s: print file hashes for current directory.\n");
 #ifdef ENABLE_TOOLKIT
 	printf("         -t [<toolkit_id> ...]: test URL toolkit rule(s).\n");
 #endif
@@ -854,6 +856,9 @@ int main(int argc, char *argv[]) {
 			}
         } else if (strcmp(argv[i], "-h") == 0) {
 			show_help(argv[0]);
+			return EXIT_SUCCESS;
+		} else if (strcmp(argv[i], "-s") == 0) {
+			print_file_hashes(".");
 			return EXIT_SUCCESS;
 #ifdef ENABLE_TOOLKIT
 		} else if (strcmp(argv[i], "-t") == 0) {

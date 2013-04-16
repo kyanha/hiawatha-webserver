@@ -40,6 +40,13 @@ typedef struct {
 	int  size;
 } t_ip_addr;
 
+typedef struct type_iplist {
+	t_ip_addr ip;
+	int netmask;
+
+	struct type_iplist *next;
+} t_iplist;
+
 int  default_ipv4(t_ip_addr *ip_addr);
 #ifdef ENABLE_IPV6
 int  default_ipv6(t_ip_addr *ip_addr);
@@ -54,5 +61,8 @@ bool ip_in_subnet(t_ip_addr *ip, t_ip_addr *subnet, int mask);
 int parse_ip_port(char *line, t_ip_addr *ip, int *port);
 int ip_to_str(char *str, t_ip_addr *ip, int max_len);
 int hostname_to_ip(char *hostname, t_ip_addr *ip);
+int  parse_iplist(char *line, t_iplist **list);
+bool in_iplist(t_iplist *list, t_ip_addr *ip);
+void remove_iplist(t_iplist *list);
 
 #endif

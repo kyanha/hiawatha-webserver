@@ -17,7 +17,7 @@
 #include "global.h"
 #include "libstr.h"
 #include "liblist.h"
-#include "libip.h"
+#include "polarssl/sha4.h"
 
 /*---< headerlist >-----------------------------------------------------------*/
 
@@ -354,40 +354,6 @@ t_access ip_allowed(t_ip_addr *ip, t_accesslist *list) {
 	}
 
 	return unspecified;
-}
-
-/*---< ip list >-------------------------------------------------------------*/
-
-int parse_iplist(char *line, t_iplist **list) {
-	char *proxy;
-	t_iplist *new;
-
-	while (line != NULL) {
-		split_string(line, &proxy, &line, ',');
-
-		if ((new = (t_iplist*)malloc(sizeof(t_iplist))) == NULL) {
-			return -1;
-		}
-		new->next = *list;
-		*list = new;
-
-		if (parse_ip(proxy, &(new->ip)) == -1) {
-			return -1;
-		}
-	}
-
-	return 0;
-}
-
-bool in_iplist(t_iplist *list, t_ip_addr *ip) {
-	while (list != NULL) {
-		if (same_ip(&(list->ip), ip)) {
-			return true;
-		}
-		list = list->next;
-	}
-
-	return false;
 }
 
 /*---< key/value >-----------------------------------------------------------*/

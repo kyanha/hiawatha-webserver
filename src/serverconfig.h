@@ -17,7 +17,7 @@
 #include <poll.h>
 #include <regex.h>
 #include "global.h"
-#include "libip.h"
+#include "ip.h"
 #include "mimetype.h"
 #ifdef ENABLE_TOOLKIT
 #include "toolkit.h"
@@ -29,8 +29,9 @@
 #include "liblist.h"
 #include "userconfig.h"
 #ifdef ENABLE_SSL
-#include "libssl.h"
+#include "ssl.h"
 #endif
+#include "filehashes.h"
 
 #define MAX_START_FILE_LENGTH 32
 
@@ -74,6 +75,7 @@ typedef struct type_connect_to {
 	int           port;
 	t_ip_addr     ip_addr;
 	bool          available;
+	bool          localhost;
 
 	struct type_connect_to *next;
 } t_connect_to;
@@ -93,6 +95,7 @@ typedef struct type_fcgi_server {
 	int           session_timeout;
 	char          *chroot;
 	size_t        chroot_len;
+	bool          localhost;
 
 	t_cgi_session *cgi_session_list[256];
 	pthread_mutex_t cgi_session_mutex[256];
@@ -122,6 +125,9 @@ typedef struct type_binding {
 	x509_crl      *ca_crl;
 #endif
 
+#ifdef HAVE_ACCF
+	bool          enable_accf;
+#endif 
 	bool          enable_trace;
 	bool          enable_alter;
 	int           max_keepalive;
@@ -129,7 +135,6 @@ typedef struct type_binding {
 	long          max_upload_size;
 	int           time_for_1st_request;
 	int           time_for_request;
-
 	int           socket;
 	struct pollfd *poll_data;
 
@@ -160,7 +165,6 @@ typedef struct type_directory {
 	t_accesslist  *alter_list;
 	t_charlist    alter_group;
 	mode_t        alter_fmode;
-	t_charlist    image_referer;
 	char          *imgref_replacement;
 	t_keyvalue    *envir_str;
 	int           time_for_cgi;
@@ -213,7 +217,6 @@ typedef struct type_host {
 	t_accesslist    *alter_list;
 	mode_t          alter_fmode;
 	char            *run_on_alter;
-	t_charlist      image_referer;
 	char            *imgref_replacement;
 	t_keyvalue      *envir_str;
 	t_keyvalue      *alias;
@@ -249,6 +252,7 @@ typedef struct type_host {
 	bool            monitor_requests;
 	bool            monitor_host;
 #endif
+	t_file_hash     *file_hashes;
 
 	struct type_host *next;
 } t_host;
@@ -353,8 +357,5 @@ int read_user_configfile(char *configfile, t_host *host, t_tempdata **tempdata);
 t_host *get_hostrecord(t_host *host, char *hostname, t_binding *binding);
 unsigned short get_throttlespeed(char *type, t_throttle *throttle);
 void close_bindings(t_binding *binding);
-#ifdef ENABLE_SSL
-void fill_random_buffer(t_config *config, char *buffer, int size);
-#endif
 
 #endif

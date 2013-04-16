@@ -14,9 +14,9 @@
 
 #include <time.h>
 #ifdef ENABLE_SSL
-#include "libssl.h"
+#include "ssl.h"
 #endif
-#include "libip.h"
+#include "ip.h"
 #include "liblist.h"
 #include "serverconfig.h"
 

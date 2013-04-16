@@ -14,7 +14,7 @@
 
 #include <stdbool.h>
 #include "global.h"
-#include "libip.h"
+#include "ip.h"
 
 typedef enum { deny, allow, pwd, unspecified } t_access;
 typedef enum { tc_data, tc_charlist, tc_accesslist, tc_keyvalue, tc_errorhandler } t_tempdata_type;
@@ -48,13 +48,6 @@ typedef struct type_keyvalue {
 	struct type_keyvalue *next;
 } t_keyvalue;
 
-typedef struct type_denybotlist {
-	char *bot;
-	t_charlist uri;
-
-	struct type_denybotlist *next;
-} t_denybotlist;
-
 typedef struct type_tempdata {
 	void *content;
 	t_tempdata_type type;
@@ -68,12 +61,6 @@ typedef struct type_ipcounterlist {
 
 	struct type_ipcounterlist *next;
 } t_ipcounterlist;
-
-typedef struct type_iplist {
-	t_ip_addr ip;
-
-	struct type_iplist *next;
-} t_iplist;
 
 typedef struct type_error_handler {
 	int  code;
@@ -96,9 +83,6 @@ void remove_charlist(t_charlist *list);
 t_accesslist *parse_accesslist(char *line, bool pwd_allowed, t_accesslist *list);
 t_accesslist *remove_accesslist(t_accesslist *list);
 t_access ip_allowed(t_ip_addr *ip, t_accesslist *list);
-
-int  parse_iplist(char *line, t_iplist **list);
-bool in_iplist(t_iplist *list, t_ip_addr *ip);
 
 int  parse_keyvalue(char *line, t_keyvalue **kvlist, char *delimiter);
 t_keyvalue *remove_keyvaluelist(t_keyvalue *list);

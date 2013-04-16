@@ -14,13 +14,13 @@ set(hiawatha_src
 	src/cgi.c
 	src/client.c
 	src/envir.c
+	src/filehashes.c
 	src/hiawatha.c
 	src/http.c
 	src/httpauth.c
+	src/ip.c
 	src/libfs.c
-	src/libip.c
 	src/liblist.c
-	src/libssl.c
 	src/libstr.c
 	src/log.c
 	src/mimetype.c
@@ -29,6 +29,7 @@ set(hiawatha_src
 	src/send.c
 	src/serverconfig.c
 	src/session.c
+	src/ssl.c
 	src/target.c
 	src/tomahawk.c
 	src/toolkit.c
@@ -37,14 +38,14 @@ set(hiawatha_src
 	src/xslt.c
 )
 if(NOT ENABLE_SSL)
-	set(hiawatha_src ${hiawatha_src} polarssl/library/base64.c  polarssl/library/md5.c)
+	set(hiawatha_src ${hiawatha_src} polarssl/library/base64.c polarssl/library/md5.c polarssl/library/sha2.c)
 endif()
 
 # ssi-cgi sources
 set(ssi_cgi_src
 	src/alternative.c
+	src/ip.c
 	src/libfs.c
-	src/libip.c
 	src/liblist.c
 	src/libstr.c
 	src/ssi-cgi.c
@@ -53,13 +54,15 @@ set(ssi_cgi_src
 # wigwam sources
 set(wigwam_src
 	src/alternative.c
+	src/filehashes.c
+	src/ip.c
 	src/libfs.c
-	src/libip.c
 	src/libstr.c
 	src/liblist.c
 	src/toolkit.c
 	src/wigwam.c
 	polarssl/library/md5.c
+	polarssl/library/sha2.c
 )
 
 # configuration files

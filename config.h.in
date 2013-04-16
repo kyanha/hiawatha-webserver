@@ -47,3 +47,7 @@
 #cmakedefine HAVE_STRNCASECMP ${HAVE_STRNCASECMP}
 #cmakedefine HAVE_STRNSTR ${HAVE_STRNSTR}
 #cmakedefine HAVE_STRCASESTR ${HAVE_STRCASESTR}
+
+/* Features
+ */
+#cmakedefine HAVE_ACCF ${HAVE_ACCF} 

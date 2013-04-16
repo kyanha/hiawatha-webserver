@@ -15,7 +15,7 @@
 #include "alternative.h"
 #include "envir.h"
 #include "libstr.h"
-#include "libip.h"
+#include "ip.h"
 #include "session.h"
 
 #define SSL_VAR_SIZE   512
@@ -233,6 +233,8 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 	 */
 	http_header_to_environment(session, fcgi_buffer, "CF-Connecting-IP:", "HTTP_CF_CONNECTING_IP");
 	http_header_to_environment(session, fcgi_buffer, "CF-IPCountry:", "HTTP_CF_IPCOUNTRY");
+	http_header_to_environment(session, fcgi_buffer, "CF-RAY:", "HTTP_CF_RAY");
+	http_header_to_environment(session, fcgi_buffer, "CF-Visitor:", "HTTP_CF_VISITOR");
 
 	/* Convert X-* HTTP headers to HTTP_* environment variables
 	 */
@@ -288,6 +290,7 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 			add_to_environment(fcgi_buffer, "SSL_ISSUER_DN", issuer_dn);
 			add_to_environment(fcgi_buffer, "SSL_CERT_SERIAL", serial_nr);
 		}
+		add_to_environment(fcgi_buffer, "SSL_VERSION", ssl_version_string(&(session->ssl_context)));
 	}
 #endif
 }
