@@ -1,3 +1,13 @@
+hiawatha (9.2) stable; urgency=low
+
+  * Added support for compiling Hiawatha against the system's default
+    version (>=1.2.0) of the PolarSSL library.
+  * PolarSSL updated to version 1.2.8.
+  * Small bugfixes (memory leaks in error situations).
+  * Bugfix: virtual hostname selection for IPv6 with non-standard port.
+
+ -- Hugo Leisink <hugo@leisink.net>  Sun, 23 Jun 2013 12:25:52 +0200
+
 hiawatha (9.1) stable; urgency=low
 
   * FileHashes option added.

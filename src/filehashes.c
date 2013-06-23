@@ -59,12 +59,14 @@ t_file_hash *read_file_hashes(char *hashes_file) {
 		}
 
 		if (strlen(hash) != FILE_HASH_SIZE) {
+			free(new);
 			fclose(fp);
 			return NULL;
 		}
 		memcpy(new->hash, hash, SHA_HASH_SIZE + 1);
 
 		if ((new->filename = strdup(filename)) == NULL) {
+			free(new);
 			fclose(fp);
 			return NULL;
 		}
@@ -124,7 +126,6 @@ bool file_hash_match(char *filename, t_file_hash *file_hashes) {
 	if ((file_hash = search_file(filename, file_hashes)) == NULL) {
 		return false;
 	}
-
 	if (sha2_file(filename, bin_hash, 0) != 0) {
 		return false;
 	}

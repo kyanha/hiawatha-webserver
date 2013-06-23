@@ -102,6 +102,7 @@ t_rproxy *rproxy_setting(char *line) {
 	/* Pattern
 	 */
 	if (regcomp(&(rproxy->pattern), path, REG_EXTENDED) != 0) {
+		free(rproxy);
 		return NULL;
 	}
 
@@ -116,6 +117,7 @@ t_rproxy *rproxy_setting(char *line) {
 		rproxy->use_ssl = true;
 #endif
 	} else {
+		free(rproxy);
 		return NULL;
 	}
 
@@ -129,6 +131,7 @@ t_rproxy *rproxy_setting(char *line) {
 				*(path + len - 1) = '\0';
 			}
 			if ((rproxy->path = strdup(path)) == NULL) {
+				free(rproxy);
 				return NULL;
 			}
 			rproxy->path_len = strlen(rproxy->path);
@@ -142,12 +145,16 @@ t_rproxy *rproxy_setting(char *line) {
 	if (*line == '[') {
 		line++;
 		if ((port = strchr(line, ']')) == NULL) {
+			check_free(rproxy->path);
+			free(rproxy);
 			return NULL;
 		}
 		*(port++) = '\0';
 		if (*port == '\0') {
 			port = NULL;
 		} else if (*port != ':') {
+			check_free(rproxy->path);
+			free(rproxy);
 			return NULL;
 		}
 	} else
@@ -157,8 +164,12 @@ t_rproxy *rproxy_setting(char *line) {
 	if (port != NULL) {
 		*(port++) = '\0';
 		if ((rproxy->port = str2int(port)) < 1) {
+			check_free(rproxy->path);
+			free(rproxy);
 			return NULL;
 		} else if (rproxy->port > 65535) {
+			check_free(rproxy->path);
+			free(rproxy);
 			return NULL;
 		}
 	} else {
@@ -174,6 +185,8 @@ t_rproxy *rproxy_setting(char *line) {
 	 */
 	if (parse_ip(line, &(rproxy->ip_addr)) == -1) {
 		if ((rproxy->hostname = strdup(line)) == NULL) {
+			check_free(rproxy->path);
+			free(rproxy);
 			return NULL;
 		}
 		rproxy->hostname_len = strlen(rproxy->hostname);
@@ -184,6 +197,9 @@ t_rproxy *rproxy_setting(char *line) {
 
 		if (resolved == -1) {
 			fprintf(stderr, "Can't resolve hostname '%s'\n", line);
+			check_free(rproxy->path);
+			check_free(rproxy->hostname);
+			free(rproxy);
 			return NULL;
 		}
 	} else {
@@ -195,6 +211,9 @@ t_rproxy *rproxy_setting(char *line) {
 	 */
 	if (timeout != NULL) {
 		if ((rproxy->timeout = str2int(timeout)) <= 0) {
+			check_free(rproxy->path);
+			check_free(rproxy->hostname);
+			free(rproxy);
 			return NULL;
 		}
 	}

@@ -57,7 +57,7 @@ static int ciphersuites[] = {
 	TLS_RSA_WITH_AES_256_CBC_SHA,
 	0
 };
-
+#if POLARSSL_VERSION_NUMBER >= 0x01020700
 static int ciphersuites_tls12[] = {
 	TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
 	TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
@@ -73,6 +73,7 @@ static int ciphersuites_tls12[] = {
 	TLS_RSA_WITH_AES_256_CBC_SHA,
 	0
 };
+#endif
 
 static char *dhm_4096_P =
 	"FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1"
@@ -103,10 +104,10 @@ static char *ssl_error_logfile;
 static rsa_context rsa;
 static pthread_mutex_t random_mutex;
 static pthread_mutex_t cache_mutex;
+static ssl_cache_context cache;
+static t_sni_list *sni_list = NULL;
 static ctr_drbg_context ctr_drbg;
 static entropy_context entropy;
-static t_sni_list *sni_list = NULL;
-static ssl_cache_context cache;
 
 /* Initialize SSL library
  */
@@ -348,20 +349,26 @@ int ssl_accept(t_ssl_accept_data *sad) {
 
 	ssl_set_min_version(sad->context, SSL_MAJOR_VERSION_3, sad->min_ssl_version);
 	ssl_set_renegotiation(sad->context, SSL_RENEGOTIATION_DISABLED);
-
 	ssl_set_rng(sad->context, ssl_random, &ctr_drbg);
 #ifdef ENABLE_DEBUG
 	ssl_set_dbg(sad->context, ssl_debug, stderr);
 #endif
 	ssl_set_bio(sad->context, net_recv, sad->client_fd, net_send, sad->client_fd);
 	ssl_set_sni(sad->context, sni_callback, sad);
-
 	ssl_set_session_cache(sad->context, ssl_get_cache, &cache, ssl_set_cache, &cache);
 
+#if POLARSSL_VERSION_NUMBER >= 0x01020700
 	ssl_set_ciphersuites_for_version(sad->context, ciphersuites, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_0);
 	ssl_set_ciphersuites_for_version(sad->context, ciphersuites, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1);
 	ssl_set_ciphersuites_for_version(sad->context, ciphersuites + 1, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_2);
 	ssl_set_ciphersuites_for_version(sad->context, ciphersuites_tls12, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_3);
+#else
+	int skip = 0;
+	if ((sad->min_ssl_version >= SSL_MINOR_VERSION_2) && (ciphersuites[0] == TLS_RSA_WITH_RC4_128_SHA)) {
+		skip = 1;
+	}
+	ssl_set_ciphersuites(sad->context, ciphersuites + skip);
+#endif
 
 	ssl_set_own_cert(sad->context, sad->certificate, sad->private_key);
 	if (sad->dh_size == 1024) {

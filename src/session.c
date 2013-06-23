@@ -463,41 +463,29 @@ int copy_directory_settings(t_session *session) {
  */
 int remove_port_from_hostname(char *hostname, t_binding *binding) {
 	char *c;
-#ifdef ENABLE_IPV6
-	char old, ip[IPv6_LEN];
-#endif
 
 	if (hostname == NULL) {
 		return -1;
 	}
 
-	if (binding->interface.family == AF_INET) {
-		if ((c = strrchr(hostname, ':')) != NULL) {
-			if (c == hostname) {
-				return -1;
-			}
-
-			*c = '\0';
-		}
 #ifdef ENABLE_IPV6
-	} else if (binding->interface.family == AF_INET6) {
-		if ((c = strrchr(hostname, '.')) != NULL) {
-			if (c == hostname) {
-				return -1;
+	if (binding->interface.family == AF_INET6) {
+		if ((*hostname == '[') && ((c = strchr(hostname, ']')) != NULL)) {
+			if (*(c + 1) == ':') {
+				*(c + 1) = '\0';
 			}
 
-			old = *c;
-			*c = '\0';
-
-			if ((*hostname == '[') && (*(c - 1) == ']')) {
-				return 0;
-			}
-
-			if (inet_pton(AF_INET6, hostname, ip) <= 0) {
-				*c = old;
-			}
+			return 0;
 		}
+	}
 #endif
+
+	if ((c = strrchr(hostname, ':')) != NULL) {
+		if (c == hostname) {
+			return -1;
+		}
+
+		*c = '\0';
 	}
 
 	return 0;

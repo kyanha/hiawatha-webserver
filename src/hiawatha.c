@@ -49,6 +49,7 @@
 #endif
 #ifdef ENABLE_SSL
 #include "ssl.h"
+#include "polarssl/version.h"
 #endif
 #ifdef ENABLE_CACHE
 #include "cache.h"
@@ -101,7 +102,7 @@ char *version_string = "Hiawatha v"VERSION
 	", reverse proxy"
 #endif
 #ifdef ENABLE_SSL
-	", SSL"
+	", SSL ("POLARSSL_VERSION_STRING")"
 #endif
 #ifdef ENABLE_TOMAHAWK
 	", Tomahawk"
@@ -304,7 +305,7 @@ int bind_sockets(t_binding *binding) {
 #ifdef ENABLE_IPV6
 	struct sockaddr_in6 saddr6;
 #endif
-	int domain, one, result;
+	int domain, optval, result;
 
 	while (binding != NULL) {
 #ifdef ENABLE_IPV6
@@ -317,14 +318,22 @@ int bind_sockets(t_binding *binding) {
 			return -1;
 		}
 
-		one = 1;
-		if (setsockopt(binding->socket, SOL_SOCKET, SO_REUSEADDR, (void*)&one, sizeof(int)) == -1) {
+		optval = 1;
+		if (setsockopt(binding->socket, SOL_SOCKET, SO_REUSEADDR, (void*)&optval, sizeof(int)) == -1) {
 			perror("setsockopt(SOL_SOCKET, SO_REUSEADDR)");
 		}
-		one = 1;
-		if (setsockopt(binding->socket, IPPROTO_TCP, TCP_NODELAY, (void*)&one, sizeof(int)) == -1) {
+
+		optval = 1;
+		if (setsockopt(binding->socket, IPPROTO_TCP, TCP_NODELAY, (void*)&optval, sizeof(int)) == -1) {
 			perror("setsockopt(IPPROTO_TCP, TCP_NODELAY)");
 		}
+
+/*
+		optval = 1;
+		if (setsockopt(binding->socket, SOL_TCP, TCP_FASTOPEN, (void*)&optval, sizeof(int)) == -1) {
+			perror("setsockopt(IPPROTO_TCP, TCP_NODELAY)");
+		}
+*/
 
 		if (binding->interface.family == AF_INET) {
 			/* IPv4
@@ -383,7 +392,7 @@ int accept_connection(t_binding *binding, t_config *config) {
 #ifdef ENABLE_IPV6
 	struct sockaddr_in6 caddr6;
 #endif
-	int                 total_conns, one, conns_per_ip;
+	int                 total_conns, optval, conns_per_ip;
 	struct timeval      timer;
 #ifdef ENABLE_DEBUG
 	static int          thread_id = 0;
@@ -465,8 +474,8 @@ int accept_connection(t_binding *binding, t_config *config) {
 
 	if ((total_conns = connection_allowed(&(session->ip_address), conns_per_ip, config->total_connections)) >= 0) {
 		if (total_conns < (config->total_connections >> 2)) {
-			one = 1;
-			if (setsockopt(session->client_socket, IPPROTO_TCP, TCP_NODELAY, (void*)&one, sizeof(int)) == -1) {
+			optval = 1;
+			if (setsockopt(session->client_socket, IPPROTO_TCP, TCP_NODELAY, (void*)&optval, sizeof(int)) == -1) {
 				close(session->client_socket);
 				free(session);
 				log_string(config->system_logfile, "error setsockopt(TCP_NODELAY)");

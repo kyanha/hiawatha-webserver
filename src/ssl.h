@@ -20,6 +20,7 @@
 #include "liblist.h"
 #include "polarssl/ssl.h"
 #include "polarssl/x509.h"
+#include "polarssl/version.h"
 
 typedef struct {
 	ssl_context *context;
@@ -34,8 +35,10 @@ typedef struct {
 } t_ssl_accept_data;
 
 int  init_ssl_module(char *logfile);
+#if POLARSSL_VERSION_NUMBER >= 0x01020000
 int  ssl_register_sni(t_charlist *hostname, rsa_context *private_key, x509_cert *certificate,
                   x509_cert *ca_certificate, x509_crl *ca_crl);
+#endif
 int  ssl_load_key_cert(char *file, rsa_context **private_key, x509_cert **certificate);
 int  ssl_load_ca_cert(char *file, x509_cert **ca_certificate);
 int  ssl_load_ca_crl(char *file, x509_crl **ca_crl);

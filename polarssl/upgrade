@@ -29,3 +29,6 @@ rm -f include/.gitignore
 rm -f library/.gitignore
 rm -rf ${dir}
 rm polarssl.tgz
+
+version=`cat include/polarssl/version.h | grep POLARSSL_VERSION_STRING | head -1 | cut -f2 -d'"'`
+echo "PolarSSL upgraded to version ${version}."

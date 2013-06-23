@@ -1378,7 +1378,6 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		if (parse_yesno(value, &(host->webdav_app)) == 0) {
 			if (host->webdav_app) {
 				host->execute_cgi = true;
-				host->enable_path_info = true;
 			}
 			return true;
 		}

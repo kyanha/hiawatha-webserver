@@ -30,6 +30,7 @@
 #include "userconfig.h"
 #ifdef ENABLE_SSL
 #include "ssl.h"
+#include "polarssl/version.h"
 #endif
 #include "filehashes.h"
 

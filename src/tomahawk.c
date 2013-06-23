@@ -95,6 +95,7 @@ int add_admin(int sock) {
 	if ((new = (t_admin*)malloc(sizeof(t_admin))) == NULL) {
 		return -1;
 	} else if ((new->fp = fdopen(sock, "r+")) == NULL) {
+		free(new);
 		return -1;
 	}
 

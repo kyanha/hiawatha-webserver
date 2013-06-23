@@ -64,8 +64,10 @@ t_config *get_configuration(void) {
 	}
 
 	if ((extensions = strdup(SSI_EXTENSIONS)) == NULL) {
+		free(config);
 		return NULL;
 	} else if (parse_charlist(extensions, &(config->extension)) == -1) {
+		free(config);
 		return NULL;
 	}
 
@@ -76,6 +78,7 @@ t_config *get_configuration(void) {
 	}
 
 	if ((config->working_dir = (char*)malloc(MAX_CWD)) == NULL) {
+		free(config);
 		return NULL;
 	} else if (getcwd(config->working_dir, MAX_CWD) == NULL) {
 		config->working_dir = CURRENT_DIRECTORY;

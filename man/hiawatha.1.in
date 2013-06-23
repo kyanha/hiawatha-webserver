@@ -237,7 +237,7 @@ Specify the IP address of the monitor server. This enables logging of statistica
 .br
 Example: MonitorServer = 192.168.1.2
 .TP
-.B MonitorStatsInterval = <seconds>
+.B MonitorStatsInterval = <minutes>
 Define the interval at which Hiawatha will make the statistical information available for the Hiawatha Monitor.
 .br
 Default = 60, example: MonitorStatsInterval = 30
@@ -316,7 +316,7 @@ The name of the web directory in a user's home directory (see UserWebsites for m
 Default = public_html, example: UserDirectory = website
 .TP
 .B WaitForCGI = yes|no
-Lets Hiawatha wait for CGI processes to finish (via waitpid() call) or not (SIGCHLD set to SIG_IGN).
+Lets Hiawatha wait for CGI processes to finish after receiving the last output byte (via waitpid() call) or not (SIGCHLD set to SIG_IGN).
 .br
 Default = yes, example: WaitForCGI = no
 .TP
@@ -472,7 +472,7 @@ Default = no, example: ExecuteCGI = yes
 .B FileHashes = <file containing file hashes>
 Points Hiawatha to a file containing SHA256 hashes for every file in the webroot directory. Before serving a file, Hiawatha checks the file hash of that file. If it doesn't match, access is denied. This protects against file changes or uploading of malware. FastCGI scripts are also checked if the FastCGI server can be reached via a UNIX socket. The file hashes file can be created via the -s option of the wigwam(1) tool.
 .br
-Example: FireHashes = /etc/hiawatha/hashes/my_website.txt
+Example: FileHashes = /etc/hiawatha/hashes/my_website.txt
 .TP
 .B FollowSymlinks = yes|no
 Allow Hiawatha to follow symlinks to files and directories. Symlinks that stay inside the webroot or are owned by root are always followed. Note that this does not apply to CGI's which are executed via FastCGI, because Hiawatha is not able to look for symlinks on remote FastCGI servers.
@@ -497,7 +497,7 @@ Default = no, example: MonitorRequests = yes
 .B NoExtensionAs = <extension>
 If the requested file has no extension, treat it as if the extension was equal to <extension>.
 .br
-Example: NoExtension = cgi
+Example: NoExtensionAs = cgi
 .TP
 .B PasswordFile = ((Basic|Digest):<passwordfile>)|none[,<groupfile>]
 When this option is set, HTTP authentication is enabled. Use the full path to the password file when that password file should also be used for sub-directories. Entries for the password file can be created via the wigwam(1) tool. The realm fo Digest HTTP authentication must be equal to the text set via LoginMessage.
@@ -529,7 +529,7 @@ By default, a virtual host can be visited via all bindings. Via this opion, you 
 Example: RequiredBinding = LAN
 .TP
 .B RequiredCA = ...
-Use this option if you want to make use of the SNI capabilities of Hiawatha. See the RequiredCA option in the BINDING CONFIGURATION chapter for more information.
+Use this option inside a virtualhost block if you want to make use of the SNI capabilities of Hiawatha. See the RequiredCA option in the BINDING CONFIGURATION chapter for more information.
 .TP
 .B RequiredGroup = <groupname>[, <groupname>, ...]
 The <groupname> is the name of the group a user must be a member of to have access (see PasswordFile for more information).
@@ -568,7 +568,7 @@ Default = no, example: ShowIndex = /etc/hiawatha/index.xslt
 (requires that Hiawatha was not compiled with -DENABLE_XSLT=off)
 .TP
 .B SSLcertFile = ...
-Use this option if you want to make use of the SNI capabilities of Hiawatha. See the SSLcertFile option in the BINDING CONFIGURATION chapter for more information.
+Use this option inside a virtualhost block if you want to make use of the SNI capabilities of Hiawatha. See the SSLcertFile option in the BINDING CONFIGURATION chapter for more information.
 .TP
 .B StartFile = <filename>
 The file which will be send to the browser when a directory is requested.

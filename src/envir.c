@@ -203,6 +203,7 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 		add_to_environment(fcgi_buffer, "REMOTE_USER", session->remote_user);
 	}
 
+/*
 	http_header_to_environment(session, fcgi_buffer, "Accept:", "HTTP_ACCEPT");
 	http_header_to_environment(session, fcgi_buffer, "Accept-Charset:", "HTTP_ACCEPT_CHARSET");
 	http_header_to_environment(session, fcgi_buffer, "Accept-Encoding:", "HTTP_ACCEPT_ENCODING");
@@ -219,28 +220,33 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 	http_header_to_environment(session, fcgi_buffer, "Referer:", "HTTP_REFERER");
 	http_header_to_environment(session, fcgi_buffer, "User-Agent:", "HTTP_USER_AGENT");
 	http_header_to_environment(session, fcgi_buffer, "Via:", "HTTP_VIA");
+*/
 
 	/* Webdav headers
 	 */
+/*
 	if (session->host->webdav_app) {
 		http_header_to_environment(session, fcgi_buffer, "Depth:", "HTTP_DEPTH");
 		http_header_to_environment(session, fcgi_buffer, "Destination:", "HTTP_DESTINATION");
 		http_header_to_environment(session, fcgi_buffer, "If:", "HTTP_IF");
 		http_header_to_environment(session, fcgi_buffer, "Overwrite:", "HTTP_OVERWRITE");
 	}
+*/
 
 	/* CloudFlare headers
 	 */
+/*
 	http_header_to_environment(session, fcgi_buffer, "CF-Connecting-IP:", "HTTP_CF_CONNECTING_IP");
 	http_header_to_environment(session, fcgi_buffer, "CF-IPCountry:", "HTTP_CF_IPCOUNTRY");
 	http_header_to_environment(session, fcgi_buffer, "CF-RAY:", "HTTP_CF_RAY");
 	http_header_to_environment(session, fcgi_buffer, "CF-Visitor:", "HTTP_CF_VISITOR");
+*/
 
 	/* Convert X-* HTTP headers to HTTP_* environment variables
 	 */
 	http_headers = session->http_headers;
 	while (http_headers != NULL) {
-		if (strncasecmp(http_headers->data, "X-", 2) == 0) {
+		if (strcasecmp(http_headers->data, "Content-Type") != 0) {
 			if (header_to_variable(http_headers->data, (char*)&variable, MAX_HEADER_LEN) != -1) {
 				add_to_environment(fcgi_buffer, variable, http_headers->data + http_headers->value_offset);
 			}

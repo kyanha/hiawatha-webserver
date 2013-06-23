@@ -213,6 +213,7 @@ int read_file(char *config_file, t_line **config, t_line **aliases, bool handle_
 	while ((lines_read = fgets_multi(line, MAX_INPUT_SIZE, fp)) != 0) {
 		if ((lines_read == -1) || (strlen(line) > MAX_INPUT_SIZE)) {
 			fprintf(stderr, "Line %d in %s is too long.\n", linenr, config_file);
+			fclose(fp);
 			return -1;
 		}
 

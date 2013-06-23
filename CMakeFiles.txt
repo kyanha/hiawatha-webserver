@@ -37,8 +37,12 @@ set(hiawatha_src
 	src/workers.c
 	src/xslt.c
 )
-if(NOT ENABLE_SSL)
-	set(hiawatha_src ${hiawatha_src} polarssl/library/base64.c polarssl/library/md5.c polarssl/library/sha2.c)
+if(NOT ENABLE_SSL AND NOT USE_SYSTEM_POLARSSL)
+	set(hiawatha_src ${hiawatha_src}
+		polarssl/library/base64.c
+		polarssl/library/md5.c
+		polarssl/library/sha2.c
+	)
 endif()
 
 # ssi-cgi sources
@@ -61,9 +65,13 @@ set(wigwam_src
 	src/liblist.c
 	src/toolkit.c
 	src/wigwam.c
-	polarssl/library/md5.c
-	polarssl/library/sha2.c
 )
+if(NOT ENABLE_SSL AND NOT USE_SYSTEM_POLARSSL)
+	set(wigwam_src ${wigwam_src}
+		polarssl/library/md5.c
+		polarssl/library/sha2.c
+	)
+endif()
 
 # configuration files
 set(config_files
