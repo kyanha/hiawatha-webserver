@@ -34,7 +34,7 @@
 #define ec_INVALID_URL          -8
 
 typedef enum { no_cgi, binary, script, fastcgi} t_cgi_type;
-typedef enum { unknown, GET, POST, HEAD, TRACE, PUT, DELETE, unsupported } t_req_method;
+typedef enum { unknown, GET, POST, HEAD, TRACE, PUT, DELETE, CONNECT, unsupported } t_req_method;
 typedef enum { missing_slash, require_ssl, location } t_cause_of_301;
 
 typedef struct type_session {
@@ -121,6 +121,19 @@ typedef struct type_session {
 	int             thread_id;
 	char            *current_task;
 #endif
+
+#ifdef ENABLE_RPROXY	
+	/* Reverse proxy keep-alive
+	 */
+	bool            rproxy_kept_alive;
+	t_ip_addr       rproxy_addr;
+	int             rproxy_port;
+	int             rproxy_socket;
+#ifdef ENABLE_SSL
+	bool            rproxy_use_ssl;
+	ssl_context     rproxy_ssl;
+#endif
+#endif
 } t_session;
 
 void init_session(t_session *session);
@@ -136,7 +149,11 @@ bool is_volatile_object(t_session *session);
 int  load_user_config(t_session *session);
 int  copy_directory_settings(t_session *session);
 bool client_is_rejected_bot(t_session *session);
+#ifdef ENABLE_IPV6
 int  remove_port_from_hostname(char *hostname, t_binding *binding);
+#else
+int  remove_port_from_hostname(char *hostname);
+#endif
 int  prevent_xss(t_session *session);
 int  init_sqli_detection(void);
 int  prevent_sqli(t_session *session);

@@ -325,6 +325,33 @@ static int serve_client(t_session *session) {
 
 	session->time = time(NULL);
 
+#ifdef ENABLE_RPROXY
+	if (session->request_method == CONNECT) {
+		if (in_iplist(session->config->tunnel_ssh, &(session->ip_address)) == false) {
+			return 405;
+		}
+
+#ifdef ENABLE_SSL
+		if (session->binding->use_ssl) {
+			return 405;
+		}
+#endif
+
+		if (strcmp(session->request_uri, "localhost:22") != 0) {
+			if (strcmp(session->request_uri, "127.0.0.1:22") != 0) {
+				if (strcmp(session->request_uri, "::1.22") != 0) {
+					return 403;
+				}
+			}
+		}
+
+		tunnel_ssh_connection(session->client_socket);
+		session->keep_alive = false;
+
+		return 200;
+	}
+#endif
+
 	/* Hide reverse proxies
 	 */
 	if (in_iplist(session->config->hide_proxy, &(session->ip_address))) {
@@ -350,7 +377,12 @@ static int serve_client(t_session *session) {
 	/* Find host record
 	 */
 	if (session->hostname != NULL) {
+#ifdef ENABLE_IPV6
 		remove_port_from_hostname(session->hostname, session->binding);
+#else
+		remove_port_from_hostname(session->hostname);
+#endif
+		reset_http_header_strlen("Host:", session->http_headers);
 
 		if ((host_record = get_hostrecord(session->config->first_host, session->hostname, session->binding)) != NULL) {
 			session->host = host_record;
@@ -792,7 +824,7 @@ static void handle_request_result(t_session *session, int result) {
 			break;
 		case ec_CLIENT_DISCONNECTED:
 			if (session->kept_alive == 0) {
-				log_system(session, "Client disconnected");
+				log_system(session, "Silent client disconnected");
 			}
 			break;
 		case ec_SOCKET_READ_ERROR:
@@ -952,6 +984,7 @@ static void connection_handler(t_session *session) {
 		sad.min_ssl_version = session->config->min_ssl_version;
 		sad.dh_size         = session->config->dh_size;
 #ifdef ENABLE_DEBUG
+		sad.thread_id       = session->thread_id;
 		session->current_task = "ssl accept";
 #endif
 		switch (ssl_accept(&sad)) {
@@ -1149,7 +1182,7 @@ static int add_thread_to_pool(t_session *session) {
 		free(new_thread);
 		return -1;
 	} else if (pthread_create(&(new_thread->worker), &child_attr, (void*)thread_wait_loop, (void*)new_thread) != 0) {
-		fprintf(stderr, "pthread create error.\n");
+		perror("pthread create error");
 		pthread_attr_destroy(&child_attr);
 		free(new_thread);
 		return -1;
@@ -1169,6 +1202,7 @@ static int add_thread_to_pool(t_session *session) {
  */
 int start_worker(t_session *session) {
 #ifndef ENABLE_THREAD_POOL
+	int result = -1;
 	pthread_attr_t child_attr;
 	pthread_t      child_thread;
 
@@ -1183,7 +1217,7 @@ int start_worker(t_session *session) {
 			if (pthread_create(&child_thread, &child_attr, (void*)connection_handler, (void*)session) == 0) {
 				/* Worker thread started
 				 */
-				return 0;
+				result = 0;
 			} else {
 				remove_client(session, false);
 				log_system(session, "pthread create error");
@@ -1192,7 +1226,7 @@ int start_worker(t_session *session) {
 		pthread_attr_destroy(&child_attr);
 	}
 
-	return -1;
+	return result;
 #else
 	int result = 0;
 	t_session_list *new_session;

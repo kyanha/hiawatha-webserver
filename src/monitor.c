@@ -346,7 +346,11 @@ int monitor_request(t_session *session) {
 
 	secure_monitor_value(session->request_uri);
 
-	ip_to_str(ip_address, &(session->ip_address), MAX_IP_STR_LEN);
+	if (session->config->anonymize_ip) {
+		anonymized_ip_to_str(ip_address, &(session->ip_address), MAX_IP_STR_LEN);
+	} else {
+		ip_to_str(ip_address, &(session->ip_address), MAX_IP_STR_LEN);
+	}
 	ip_address[MAX_IP_STR_LEN] = '\0';
 
 	if ((user_agent = get_http_header("User-Agent:", session->http_headers)) == NULL) {

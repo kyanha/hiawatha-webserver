@@ -41,8 +41,16 @@ if(NOT ENABLE_SSL AND NOT USE_SYSTEM_POLARSSL)
 	set(hiawatha_src ${hiawatha_src}
 		polarssl/library/base64.c
 		polarssl/library/md5.c
-		polarssl/library/sha2.c
 	)
+	if(EXISTS ${CMAKE_SOURCE_DIR}/polarssl/library/sha2.c)
+		set(hiawatha_src ${hiawatha_src}
+			polarssl/library/sha2.c
+		)
+	else()
+		set(hiawatha_src ${hiawatha_src}
+			polarssl/library/sha256.c
+		)
+	endif()
 endif()
 
 # ssi-cgi sources
@@ -69,8 +77,16 @@ set(wigwam_src
 if(NOT ENABLE_SSL AND NOT USE_SYSTEM_POLARSSL)
 	set(wigwam_src ${wigwam_src}
 		polarssl/library/md5.c
-		polarssl/library/sha2.c
 	)
+	if(EXISTS ${CMAKE_SOURCE_DIR}/polarssl/library/sha2.c)
+		set(wigwam_src ${wigwam_src}
+			polarssl/library/sha2.c
+		)
+	else()
+		set(wigwam_src ${wigwam_src}
+			polarssl/library/sha256.c
+		)
+	endif()
 endif()
 
 # configuration files

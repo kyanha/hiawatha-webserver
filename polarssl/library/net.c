@@ -1,7 +1,7 @@
 /*
  *  TCP networking functions
  *
- *  Copyright (C) 2006-2010, Brainspark B.V.
+ *  Copyright (C) 2006-2013, Brainspark B.V.
  *
  *  This file is part of PolarSSL (http://www.polarssl.org)
  *  Lead Maintainer: Paul Bakker <polarssl_maintainer at polarssl.org>
@@ -29,7 +29,8 @@
 
 #include "polarssl/net.h"
 
-#if defined(_WIN32) || defined(_WIN32_WCE)
+#if (defined(_WIN32) || defined(_WIN32_WCE)) && !defined(EFIX64) && \
+    !defined(EFI32)
 
 #include <winsock2.h>
 #include <windows.h>
@@ -52,7 +53,9 @@ static int wsa_init_done = 0;
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#if defined(POLARSSL_HAVE_TIME)
 #include <sys/time.h>
+#endif
 #include <unistd.h>
 #include <signal.h>
 #include <fcntl.h>
@@ -62,10 +65,13 @@ static int wsa_init_done = 0;
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) ||  \
     defined(__DragonflyBSD__)
 #include <sys/endian.h>
-#elif defined(__APPLE__)
+#elif defined(__APPLE__) || defined(HAVE_MACHINE_ENDIAN_H) ||   \
+      defined(EFIX64) || defined(EFI32)
 #include <machine/endian.h>
 #elif defined(sun)
 #include <sys/isa_defs.h>
+#elif defined(_AIX) || defined(HAVE_ARPA_NAMESER_COMPAT_H)
+#include <arpa/nameser_compat.h>
 #else
 #include <endian.h>
 #endif
@@ -74,9 +80,12 @@ static int wsa_init_done = 0;
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <time.h>
 
-#ifdef _MSC_VER
+#if defined(POLARSSL_HAVE_TIME)
+#include <time.h>
+#endif
+
+#if defined(_MSC_VER) && !defined(EFIX64) && !defined(EFI32)
 #include <basetsd.h>
 typedef UINT32 uint32_t;
 #else
@@ -86,7 +95,7 @@ typedef UINT32 uint32_t;
 /*
  * htons() is not always available.
  * By default go for LITTLE_ENDIAN variant. Otherwise hope for _BYTE_ORDER and __BIG_ENDIAN
- * to help determine endianess.
+ * to help determine endianness.
  */
 #if defined(__BYTE_ORDER) && defined(__BIG_ENDIAN) && __BYTE_ORDER == __BIG_ENDIAN
 #define POLARSSL_HTONS(n) (n)
@@ -113,7 +122,9 @@ int net_connect( int *fd, const char *host, int port )
     struct sockaddr_in server_addr;
     struct hostent *server_host;
 
-#if defined(_WIN32) || defined(_WIN32_WCE)
+#if ( defined(_WIN32) || defined(_WIN32_WCE) ) && !defined(EFIX64) && \
+    !defined(EFI32)
+
     WSADATA wsaData;
 
     if( wsa_init_done == 0 )
@@ -124,13 +135,15 @@ int net_connect( int *fd, const char *host, int port )
         wsa_init_done = 1;
     }
 #else
+#if !defined(EFIX64) && !defined(EFI32)
     signal( SIGPIPE, SIG_IGN );
+#endif
 #endif
 
     if( ( server_host = gethostbyname( host ) ) == NULL )
         return( POLARSSL_ERR_NET_UNKNOWN_HOST );
 
-    if( ( *fd = socket( AF_INET, SOCK_STREAM, IPPROTO_IP ) ) < 0 )
+    if( ( *fd = (int) socket( AF_INET, SOCK_STREAM, IPPROTO_IP ) ) < 0 )
         return( POLARSSL_ERR_NET_SOCKET_FAILED );
 
     memcpy( (void *) &server_addr.sin_addr,
@@ -158,7 +171,8 @@ int net_bind( int *fd, const char *bind_ip, int port )
     int n, c[4];
     struct sockaddr_in server_addr;
 
-#if defined(_WIN32) || defined(_WIN32_WCE)
+#if ( defined(_WIN32) || defined(_WIN32_WCE) ) && !defined(EFIX64) && \
+    !defined(EFI32)
     WSADATA wsaData;
 
     if( wsa_init_done == 0 )
@@ -169,10 +183,12 @@ int net_bind( int *fd, const char *bind_ip, int port )
         wsa_init_done = 1;
     }
 #else
+#if !defined(EFIX64) && !defined(EFI32)
     signal( SIGPIPE, SIG_IGN );
 #endif
+#endif
 
-    if( ( *fd = socket( AF_INET, SOCK_STREAM, IPPROTO_IP ) ) < 0 )
+    if( ( *fd = (int) socket( AF_INET, SOCK_STREAM, IPPROTO_IP ) ) < 0 )
         return( POLARSSL_ERR_NET_SOCKET_FAILED );
 
     n = 1;
@@ -221,7 +237,8 @@ int net_bind( int *fd, const char *bind_ip, int port )
  */
 static int net_is_blocking( void )
 {
-#if defined(_WIN32) || defined(_WIN32_WCE)
+#if ( defined(_WIN32) || defined(_WIN32_WCE) ) && !defined(EFIX64) && \
+    !defined(EFI32)
     return( WSAGetLastError() == WSAEWOULDBLOCK );
 #else
     switch( errno )
@@ -252,8 +269,8 @@ int net_accept( int bind_fd, int *client_fd, void *client_ip )
     int n = (int) sizeof( client_addr );
 #endif
 
-    *client_fd = accept( bind_fd, (struct sockaddr *)
-                         &client_addr, &n );
+    *client_fd = (int) accept( bind_fd, (struct sockaddr *)
+                               &client_addr, &n );
 
     if( *client_fd < 0 )
     {
@@ -275,7 +292,8 @@ int net_accept( int bind_fd, int *client_fd, void *client_ip )
  */
 int net_set_block( int fd )
 {
-#if defined(_WIN32) || defined(_WIN32_WCE)
+#if ( defined(_WIN32) || defined(_WIN32_WCE) ) && !defined(EFIX64) && \
+    !defined(EFI32)
     u_long n = 0;
     return( ioctlsocket( fd, FIONBIO, &n ) );
 #else
@@ -285,7 +303,8 @@ int net_set_block( int fd )
 
 int net_set_nonblock( int fd )
 {
-#if defined(_WIN32) || defined(_WIN32_WCE)
+#if ( defined(_WIN32) || defined(_WIN32_WCE) ) && !defined(EFIX64) && \
+    !defined(EFI32)
     u_long n = 1;
     return( ioctlsocket( fd, FIONBIO, &n ) );
 #else
@@ -293,6 +312,7 @@ int net_set_nonblock( int fd )
 #endif
 }
 
+#if defined(POLARSSL_HAVE_TIME)
 /*
  * Portable usleep helper
  */
@@ -303,12 +323,13 @@ void net_usleep( unsigned long usec )
     tv.tv_usec = usec;
     select( 0, NULL, NULL, NULL, &tv );
 }
+#endif /* POLARSSL_HAVE_TIME */
 
 /*
  * Read at most 'len' characters
  */
 int net_recv( void *ctx, unsigned char *buf, size_t len )
-{ 
+{
     int ret = read( *((int *) ctx), buf, len );
 
     if( ret < 0 )
@@ -316,7 +337,8 @@ int net_recv( void *ctx, unsigned char *buf, size_t len )
         if( net_is_blocking() != 0 )
             return( POLARSSL_ERR_NET_WANT_READ );
 
-#if defined(_WIN32) || defined(_WIN32_WCE)
+#if ( defined(_WIN32) || defined(_WIN32_WCE) ) && !defined(EFIX64) && \
+    !defined(EFI32)
         if( WSAGetLastError() == WSAECONNRESET )
             return( POLARSSL_ERR_NET_CONN_RESET );
 #else
@@ -345,7 +367,8 @@ int net_send( void *ctx, const unsigned char *buf, size_t len )
         if( net_is_blocking() != 0 )
             return( POLARSSL_ERR_NET_WANT_WRITE );
 
-#if defined(_WIN32) || defined(_WIN32_WCE)
+#if ( defined(_WIN32) || defined(_WIN32_WCE) ) && !defined(EFIX64) && \
+    !defined(EFI32)
         if( WSAGetLastError() == WSAECONNRESET )
             return( POLARSSL_ERR_NET_CONN_RESET );
 #else

@@ -20,6 +20,8 @@
 #include "libstr.h"
 #include "ip.h"
 
+char *unknown_ip = "<unknown>";
+
 int default_ipv4(t_ip_addr *ip_addr) {
 	/* set to 0.0.0.0
 	 */
@@ -231,12 +233,44 @@ int parse_ip_port(char *line, t_ip_addr *ip, int *port) {
  */
 int ip_to_str(char *str, t_ip_addr *ip, int max_len) {
 	if (inet_ntop(ip->family, &(ip->value), str, max_len) == NULL) {
-		strcpy(str, "?.?.?.?");
-
+		strncpy(str, unknown_ip, max_len);
+		str[max_len - 1] = '\0';
 		return -1;
 	}
 
 	return 0;
+}
+
+/* Anonymize an IP address and write it to a logfile.
+ */
+int anonymized_ip_to_str(char *str, t_ip_addr *ip, int max_len) {
+	t_ip_addr anonymized_ip;
+	int mask;
+
+	if (ip == NULL) {
+		strncpy(str, unknown_ip, max_len);
+		str[max_len - 1] = '\0';
+		return -1;
+	} else if (ip->family == AF_INET) {
+		mask = 24;
+#ifdef ENABLE_IPV6
+	} else if (ip->family == AF_INET6) {
+		mask = 32;
+#endif
+	} else {
+		strncpy(str, unknown_ip, max_len);
+		str[max_len - 1] = '\0';
+		return -1;
+	}
+
+	copy_ip(&anonymized_ip, ip);
+	if (apply_netmask(&anonymized_ip, mask) == -1) {
+		strncpy(str, unknown_ip, max_len);
+		str[max_len - 1] = '\0';
+		return -1;
+	}
+
+	return ip_to_str(str, &anonymized_ip, max_len); 
 }
 
 /* Convert hostname to an IP address

@@ -30,7 +30,6 @@ int send_buffer(t_session *session, const char *buffer, int size);
 int send_header(t_session *session);
 int send_chunk(t_session *session, const char *chunk, int size);
 int send_code(t_session *session);
-int send_directly(int sock, const char *buffer, int size);
 int send_fcgi_buffer(t_fcgi_buffer *fcgi_buffer, const char *buffer, int size);
 
 void send_basic_auth(t_session *session);

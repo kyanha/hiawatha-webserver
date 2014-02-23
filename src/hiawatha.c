@@ -328,18 +328,10 @@ int bind_sockets(t_binding *binding) {
 			perror("setsockopt(IPPROTO_TCP, TCP_NODELAY)");
 		}
 
-/*
-		optval = 1;
-		if (setsockopt(binding->socket, SOL_TCP, TCP_FASTOPEN, (void*)&optval, sizeof(int)) == -1) {
-			perror("setsockopt(IPPROTO_TCP, TCP_NODELAY)");
-		}
-*/
-
 		if (binding->interface.family == AF_INET) {
 			/* IPv4
 			 */
 			memset(&saddr4, 0, sizeof(struct sockaddr_in));
-			//saddr4.sin_len = sizeof(struct sockaddr_in);
 			saddr4.sin_family = AF_INET;
 			memcpy(&(saddr4.sin_addr.s_addr), &(binding->interface.value), IPv4_LEN);
 			saddr4.sin_port = htons(binding->port);
@@ -352,7 +344,6 @@ int bind_sockets(t_binding *binding) {
 			/* IPv6
 			 */
 			memset(&saddr6, 0, sizeof(struct sockaddr_in6));
-			//saddr6.sin6_len = sizeof(struct sockaddr_in6);
 			saddr6.sin6_family = AF_INET6;
 			memcpy(&(saddr6.sin6_addr.s6_addr), &(binding->interface.value), IPv6_LEN);
 			saddr6.sin6_port = htons(binding->port);
@@ -395,7 +386,7 @@ int accept_connection(t_binding *binding, t_config *config) {
 	int                 total_conns, optval, conns_per_ip;
 	struct timeval      timer;
 #ifdef ENABLE_DEBUG
-	static int          thread_id = 0;
+	static int          thread_id = 1;
 #endif
 
 	if ((session = (t_session*)malloc(sizeof(t_session))) == NULL) {
@@ -1128,7 +1119,7 @@ int main(int argc, char *argv[]) {
 	settings.daemon       = true;
 	settings.config_check = false;
 
-	/* Read commandline parameters
+	/* Read command line parameters
 	 */
 	while (++i < argc) {
 		if (strcmp(argv[i], "-c") == 0) {
@@ -1147,7 +1138,7 @@ int main(int argc, char *argv[]) {
 			settings.config_check = true;
 		} else if (strcmp(argv[i], "-v") == 0) {
 			printf("%s\n", version_string);
-			printf("Copyright (C) by Hugo Leisink <hugo@leisink.net>\n");
+			printf("Copyright (c) by Hugo Leisink <hugo@leisink.net>\n");
 			return EXIT_SUCCESS;
 		} else {
 			fprintf(stderr, "Unknown option. Use '-h' for help.\n");

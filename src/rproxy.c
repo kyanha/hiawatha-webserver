@@ -20,6 +20,7 @@
 #include <sys/un.h>
 #include <errno.h>
 #include <string.h>
+#include <poll.h>
 #include <time.h>
 #include <pthread.h>
 #include "global.h"
@@ -34,6 +35,7 @@
 #define RPROXY_ID_LEN   10 /* Must be smaller than 32 */
 #define MAX_SEND_BUFFER  2 * KILOBYTE
 #define EXTENSION_SIZE  10
+#define SSH_BUFFER       4 * KILOBYTE
 
 static char   *rproxy_header;
 static size_t rproxy_header_len;
@@ -55,13 +57,13 @@ int init_rproxy_module(void) {
 	unsigned char digest[16];
 	char str[50];
 	time_t t;
-	struct tm *s;
-	char *format = "Connection: close\r\n%s %s\r\n";
+	struct tm s;
+	char *format = "%s %s\r\n";
 
 	time(&t);
-	s = localtime(&t);
+	localtime_r(&t, &s);
 	str[49] = '\0';
-	strftime(str, 49, "%a %d %b %Y %T", s);
+	strftime(str, 49, "%a %d %b %Y %T", &s);
 
 	md5((unsigned char*)str, strlen(str), digest);
 	md5_bin2hex(digest, rproxy_id);
@@ -270,39 +272,39 @@ void init_rproxy_result(t_rproxy_result *result) {
 
 /* Connect to the webserver
  */
-int connect_to_webserver(t_rproxy *rproxy) {
+int connect_to_server(t_ip_addr *ip_addr, int port) {
 	int sock = -1;
 	struct sockaddr_in saddr4;
 #ifdef ENABLE_IPV6
 	struct sockaddr_in6 saddr6;
 #endif
 
-	if (rproxy == NULL) {
+	if (ip_addr == NULL) {
 		return -1;
 	}
 
-	if (rproxy->ip_addr.family == AF_INET) {
+	if (ip_addr->family == AF_INET) {
 		/* IPv4
 		 */
 		if ((sock = socket(AF_INET, SOCK_STREAM, 0)) > 0) {
 			memset(&saddr4, 0, sizeof(struct sockaddr_in));
 			saddr4.sin_family = AF_INET;
-			saddr4.sin_port = htons(rproxy->port);
-			memcpy(&saddr4.sin_addr.s_addr, &(rproxy->ip_addr.value), rproxy->ip_addr.size);
+			saddr4.sin_port = htons(port);
+			memcpy(&saddr4.sin_addr.s_addr, &(ip_addr->value), ip_addr->size);
 			if (connect(sock, (struct sockaddr*)&saddr4, sizeof(struct sockaddr_in)) != 0) {
 				close(sock);
 				sock = -1;
 			}
 		}
 #ifdef ENABLE_IPV6
-	} else if (rproxy->ip_addr.family == AF_INET6) {
+	} else if (ip_addr->family == AF_INET6) {
 		/* IPv6
 		 */
 		if ((sock = socket(AF_INET6, SOCK_STREAM, 0)) > 0) {
 			memset(&saddr6, 0, sizeof(struct sockaddr_in6));
 			saddr6.sin6_family = AF_INET6;
-			saddr6.sin6_port = htons(rproxy->port);
-			memcpy(&saddr6.sin6_addr.s6_addr, &(rproxy->ip_addr.value), rproxy->ip_addr.size);
+			saddr6.sin6_port = htons(port);
+			memcpy(&saddr6.sin6_addr.s6_addr, &(ip_addr->value), ip_addr->size);
 			if (connect(sock, (struct sockaddr*)&saddr6, sizeof(struct sockaddr_in6)) != 0) {
 				close(sock);
 				sock = -1;
@@ -419,10 +421,6 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 			}
 		}
 
-		if (strncasecmp(http_header->data, "Connection:", 11) == 0) {
-			continue;
-		}
-
 #ifdef ENABLE_CACHE
 		if (strncasecmp(http_header->data, "If-Modified-Since:", 18) == 0) {
 			if (extension_from_uri(options->uri, extension, EXTENSION_SIZE)) {
@@ -496,6 +494,72 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 	if (send_to_webserver(webserver, result, &send_buffer, NULL, 0) == -1) {
 		return -1;
 	}
+
+	return 0;
+}
+
+static int forward_ssh_data(int from_sock, int to_sock) {
+	int bytes_read;
+	char buffer[SSH_BUFFER];
+
+	if ((bytes_read = recv(from_sock, buffer, SSH_BUFFER, 0)) <= 0) {
+		return -1;
+	}
+
+	if (send(to_sock, buffer, bytes_read, 0) == -1) {
+		return -1;
+	}
+
+	return 0;
+}
+
+/* Tunnel CONNECT request to local SSH daemon
+ */
+int tunnel_ssh_connection(int client_sock) {
+	int server_sock;
+	t_ip_addr localhost;
+	struct pollfd poll_data[2];
+	bool quit = false;
+
+	set_to_localhost(&localhost);
+	if ((server_sock = connect_to_server(&localhost, 22)) == -1) {
+		return -1;
+	}
+
+	if (send(client_sock, "HTTP/1.0 200 OK\r\n\r\n", 19, 0) == -1) {
+		return -1;
+	}
+
+	poll_data[0].fd = client_sock;
+	poll_data[0].events = POLL_EVENT_BITS;
+	poll_data[1].fd = server_sock;
+	poll_data[1].events = POLL_EVENT_BITS;
+
+	while (quit == false) {
+		switch (poll(poll_data, 2, 1000)) {
+			case -1:
+				if (errno != EINTR) {
+					quit = true;
+				}
+				break;
+			case 0:
+				break;
+			default:
+				if (poll_data[0].revents != 0) {
+					if (forward_ssh_data(client_sock, server_sock) == -1) {
+						quit = true;
+					}
+				}
+				if (poll_data[1].revents != 0) {
+					if (forward_ssh_data(server_sock, client_sock) == -1) {
+						quit = true;
+					}
+				}
+				break;
+		}
+	}
+
+	close(server_sock);
 
 	return 0;
 }

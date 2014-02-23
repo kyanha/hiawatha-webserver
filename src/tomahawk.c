@@ -69,7 +69,7 @@ static void clear_counters(void) {
  */
 int init_tomahawk_module(void) {
 	time_t t;
-	struct tm *s;
+	struct tm s;
 
     adminlist = NULL;
 	current_admin = 0;
@@ -78,9 +78,9 @@ int init_tomahawk_module(void) {
 	}
 
 	time(&t);
-	s = localtime(&t);
+	localtime_r(&t, &s);
 	start_time[TIMESTAMP_SIZE - 1] = '\0';
-	strftime(start_time, TIMESTAMP_SIZE - 1, "%a %d %b %Y %T %z", s);
+	strftime(start_time, TIMESTAMP_SIZE - 1, "%a %d %b %Y %T %z", &s);
 
 	clear_counters();
 

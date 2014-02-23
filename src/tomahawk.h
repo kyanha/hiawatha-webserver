@@ -41,6 +41,7 @@ typedef struct type_admin {
 	FILE *fp;
 	bool authenticated;
 	int timer;
+	char *repeat_command;
 
 	struct type_admin *next;
 } t_admin;

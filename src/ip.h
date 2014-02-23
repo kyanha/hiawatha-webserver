@@ -12,6 +12,7 @@
 #ifndef _LIBIP_H
 #define _LIBIP_H
 
+#include "config.h"
 #include <stdbool.h>
 #include <sys/types.h>
 #ifdef HAVE_NETINET_IN_H
@@ -58,9 +59,10 @@ int  copy_ip(t_ip_addr *dest, t_ip_addr *src);
 bool same_ip(t_ip_addr *ip1, t_ip_addr *ip2);
 int  apply_netmask(t_ip_addr *ip, int mask);
 bool ip_in_subnet(t_ip_addr *ip, t_ip_addr *subnet, int mask);
-int parse_ip_port(char *line, t_ip_addr *ip, int *port);
-int ip_to_str(char *str, t_ip_addr *ip, int max_len);
-int hostname_to_ip(char *hostname, t_ip_addr *ip);
+int  parse_ip_port(char *line, t_ip_addr *ip, int *port);
+int  ip_to_str(char *str, t_ip_addr *ip, int max_len);
+int  anonymized_ip_to_str(char *str, t_ip_addr *ip, int max_len);
+int  hostname_to_ip(char *hostname, t_ip_addr *ip);
 int  parse_iplist(char *line, t_iplist **list);
 bool in_iplist(t_iplist *list, t_ip_addr *ip);
 void remove_iplist(t_iplist *list);

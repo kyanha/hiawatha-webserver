@@ -202,7 +202,7 @@ int send_header(t_session *session) {
 	char ecode[5], timestr[TIMESTR_SIZE];
 	const char *emesg;
 	time_t t;
-	struct tm *s;
+	struct tm s;
 	t_keyvalue *header;
 
 	/* Send HTTP header.
@@ -249,9 +249,9 @@ int send_header(t_session *session) {
 	 */
 	if (time(&t) == -1) {
 		return -1;
-	} else if ((s = gmtime(&t)) == NULL) {
+	} else if (gmtime_r(&t, &s) == NULL) {
 		return -1;
-	} else if (strftime(timestr, TIMESTR_SIZE, "%a, %d %b %Y %X GMT\r\n", s) == 0) {
+	} else if (strftime(timestr, TIMESTR_SIZE, "%a, %d %b %Y %X GMT\r\n", &s) == 0) {
 		return -1;
 	} else if (send_buffer(session, "Date: ", 6) == -1) {
 		return -1;
@@ -319,11 +319,11 @@ int send_header(t_session *session) {
 		}
 		t += (time_t)session->expires;
 
-		if ((s = gmtime(&t)) == NULL) {
+		if (gmtime_r(&t, &s) == NULL) {
 			return -1;
 		} else if (send_buffer(session, hs_expires, 9) == -1) {
 			return -1;
-		} else if (strftime(timestr, TIMESTR_SIZE, "%a, %d %b %Y %X GMT\r\n", s) == 0) {
+		} else if (strftime(timestr, TIMESTR_SIZE, "%a, %d %b %Y %X GMT\r\n", &s) == 0) {
 			return -1;
 		} else if (send_buffer(session, timestr, strlen(timestr)) == -1) {
 			return -1;
@@ -687,5 +687,5 @@ void send_digest_auth(t_session *session) {
 	} else if (send_buffer(session, nonce, 2 * NONCE_DIGITS) == -1) {
 		return;
 	}
-	send_buffer(session, "\", algorithm=MD5, stale=false\r\n", 31);
+	send_buffer(session, "\", algorithm=MD5\r\n", 18);
 }

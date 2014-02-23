@@ -22,25 +22,33 @@
 #include "polarssl/x509.h"
 #include "polarssl/version.h"
 
+#if POLARSSL_VERSION_NUMBER < 0x01030000
+#define x509_crt x509_cert
+#define pk_context rsa_context
+#endif
+
 typedef struct {
 	ssl_context *context;
 	int         *client_fd;
-	rsa_context *private_key;
-	x509_cert   *certificate;
-	x509_cert   *ca_certificate;
+	pk_context  *private_key;
+	x509_crt    *certificate;
+	x509_crt    *ca_certificate;
 	x509_crl    *ca_crl;
 	int         timeout;
 	int         min_ssl_version;
 	int         dh_size;
+#ifdef ENABLE_DEBUG
+	int         thread_id;
+#endif
 } t_ssl_accept_data;
 
 int  init_ssl_module(char *logfile);
 #if POLARSSL_VERSION_NUMBER >= 0x01020000
-int  ssl_register_sni(t_charlist *hostname, rsa_context *private_key, x509_cert *certificate,
-                  x509_cert *ca_certificate, x509_crl *ca_crl);
+int  ssl_register_sni(t_charlist *hostname, pk_context *private_key, x509_crt *certificate,
+                  x509_crt *ca_certificate, x509_crl *ca_crl);
 #endif
-int  ssl_load_key_cert(char *file, rsa_context **private_key, x509_cert **certificate);
-int  ssl_load_ca_cert(char *file, x509_cert **ca_certificate);
+int  ssl_load_key_cert(char *file, pk_context **private_key, x509_crt **certificate);
+int  ssl_load_ca_cert(char *file, x509_crt **ca_certificate);
 int  ssl_load_ca_crl(char *file, x509_crl **ca_crl);
 int  ssl_accept(t_ssl_accept_data *ssl_accept_data);
 int  ssl_pending(ssl_context *ssl);

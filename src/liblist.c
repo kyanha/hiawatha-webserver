@@ -17,7 +17,6 @@
 #include "global.h"
 #include "libstr.h"
 #include "liblist.h"
-#include "polarssl/sha4.h"
 
 /*---< headerlist >-----------------------------------------------------------*/
 
@@ -105,6 +104,28 @@ char *get_http_header(char *key, t_http_header *http_headers) {
 	}
 
 	return NULL;
+}
+
+/* Reset the strlen of the HTTP header
+ */
+void reset_http_header_strlen(char *key, t_http_header *http_headers) {
+	int len;
+
+	if ((key == NULL) || (http_headers == NULL)) {
+		return;
+	}
+
+	len = strlen(key);
+	while (http_headers != NULL) {
+		if (strncasecmp(http_headers->data, key, len) == 0) {
+			http_headers->length = strlen(http_headers->data);
+			if (http_headers->value_offset > http_headers->length) {
+				http_headers->value_offset = 0;
+			}
+			break;
+		}
+		http_headers = http_headers->next;
+	}
 }
 
 /* free() a list of http_headers.

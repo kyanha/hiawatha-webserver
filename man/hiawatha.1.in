@@ -63,7 +63,11 @@ With 'set', you can declare a variable. Make sure the name of the variable doesn
 .br
 Example: set local_net = 192.168.1.0/24
          AccessList = allow local_net, deny 0.0.0.0/0 (see AccessList for more information about this option)
-
+.TP
+.B AnonymizeIP = yes|no
+Anonymize IP addresses before writing them to the access and error logfiles or sending them to the Hiawatha Monitor.
+.br
+Default = no, example: AnonymizeIP = yes
 .TP
 .B BanlistMask = (allow|deny) <ip-address>[/netmask][, (allow|deny) <ip-address>[/netmask], ...]
 Prevent IPs from getting banned in case of bad behaviour. By default, all IPs can be banned. IPs that are denied from the banlist will not be banned.
@@ -309,6 +313,11 @@ Example: Tomahawk = 81,41d0c72bd73afaa2c207064d81d5a3d9
 .br
 
 (requires that Hiawatha was compiled with -DENABLE_TOMAHAWK=on)
+.TP
+.B TunnelSSH = <ip-address>[, <ip-address>, ...]
+This option allows you to connect to the SSH daemon on your server when port 22 is not available. The parameter of this option is the IP address from where you want to connect to your server. In PuTTY and WinSCP, use the HTTP proxy type and enable the 'Consider proxying local host connections' option. Use 'localhost' as the hostname and your server's hostname as the proxy hostname.
+.br
+Example: TunnelSSH = 123.45.67.89
 .TP
 .B UserDirectory = <directory>
 The name of the web directory in a user's home directory (see UserWebsites for more information).

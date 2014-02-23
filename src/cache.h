@@ -37,6 +37,7 @@ typedef struct type_cached_object {
 	volatile int  in_use;
 	t_ip_addr     last_ip;
 	t_cot_type    type;
+	bool          close_connection;
 
 	struct type_cached_object *prev;
 	struct type_cached_object *next;
@@ -69,7 +70,7 @@ void handle_remove_header_for_cgi_cache(t_session *session, char *buffer);
  */
 #ifdef ENABLE_RPROXY
 int rproxy_cache_time(t_session *session, char *buffer);
-t_cached_object *add_rproxy_output_to_cache(t_session *session, char *output, int size, int time);
+t_cached_object *add_rproxy_output_to_cache(t_session *session, char *output, int size, int time, bool keep_alive);
 t_cached_object *search_cache_for_rproxy_output(t_session *session);
 void handle_remove_header_for_rproxy_cache(t_session *session, char *buffer);
 #endif

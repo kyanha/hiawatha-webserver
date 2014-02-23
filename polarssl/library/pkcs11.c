@@ -5,7 +5,7 @@
  *
  * \author Adriaan de Jong <dejong@fox-it.com>
  *
- *  Copyright (C) 2006-2010, Brainspark B.V.
+ *  Copyright (C) 2006-2013, Brainspark B.V.
  *
  *  This file is part of PolarSSL (http://www.polarssl.org)
  *  Lead Maintainer: Paul Bakker <polarssl_maintainer at polarssl.org>
@@ -31,9 +31,16 @@
 
 #if defined(POLARSSL_PKCS11_C)
 
+#if defined(POLARSSL_MEMORY_C)
+#include "polarssl/memory.h"
+#else
+#define polarssl_malloc     malloc
+#define polarssl_free       free
+#endif
+
 #include <stdlib.h>
 
-int pkcs11_x509_cert_init( x509_cert *cert, pkcs11h_certificate_t pkcs11_cert )
+int pkcs11_x509_cert_init( x509_crt *cert, pkcs11h_certificate_t pkcs11_cert )
 {
     int ret = 1;
     unsigned char *cert_blob = NULL;
@@ -51,7 +58,7 @@ int pkcs11_x509_cert_init( x509_cert *cert, pkcs11h_certificate_t pkcs11_cert )
         goto cleanup;
     }
 
-    cert_blob = malloc( cert_blob_size );
+    cert_blob = polarssl_malloc( cert_blob_size );
     if( NULL == cert_blob )
     {
         ret = 4;
@@ -64,7 +71,7 @@ int pkcs11_x509_cert_init( x509_cert *cert, pkcs11h_certificate_t pkcs11_cert )
         goto cleanup;
     }
 
-    if( 0 != x509parse_crt(cert, cert_blob, cert_blob_size ) )
+    if( 0 != x509_crt_parse(cert, cert_blob, cert_blob_size ) )
     {
         ret = 6;
         goto cleanup;
@@ -74,7 +81,7 @@ int pkcs11_x509_cert_init( x509_cert *cert, pkcs11h_certificate_t pkcs11_cert )
 
 cleanup:
     if( NULL != cert_blob )
-        free( cert_blob );
+        polarssl_free( cert_blob );
 
     return ret;
 }
@@ -84,9 +91,9 @@ int pkcs11_priv_key_init( pkcs11_context *priv_key,
         pkcs11h_certificate_t pkcs11_cert )
 {
     int ret = 1;
-    x509_cert cert;
+    x509_crt cert;
 
-    memset( &cert, 0, sizeof( cert ) );
+    x509_crt_init( &cert );
 
     if( priv_key == NULL )
         goto cleanup;
@@ -100,7 +107,7 @@ int pkcs11_priv_key_init( pkcs11_context *priv_key,
     ret = 0;
 
 cleanup:
-    x509_free( &cert );
+    x509_crt_free( &cert );
 
     return ret;
 }

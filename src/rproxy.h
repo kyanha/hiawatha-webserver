@@ -16,6 +16,7 @@
 
 #ifdef ENABLE_RPROXY
 
+#include <stdbool.h>
 #include <regex.h>
 #ifdef ENABLE_SSL
 #include "polarssl/ssl.h"
@@ -75,9 +76,10 @@ void init_rproxy_options(t_rproxy_options *options, int socket, t_ip_addr *clien
                          char *method, char *uri, t_http_header *http_headers,
                          char *body, int body_length, char *remote_user);
 void init_rproxy_result(t_rproxy_result *result);
-int connect_to_webserver(t_rproxy *rproxy);
+int  connect_to_server(t_ip_addr *ip_addr, int port);
 int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *options,
                               t_rproxy *rproxy, t_rproxy_result *result);
+int tunnel_ssh_connection(int client_sock);
 
 #endif
 

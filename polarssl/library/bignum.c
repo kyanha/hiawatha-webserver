@@ -37,6 +37,13 @@
 #include "polarssl/bignum.h"
 #include "polarssl/bn_mul.h"
 
+#if defined(POLARSSL_MEMORY_C)
+#include "polarssl/memory.h"
+#else
+#define polarssl_malloc     malloc
+#define polarssl_free       free
+#endif
+
 #include <stdlib.h>
 
 #define ciL    (sizeof(t_uint))         /* chars in limb  */
@@ -73,7 +80,7 @@ void mpi_free( mpi *X )
     if( X->p != NULL )
     {
         memset( X->p, 0, X->n * ciL );
-        free( X->p );
+        polarssl_free( X->p );
     }
 
     X->s = 1;
@@ -93,7 +100,7 @@ int mpi_grow( mpi *X, size_t nblimbs )
 
     if( X->n < nblimbs )
     {
-        if( ( p = (t_uint *) malloc( nblimbs * ciL ) ) == NULL )
+        if( ( p = (t_uint *) polarssl_malloc( nblimbs * ciL ) ) == NULL )
             return( POLARSSL_ERR_MPI_MALLOC_FAILED );
 
         memset( p, 0, nblimbs * ciL );
@@ -102,7 +109,7 @@ int mpi_grow( mpi *X, size_t nblimbs )
         {
             memcpy( p, X->p, X->n * ciL );
             memset( X->p, 0, X->n * ciL );
-            free( X->p );
+            polarssl_free( X->p );
         }
 
         X->n = nblimbs;
@@ -122,6 +129,12 @@ int mpi_copy( mpi *X, const mpi *Y )
 
     if( X == Y )
         return( 0 );
+
+    if( Y->p == NULL )
+    {
+        mpi_free( X );
+        return( 0 );
+    }
 
     for( i = Y->n - 1; i > 0; i-- )
         if( Y->p[i] != 0 )
@@ -775,7 +788,7 @@ cleanup:
 }
 
 /*
- * Helper for mpi substraction
+ * Helper for mpi subtraction
  */
 static void mpi_sub_hlp( size_t n, t_uint *s, t_uint *d )
 {
@@ -796,7 +809,7 @@ static void mpi_sub_hlp( size_t n, t_uint *s, t_uint *d )
 }
 
 /*
- * Unsigned substraction: X = |A| - |B|  (HAC 14.9)
+ * Unsigned subtraction: X = |A| - |B|  (HAC 14.9)
  */
 int mpi_sub_abs( mpi *X, const mpi *A, const mpi *B )
 {
@@ -819,7 +832,7 @@ int mpi_sub_abs( mpi *X, const mpi *A, const mpi *B )
         MPI_CHK( mpi_copy( X, A ) );
 
     /*
-     * X should always be positive as a result of unsigned substractions.
+     * X should always be positive as a result of unsigned subtractions.
      */
     X->s = 1;
 
@@ -870,7 +883,7 @@ cleanup:
 }
 
 /*
- * Signed substraction: X = A - B
+ * Signed subtraction: X = A - B
  */
 int mpi_sub_mpi( mpi *X, const mpi *A, const mpi *B )
 {
@@ -917,7 +930,7 @@ int mpi_add_int( mpi *X, const mpi *A, t_sint b )
 }
 
 /*
- * Signed substraction: X = A - b
+ * Signed subtraction: X = A - b
  */
 int mpi_sub_int( mpi *X, const mpi *A, t_sint b )
 {
@@ -1480,7 +1493,7 @@ int mpi_exp_mod( mpi *X, const mpi *A, const mpi *E, const mpi *N, mpi *_RR )
 
         for( i = 0; i < wsize - 1; i++ )
             mpi_montmul( &W[j], &W[j], N, mm, &T );
-    
+
         /*
          * W[i] = W[i - 1] * W[1]
          */
@@ -1503,8 +1516,10 @@ int mpi_exp_mod( mpi *X, const mpi *A, const mpi *E, const mpi *N, mpi *_RR )
     {
         if( bufsize == 0 )
         {
-            if( nblimbs-- == 0 )
+            if( nblimbs == 0 )
                 break;
+
+            nblimbs--;
 
             bufsize = sizeof( t_uint ) << 3;
         }
@@ -1967,7 +1982,7 @@ cleanup:
     return( ret );
 }
 
-#endif
+#endif /* POLARSSL_GENPRIME */
 
 #if defined(POLARSSL_SELF_TEST)
 
@@ -2079,7 +2094,6 @@ int mpi_self_test( int verbose )
     if( verbose != 0 )
         printf( "passed\n" );
 
-#if defined(POLARSSL_GENPRIME)
     MPI_CHK( mpi_inv_mod( &X, &A, &N ) );
 
     MPI_CHK( mpi_read_string( &U, 16,
@@ -2100,7 +2114,6 @@ int mpi_self_test( int verbose )
 
     if( verbose != 0 )
         printf( "passed\n" );
-#endif
 
     if( verbose != 0 )
         printf( "  MPI test #5 (simple gcd): " );

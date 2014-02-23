@@ -137,7 +137,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		} else if (split_string(rest, &value, &rest, ' ') == -1) {
 			return false;
 		}
-		
+
 		if (*value == '!') {
 			new_rule->neg_match = true;
 			value++;
@@ -183,10 +183,6 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			 */
 			new_rule->operation = to_redirect;
 			new_rule->flow = tf_exit;
-
-			if (new_rule->neg_match) {
-				return false;
-			}
 
 			if (rest == NULL) {
 				return false;
@@ -324,10 +320,6 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			new_rule->operation = to_redirect;
 			new_rule->flow = tf_exit;
 
-			if (new_rule->neg_match) {
-				return false;
-			}
-
 			if (rest == NULL) {
 				return false;
 			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
@@ -342,10 +334,6 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			 */
 			new_rule->operation = to_rewrite;
 			new_rule->flow = tf_exit;
-
-			if (new_rule->neg_match) {
-				return false;
-			}
 
 			split_string(rest, &value, &rest, ' ');
 			if (value == NULL) {
@@ -666,7 +654,7 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 				if ((header = get_http_header(rule->header, options->http_headers)) == NULL) {
 					break;
 				}
-				if (regexec(&(rule->pattern), header, 0, NULL, 0) == 0) {
+				if (regexec(&(rule->pattern), header, REGEXEC_NMATCH, pmatch, 0) == 0) {
 					condition_met = true;
 				}
 				if (rule->neg_match) {
@@ -736,7 +724,11 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 			case to_rewrite:
 				/* Rewrite
 				 */
-				if (do_rewrite(url, &(rule->pattern), pmatch, rule->parameter, &(options->new_url), rule->match_loop) == -1) {
+				if (rule->neg_match) {
+					if ((options->new_url = strdup(rule->parameter)) == NULL) {
+						return UT_ERROR;
+					}
+				} else if (do_rewrite(url, &(rule->pattern), pmatch, rule->parameter, &(options->new_url), rule->match_loop) == -1) {
 					if (options->new_url != NULL) {
 						free(options->new_url);
 						options->new_url = NULL;
@@ -800,7 +792,11 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 			case to_redirect:
 				/* Redirect client
 				 */
-				if (do_rewrite(url, &(rule->pattern), pmatch, rule->parameter, &(options->new_url), rule->match_loop) == -1) {
+				if (rule->neg_match) {
+					if ((options->new_url = strdup(rule->parameter)) == NULL) {
+						return UT_ERROR;
+					}
+				} else if (do_rewrite(url, &(rule->pattern), pmatch, rule->parameter, &(options->new_url), rule->match_loop) == -1) {
 					if (options->new_url != NULL) {
 						free(options->new_url);
 						options->new_url = NULL;

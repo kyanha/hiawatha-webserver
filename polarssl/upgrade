@@ -1,12 +1,15 @@
 #!/bin/sh
 
+cd `dirname $0`
+
 if [ "$1" = "" ]; then
-	echo "Downloading latest PolarSSL library."
-	wget -qO polarssl.tgz https://polarssl.org/download/latest-stable
-else
-	echo "Downloading PolarSSL version ${1}."
-	wget -qO polarssl.tgz https://polarssl.org/download/polarssl-${1}-gpl.tgz
+	echo "Usage: ${0} <version>"
+	exit;
 fi
+
+echo "Downloading PolarSSL version ${1}."
+wget -qO polarssl.tgz https://polarssl.org/download/polarssl-${1}-gpl.tgz?do=yes
+
 if [ ! -s polarssl.tgz ]; then 
 	rm -f polarssl.tgz
 	echo "Download error."
@@ -30,5 +33,4 @@ rm -f library/.gitignore
 rm -rf ${dir}
 rm polarssl.tgz
 
-version=`cat include/polarssl/version.h | grep POLARSSL_VERSION_STRING | head -1 | cut -f2 -d'"'`
-echo "PolarSSL upgraded to version ${version}."
+echo "PolarSSL upgraded to version ${1}."

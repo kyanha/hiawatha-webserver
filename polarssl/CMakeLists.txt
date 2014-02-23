@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 2.6)
 project(POLARSSL C)
 
-enable_testing()
-
 if(CMAKE_COMPILER_IS_GNUCC)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wall -Wextra -W -Wdeclaration-after-statement")
   set(CMAKE_C_FLAGS_DEBUG "-g3 -O0")
@@ -14,8 +12,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
     set(CMAKE_SHARED_LINKER_FLAGS "-fprofile-arcs -ftest-coverage")
   endif(CMAKE_COMPILER_IS_GNUCC)
 endif(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-
-option(USE_PKCS11_HELPER_LIBRARY "Build PolarSSL with the pkcs11-helper library." OFF)
 
 option(ENABLE_ZLIB_SUPPORT "Build PolarSSL with zlib library." OFF)
 

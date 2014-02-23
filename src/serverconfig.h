@@ -120,9 +120,9 @@ typedef struct type_binding {
 	char          *key_cert_file;
 	char          *ca_cert_file;
 	char          *ca_crl_file;
-	rsa_context   *private_key;
-	x509_cert     *certificate;
-	x509_cert     *ca_certificate;
+	pk_context    *private_key;
+	x509_crt      *certificate;
+	x509_crt      *ca_certificate;
 	x509_crl      *ca_crl;
 #endif
 
@@ -229,9 +229,9 @@ typedef struct type_host {
 	char            *key_cert_file;
 	char            *ca_cert_file;
 	char            *ca_crl_file;
-	rsa_context     *private_key;
-	x509_cert       *certificate;
-	x509_cert       *ca_certificate;
+	pk_context      *private_key;
+	x509_crt        *certificate;
+	x509_crt        *ca_certificate;
 	x509_crl        *ca_crl;
 #endif
 #ifdef ENABLE_RPROXY
@@ -267,6 +267,7 @@ typedef struct type_config {
 	char          *server_string;
 	t_binding     *binding;
 	t_log_format  log_format;
+	bool          anonymize_ip;
 	bool          wait_for_cgi;
 	t_charlist    cgi_extension;
 #ifdef ENABLE_THREAD_POOL
@@ -330,9 +331,10 @@ typedef struct type_config {
 #ifdef ENABLE_CACHE
 	off_t         cache_size;
 	off_t         cache_max_filesize;
+#endif
 #ifdef ENABLE_RPROXY
 	t_charlist    cache_rproxy_extensions;
-#endif
+	t_iplist      *tunnel_ssh;
 #endif
 
 #ifdef ENABLE_TOMAHAWK

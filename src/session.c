@@ -24,6 +24,7 @@
 #include "liblist.h"
 #include "session.h"
 #include "log.h"
+#include "ssl.h"
 #ifdef ENABLE_MONITOR
 #include "monitor.h"
 #endif
@@ -134,6 +135,10 @@ void init_session(t_session *session) {
 
 	session->socket_open = false;
 	session->flooding_timer = session->time;
+
+#ifdef ENABLE_RPROXY
+	session->rproxy_kept_alive = false;
+#endif
 }
 
 /* Reset a session-record for reuse.
@@ -197,6 +202,18 @@ void reset_session(t_session *session) {
 /* Free all remaining buffers
  */
 void destroy_session(t_session *session) {
+#ifdef ENABLE_RPROXY
+	if (session->rproxy_kept_alive) {
+#ifdef ENABLE_SSL
+		if (session->rproxy_use_ssl) {
+			ssl_close(&(session->rproxy_ssl));
+		}
+#endif
+		close(session->rproxy_socket);
+		session->rproxy_kept_alive = false;
+	}
+#endif
+
 	check_free(session->request);
 	session->request = NULL;
 }
@@ -216,9 +233,9 @@ void determine_request_method(t_session *session) {
 		session->request_method = PUT;
 	} else if (strncmp(session->request, "DELETE ", 7) == 0) {
 		session->request_method = DELETE;
-	} else if (strncmp(session->request, "OPTIONS ", 8) == 0) {
-		session->request_method = unsupported;
 	} else if (strncmp(session->request, "CONNECT ", 8) == 0) {
+		session->request_method = CONNECT;
+	} else if (strncmp(session->request, "OPTIONS ", 8) == 0) {
 		session->request_method = unsupported;
 	} else if (strncmp(session->request, "PROPFIND ", 9) == 0) {
 		session->request_method = unsupported;
@@ -461,7 +478,11 @@ int copy_directory_settings(t_session *session) {
 
 /* Remove port from hostname
  */
+#ifdef ENABLE_IPV6
 int remove_port_from_hostname(char *hostname, t_binding *binding) {
+#else
+int remove_port_from_hostname(char *hostname) {
+#endif
 	char *c;
 
 	if (hostname == NULL) {

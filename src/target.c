@@ -67,6 +67,7 @@ extern char *fb_filesystem;
 extern char *fb_symlink;
 extern char *fb_alterlist;
 extern char *hs_eol;
+extern char *hs_conn;
 extern char *hs_conlen;
 extern char *hs_contyp;
 extern char *hs_forwarded;
@@ -79,7 +80,7 @@ int send_file(t_session *session) {
 	off_t file_size, send_begin, send_end, send_size;
 	int  retval, handle = -1;
 	struct stat status;
-	struct tm *fdate;
+	struct tm fdate;
 #ifdef ENABLE_CACHE
 	t_cached_object *cached_object;
 #endif
@@ -198,6 +199,13 @@ int send_file(t_session *session) {
 	 */
 	if (session->handling_error == false) {
 		if ((range = get_http_header("Range:", session->http_headers)) != NULL) {
+			/* Check for multi-range
+			 */
+			if (strchr(range, ',') != NULL) {
+				close(handle);
+				return 416;
+			}
+
 			if (strncmp(range, "bytes=", 6) == 0) {
 				if ((range = strdup(range + 6)) == NULL) {
 					close(handle);
@@ -285,11 +293,11 @@ int send_file(t_session *session) {
 		 */
 		if (fstat(handle, &status) == -1) {
 			break;
-		} else if ((fdate = gmtime(&(status.st_mtime))) == NULL) {
+		} else if (gmtime_r(&(status.st_mtime), &fdate) == NULL) {
 			break;
 		} else if (send_buffer(session, "Last-Modified: ", 15) == -1) {
 			break;
-		} else if (strftime(value, VALUE_SIZE, "%a, %d %b %Y %X GMT\r\n", fdate) == 0) {
+		} else if (strftime(value, VALUE_SIZE, "%a, %d %b %Y %X GMT\r\n", &fdate) == 0) {
 			break;
 		} else if (send_buffer(session, value, strlen(value)) == -1) {
 			break;
@@ -482,7 +490,7 @@ int execute_cgi(t_session *session) {
 	if ((wrap_cgi == false) && (session->cgi_type != fastcgi)) {
 		check_file_exists = true;
 	} else if ((session->cgi_type == fastcgi) && (session->fcgi_server != NULL)) {
-		check_file_exists = session->fcgi_server->localhost;
+		check_file_exists = false;
 	} else {
 		check_file_exists = false;
 	}
@@ -718,7 +726,7 @@ int execute_cgi(t_session *session) {
 								free(cache_buffer);
 								cache_buffer = NULL;
 							} else {
-								memcpy(cache_buffer	+ cache_size, cgi_info.input_buffer, cgi_info.input_len);
+								memcpy(cache_buffer + cache_size, cgi_info.input_buffer, cgi_info.input_len);
 								cache_size += cgi_info.input_len;
 								*(cache_buffer + cache_size) = '\0';
 							}
@@ -875,7 +883,7 @@ int execute_cgi(t_session *session) {
 			case cgi_END_OF_DATA:
 				if (in_body) {
 					retval = rs_QUIT;
-					if (send_in_chunks) {
+					if (send_in_chunks && (session->request_method != HEAD)) {
 						if (send_chunk(session, NULL, 0) == -1) {
 							retval = rs_DISCONNECT;
 						}
@@ -1321,13 +1329,32 @@ int handle_xml_file(t_session *session) {
 #endif
 
 #ifdef ENABLE_RPROXY
+static int find_chunk_size(char *buffer) {
+	int chunk_extra_size, chunk_size;
+
+	if (strstr(buffer, "\r\n") == NULL) {
+		return -1;
+	}
+
+	chunk_extra_size = 4;
+	chunk_size = 0;
+	while (*buffer != '\r') {
+		chunk_size = (16 * chunk_size) + (int)hex_to_int(*buffer);
+		chunk_extra_size++;
+		buffer++;
+	}
+
+	return chunk_extra_size + chunk_size;
+}
+
 int proxy_request(t_session *session, t_rproxy *rproxy) {
 	t_rproxy_options options;
 	t_rproxy_webserver webserver;
 	t_rproxy_result rproxy_result;
-	char buffer[RPROXY_BUFFER_SIZE + 1], *end_of_header;
-	int bytes_read, bytes_in_buffer = 0, result = 200, code, poll_result;
-	bool header_read = false, keep_reading = true;
+	char buffer[RPROXY_BUFFER_SIZE + 1], *end_of_header, *str, *eol;
+	int bytes_read, bytes_in_buffer = 0, result = 200, code, poll_result, send_size;
+	int can_read, content_length = -1, content_read = 0, chunk_size, chunk_total, header_size;
+	bool header_read = false, keep_reading = true, keep_alive, chunked_transfer = false;
 	struct pollfd poll_data;
 	time_t deadline;
 #ifdef ENABLE_CACHE
@@ -1340,15 +1367,19 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	session->current_task = "proxy request";
 #endif
 
+	keep_alive = session->keep_alive;
+
 #ifdef ENABLE_CACHE
 	/* Search for CGI output in cache
 	 */
 	if (session->request_method == GET) {
 		if ((cached_object = search_cache_for_rproxy_output(session)) != NULL) {
-			if (send_header(session) == -1) {
+			if (send_buffer(session, cached_object->data, cached_object->size) == -1) {
 				result = rs_DISCONNECT;
-			} else if (send_buffer(session, cached_object->data, cached_object->size) == -1) {
-				result = rs_DISCONNECT;
+			}
+
+			if (cached_object->close_connection) {
+				session->keep_alive = false;
 			}
 
 			done_with_cached_object(cached_object, false);
@@ -1368,23 +1399,60 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 #endif
 	init_rproxy_result(&rproxy_result);
 
-	session->keep_alive = false;
-
-	/* Connect to webserver
-	 */
-	if ((webserver.socket = connect_to_webserver(rproxy)) == -1) {
-		return 503;
+	if (session->rproxy_kept_alive && ((same_ip(&(session->rproxy_addr), &(rproxy->ip_addr)) == false) || (session->rproxy_port != rproxy->port))) {
+#ifdef ENABLE_SSL
+		if (session->rproxy_use_ssl) {
+			ssl_close(&(session->rproxy_ssl));
+		}
+#endif
+		close(session->rproxy_socket);
+		session->rproxy_kept_alive = false;
 	}
 
+	/* Test if kept-alive connection is still alive
+	 */
+	if (session->rproxy_kept_alive) {
+		if (recv(session->rproxy_socket, buffer, 1, MSG_DONTWAIT | MSG_PEEK) == -1) {
+			if (errno != EAGAIN) {
 #ifdef ENABLE_SSL
-	webserver.use_ssl = rproxy->use_ssl;
-	if (webserver.use_ssl) {
-		if (ssl_connect(&(webserver.ssl), &(webserver.socket), rproxy->hostname) == -1) {
-			close(webserver.socket);
-			return 503;
+				if (session->rproxy_use_ssl) {
+					ssl_close(&(session->rproxy_ssl));
+				}
+#endif
+				close(session->rproxy_socket);
+
+				session->rproxy_kept_alive = false;
+			}
 		}
 	}
+
+	if (session->rproxy_kept_alive) {
+		/* Use kept alive connection
+		 */
+		webserver.socket = session->rproxy_socket;
+#ifdef ENABLE_SSL
+		webserver.use_ssl = session->rproxy_use_ssl;
+		if (webserver.use_ssl) {
+			memcpy(&(webserver.ssl), &(session->rproxy_ssl), sizeof(ssl_context));
+		}
 #endif
+	} else {
+		/* Connect to webserver
+		 */
+		if ((webserver.socket = connect_to_server(&(rproxy->ip_addr), rproxy->port)) == -1) {
+			return 503;
+		}
+
+#ifdef ENABLE_SSL
+		webserver.use_ssl = rproxy->use_ssl;
+		if (webserver.use_ssl) {
+			if (ssl_connect(&(webserver.ssl), &(webserver.socket), rproxy->hostname) == -1) {
+				close(webserver.socket);
+				return 503;
+			}
+		}
+#endif
+	}
 
 	/* Send request to webserver
 	 */
@@ -1415,6 +1483,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 				if (errno != EINTR) {
 					result = -1;
 					keep_reading = false;
+					keep_alive = false;
 				}
 				break;
 			case 0:
@@ -1424,18 +1493,32 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 				}
 				break;
 			default:
+				if (content_length == -1) {
+					can_read = RPROXY_BUFFER_SIZE - bytes_in_buffer;
+				} else {
+					can_read = content_length - content_read;
+					if (can_read > RPROXY_BUFFER_SIZE) {
+						can_read = RPROXY_BUFFER_SIZE;
+					}
+				}
+
+				if (RPROXY_BUFFER_SIZE - bytes_in_buffer > 0) {
 #ifdef ENABLE_SSL
-			    if (webserver.use_ssl) {
-					bytes_read = ssl_receive(&(webserver.ssl), buffer + bytes_in_buffer, RPROXY_BUFFER_SIZE - bytes_in_buffer);
-				} else
+					if (webserver.use_ssl) {
+						bytes_read = ssl_receive(&(webserver.ssl), buffer + bytes_in_buffer, RPROXY_BUFFER_SIZE - bytes_in_buffer);
+					} else
 #endif
-					bytes_read = read(webserver.socket, buffer + bytes_in_buffer, RPROXY_BUFFER_SIZE - bytes_in_buffer);
+						bytes_read = read(webserver.socket, buffer + bytes_in_buffer, RPROXY_BUFFER_SIZE - bytes_in_buffer);
+				} else {
+					bytes_read = -1;
+				}
 
 				switch (bytes_read) {
 					case -1:
 						if (errno != EINTR) {
 							result = -1;
 							keep_reading = false;
+							keep_alive = false;
 						}
 						break;
 					case 0:
@@ -1444,12 +1527,14 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 					default:
 						/* Read first line and extract return code
 						 */
-						if (header_read == false) {
-							bytes_in_buffer += bytes_read;
+						bytes_in_buffer += bytes_read;
+						*(buffer + bytes_in_buffer) = '\0';
 
-							*(buffer + bytes_in_buffer) = '\0';
+						if (header_read == false) {
+							/* Look for header
+							 */
 							if ((end_of_header = strstr(buffer, "\r\n\r\n")) != NULL) {
-								*end_of_header = '\0';
+								*(end_of_header + 2) = '\0';
 								if ((code = extract_http_code(buffer)) != -1) {
 									session->return_code = code;
 								}
@@ -1457,12 +1542,13 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 								if ((code != 200) && (session->host->trigger_on_cgi_status)) {
 									result = code;
 									keep_reading = false;
+									keep_alive = false;
 									*end_of_header = '\r';
 									break;
 								}
 
 #ifdef ENABLE_CACHE
-								if (code == 200) {
+								if ((code == 200) && (session->request_method == GET)) {
 									if ((cache_time = rproxy_cache_time(session, buffer)) > 0) {
 										if ((cache_buffer = (char*)malloc(session->config->cache_max_filesize + 1)) != NULL) {
 											*(cache_buffer + session->config->cache_max_filesize) = '\0';
@@ -1472,40 +1558,132 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 
 								handle_remove_header_for_rproxy_cache(session, buffer);
 #endif
-								*end_of_header = '\r';
 
-								bytes_read = bytes_in_buffer;
-								bytes_in_buffer = 0;
+								/* Parse content length
+								 */
+								if (session->request_method == HEAD) {
+									content_length = 0;
+								} else if (((code >= 100) && (code < 200)) || (code == 204) ||
+								            (code == 302) || (code == 303) || (code == 304)) {
+									content_length = 0;
+								} else if ((str = strcasestr(buffer, hs_conlen)) != NULL) {
+									str += strlen(hs_conlen);
+									if ((eol = strchr(str, '\r')) != NULL) {
+										*eol = '\0';
+										content_length = str2int(str);
+										*eol = '\r';
+									}
+								} else {
+									content_length = 0;
+								}
+
+								/* Determine if is chunked transfer encoding
+								 */
+								if (strcasestr(buffer, hs_chunked) != NULL) {
+									chunked_transfer = true;
+									content_length = -1;
+									header_size = end_of_header + 4 - buffer;
+								}
+
+								/* Determine connection type
+								 */
+								if (strncmp(buffer, "HTTP/1.0 ", 9) == 0) {
+									keep_alive = false;
+								} else if (strncmp(buffer, "HTTP/1.1 ", 9) == 0) {
+									if ((str = strcasestr(buffer, hs_conn)) != NULL) {
+										str += strlen(hs_conn);
+										if (strncmp(str, "close\r\n", 7) == 0) {
+											keep_alive = false;
+										}
+									}
+								}
+
+								content_read = bytes_in_buffer - (end_of_header + 4 - buffer);
 								header_read = true;
+
+								*(end_of_header + 2)= '\r';
 							} else if (bytes_in_buffer == RPROXY_BUFFER_SIZE) {
 								result = -1;
 								keep_reading = false;
+								keep_alive = false;
 								break;
 							} else {
 								continue;
 							}
+						} else {
+							/* Dealing with body
+							 */
+							content_read += bytes_read;
 						}
 
-						/* Send data to client
-						 */
-						if (send_buffer(session, buffer, bytes_read) == -1) {
-							result = -1;
+						if (content_read == content_length) {
 							keep_reading = false;
-							break;
 						}
+
+						/* Determine what to send
+						 */
+						if (chunked_transfer) {
+							/* Send chunk
+							 */
+							chunk_total = header_size;
+							while ((chunk_size = find_chunk_size(buffer + chunk_total)) != -1) {
+								if (chunk_total + chunk_size <= bytes_in_buffer) {
+									chunk_total += chunk_size;
+
+									if (chunk_size == 5) {
+										keep_reading = false;
+									}
+								} else {
+									break;
+								}
+							}
+							
+							if (bytes_in_buffer >= chunk_total) {
+								send_size = chunk_total;
+							} else {
+								send_size = 0;
+							}
+						} else {
+							/* Send complete buffer
+							 */
+							send_size = bytes_in_buffer;
+						}
+
+						/* Send buffer content
+						 */
+						if (send_size > 0) {
+							if (send_buffer(session, buffer, send_size) == -1) {
+								result = -1;
+								keep_reading = false;
+								keep_alive = false;
+								break;
+							}
 
 #ifdef ENABLE_CACHE
-						if (cache_buffer != NULL) {
-							if ((off_t)(cache_size + bytes_read) > session->config->cache_max_filesize) {
-								clear_free(cache_buffer, cache_size);
-								cache_buffer = NULL;
+							/* Add output to cache buffer
+							 */
+							if (cache_buffer != NULL) {
+								if ((off_t)(cache_size + send_size) > session->config->cache_max_filesize) {
+									clear_free(cache_buffer, cache_size);
+									cache_buffer = NULL;
+								} else {
+									memcpy(cache_buffer + cache_size, buffer, send_size);
+									cache_size += send_size;
+									*(cache_buffer + cache_size) = '\0';
+								}
+							}
+#endif
+
+							if (chunked_transfer) {
+								bytes_in_buffer -= chunk_total;
+								memmove(buffer, buffer + chunk_total, bytes_in_buffer);
+								*(buffer + bytes_in_buffer) = '\0';
+
+								header_size = 0;
 							} else {
-								memcpy(cache_buffer + cache_size, buffer, bytes_read);
-								cache_size += bytes_read;
-								*(cache_buffer + cache_size) = '\0';
+								bytes_in_buffer = 0;
 							}
 						}
-#endif
 
 						session->data_sent = true;
 				}
@@ -1514,19 +1692,37 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 
 #ifdef ENABLE_CACHE
 	if (cache_buffer != NULL) {
-		add_rproxy_output_to_cache(session, cache_buffer, cache_size, cache_time);
+		add_rproxy_output_to_cache(session, cache_buffer, cache_size, cache_time, keep_alive);
 		clear_free(cache_buffer, cache_size);
 	}
 #endif
 
-	/* Close connection to webserver
-	 */
+	if (keep_alive == false) {
+		/* Close connection to webserver
+		 */
 #ifdef ENABLE_SSL
-	if (webserver.use_ssl) {
-		ssl_close(&(webserver.ssl));
-	}
+		if (webserver.use_ssl) {
+			ssl_close(&(webserver.ssl));
+		}
 #endif
-	close(webserver.socket);
+		close(webserver.socket);
+
+		session->keep_alive = false;
+		session->rproxy_kept_alive = false;
+	} else if (session->rproxy_kept_alive == false) {
+		/* Keep connection alive
+		 */
+		memcpy(&(session->rproxy_addr), &(rproxy->ip_addr), sizeof(t_ip_addr));
+		session->rproxy_port = rproxy->port;
+		session->rproxy_socket = webserver.socket;
+#ifdef ENABLE_SSL
+		session->rproxy_use_ssl = webserver.use_ssl;
+		if (session->rproxy_use_ssl) {
+			memcpy(&(session->rproxy_ssl), &(webserver.ssl), sizeof(ssl_context));
+		}
+#endif
+		session->rproxy_kept_alive = true;
+	}
 
 	return result;
 }

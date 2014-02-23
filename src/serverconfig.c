@@ -286,6 +286,7 @@ t_config *default_config(void) {
 	config->cgi_wrapper        = SBIN_DIR"/cgi-wrapper";
 	config->wrap_user_cgi      = false;
 	config->log_format         = hiawatha;
+	config->anonymize_ip       = false;
 	config->user_directory     = "public_html";
 	config->user_directory_set = false;
 	config->hide_proxy         = NULL;
@@ -334,6 +335,7 @@ t_config *default_config(void) {
 	config->cache_max_filesize = 256 * KILOBYTE;
 #ifdef ENABLE_RPROXY
 	init_charlist(&(config->cache_rproxy_extensions));
+	config->tunnel_ssh         = NULL;
 #endif
 #endif
 
@@ -693,7 +695,11 @@ static bool system_setting(char *key, char *value, t_config *config) {
 	char *alist;
 #endif
 
-	if (strcmp(key, "banlistmask") == 0) {
+	if (strcmp(key, "anonymizeip") == 0) {
+		if (parse_yesno(value, &(config->anonymize_ip)) == 0) {
+			return true;
+		}
+    } else if (strcmp(key, "banlistmask") == 0) {
 		if ((config->banlist_mask = parse_accesslist(value, false, config->banlist_mask)) != NULL) {
 			return true;
 		}
@@ -796,6 +802,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		if ((config->total_connections = str2int(value)) != -1) {
 			return true;
 		}
+
 #ifdef ENABLE_SSL
 	} else if (strcmp(key, "dhsize") == 0) {
 		if (strcmp(value, "1024") == 0) {
@@ -842,10 +849,6 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			return true;
 		} else if (strcmp(value, "extended") == 0) {
 			config->log_format = extended;
-			return true;
-		}
-	} else if (strcmp(key, "rebanduringban") == 0) {
-		if (parse_yesno(value, &(config->reban_during_ban)) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "logfilemask") == 0) {
@@ -949,6 +952,10 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			return true;
 		}
 #endif
+	} else if (strcmp(key, "rebanduringban") == 0) {
+		if (parse_yesno(value, &(config->reban_during_ban)) == 0) {
+			return true;
+		}
 	} else if (strcmp(key, "reconnectdelay") == 0) {
 		if ((config->reconnect_delay = str2int(value)) > 0) {
 			return true;
@@ -1037,6 +1044,12 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			} else {
 				free(config->tomahawk_port);
 			}
+		}
+#endif
+#ifdef ENABLE_RPROXY
+	} else if (strcmp(key, "tunnelssh") == 0) {
+		if (parse_iplist(value, &(config->tunnel_ssh)) != -1) {
+			return true;
 		}
 #endif
 	} else if (strcmp(key, "userdirectory") == 0) {

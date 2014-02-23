@@ -21,7 +21,13 @@
 #include "libstr.h"
 #include "libfs.h"
 #include "filehashes.h"
+#include "polarssl/version.h"
+#if POLARSSL_VERSION_NUMBER >= 0x01030000
+#include "polarssl/sha256.h"
+#else
 #include "polarssl/sha2.h"
+#define sha256_file sha2_file
+#endif
 
 void sha2_bin2hex(unsigned char bin[SHA_HASH_SIZE], char hex[FILE_HASH_SIZE + 1]) {
 	int i;
@@ -126,7 +132,7 @@ bool file_hash_match(char *filename, t_file_hash *file_hashes) {
 	if ((file_hash = search_file(filename, file_hashes)) == NULL) {
 		return false;
 	}
-	if (sha2_file(filename, bin_hash, 0) != 0) {
+	if (sha256_file(filename, bin_hash, 0) != 0) {
 		return false;
 	}
 	sha2_bin2hex(bin_hash, hex_hash);
@@ -168,7 +174,7 @@ int print_file_hashes(char *directory) {
 				print_file_hashes(fileinfo->d_name);
 				break;
 			case no:
-				if (sha2_file(fileinfo->d_name, bin_hash, 0) != 0) {
+				if (sha256_file(fileinfo->d_name, bin_hash, 0) != 0) {
 					return -1;
 				}
 				sha2_bin2hex(bin_hash, hex_hash);

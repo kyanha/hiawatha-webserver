@@ -32,7 +32,7 @@
 
 #include "config.h"
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(EFIX64) && !defined(EFI32)
 #include <basetsd.h>
 #if (_MSC_VER <= 1200)
 typedef   signed short  int16_t;
@@ -128,6 +128,7 @@ typedef uint32_t t_udbl;
 #define POLARSSL_HAVE_UDBL
 #else
   #if ( defined(_MSC_VER) && defined(_M_AMD64) )
+    #define POLARSSL_HAVE_INT64
     typedef  int64_t t_sint;
     typedef uint64_t t_uint;
   #else
@@ -137,11 +138,13 @@ typedef uint32_t t_udbl;
           defined(__ia64__)  || defined(__alpha__)     || \
           (defined(__sparc__) && defined(__arch64__))  || \
           defined(__s390x__) ) )
+       #define POLARSSL_HAVE_INT64
        typedef  int64_t t_sint;
        typedef uint64_t t_uint;
        typedef unsigned int t_udbl __attribute__((mode(TI)));
        #define POLARSSL_HAVE_UDBL
     #else
+       #define POLARSSL_HAVE_INT32
        typedef  int32_t t_sint;
        typedef uint32_t t_uint;
        #if ( defined(_MSC_VER) && defined(_M_IX86) )
@@ -158,6 +161,10 @@ typedef uint32_t t_udbl;
 #endif /* POLARSSL_HAVE_INT16 */
 #endif /* POLARSSL_HAVE_INT8  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * \brief          MPI structure
  */
@@ -168,10 +175,6 @@ typedef struct
     t_uint *p;          /*!<  pointer to limbs  */
 }
 mpi;
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /**
  * \brief           Initialize one MPI
@@ -433,7 +436,7 @@ int mpi_cmp_int( const mpi *X, t_sint z );
 int mpi_add_abs( mpi *X, const mpi *A, const mpi *B );
 
 /**
- * \brief          Unsigned substraction: X = |A| - |B|
+ * \brief          Unsigned subtraction: X = |A| - |B|
  *
  * \param X        Destination MPI
  * \param A        Left-hand MPI
@@ -457,7 +460,7 @@ int mpi_sub_abs( mpi *X, const mpi *A, const mpi *B );
 int mpi_add_mpi( mpi *X, const mpi *A, const mpi *B );
 
 /**
- * \brief          Signed substraction: X = A - B
+ * \brief          Signed subtraction: X = A - B
  *
  * \param X        Destination MPI
  * \param A        Left-hand MPI
@@ -481,7 +484,7 @@ int mpi_sub_mpi( mpi *X, const mpi *A, const mpi *B );
 int mpi_add_int( mpi *X, const mpi *A, t_sint b );
 
 /**
- * \brief          Signed substraction: X = A - b
+ * \brief          Signed subtraction: X = A - b
  *
  * \param X        Destination MPI
  * \param A        Left-hand MPI

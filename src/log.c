@@ -50,12 +50,12 @@ int init_log_module(void) {
  */
 static void print_timestamp(char *str) {
 	time_t t;
-	struct tm *s;
+	struct tm s;
 
 	time(&t);
-	s = localtime(&t);
+	localtime_r(&t, &s);
 	str[TIMESTAMP_SIZE - 1] = '\0';
-	strftime(str, TIMESTAMP_SIZE - 1, "%a %d %b %Y %T %z|", s);
+	strftime(str, TIMESTAMP_SIZE - 1, "%a %d %b %Y %T %z|", &s);
 }
 
 /* Keep escape characters out of the logfile
@@ -174,7 +174,12 @@ void log_file_error(t_session *session, char *file, char *mesg, ...) {
 
 	va_start(args, mesg);
 
-	ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+	if (session->config->anonymize_ip) {
+		anonymized_ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+	} else {
+		ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+	}
+
 	strcat(str, "|");
 	print_timestamp(str + strlen(str));
 	if (file == NULL) {
@@ -203,7 +208,7 @@ void log_request(t_session *session) {
 	t_http_header *http_header;
 	int offset;
 	time_t t;
-	struct tm *s;
+	struct tm s;
 
 	if (ip_allowed(&(session->ip_address), session->config->logfile_mask) == deny) {
 		return;
@@ -232,7 +237,12 @@ void log_request(t_session *session) {
 	if (session->config->log_format == hiawatha) {
 		/* Hiawatha log format
 		 */
-		ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+		if (session->config->anonymize_ip) {
+			anonymized_ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+		} else {
+			ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+		}
+
 		strcat(str, "|");
 		offset = strlen(str);
 		print_timestamp(str + offset);
@@ -274,16 +284,20 @@ void log_request(t_session *session) {
 	} else {
 		/* Common Log Format
 		 */
-		ip_to_str(ip_address, &(session->ip_address), IP_ADDRESS_SIZE);
+		if (session->config->anonymize_ip) {
+			anonymized_ip_to_str(ip_address, &(session->ip_address), IP_ADDRESS_SIZE);
+		} else {
+			ip_to_str(ip_address, &(session->ip_address), IP_ADDRESS_SIZE);
+		}
 
 		if (user == NULL) {
 			user = "-";
 		}
 
 		time(&t);
-		s = localtime(&t);
+		localtime_r(&t, &s);
 		timestamp[TIMESTAMP_SIZE - 1] = '\0';
-		strftime(timestamp, TIMESTAMP_SIZE - 1, "%d/%b/%Y:%T %z", s);
+		strftime(timestamp, TIMESTAMP_SIZE - 1, "%d/%b/%Y:%T %z", &s);
 
 		snprintf(str, BUFFER_SIZE, "%s - %s [%s] \"%s %s", ip_address, user, timestamp, secure_string(session->method), uri);
 		offset = strlen(str);
@@ -437,7 +451,12 @@ void log_cgi_error(t_session *session, char *mesg) {
 
 	if (len > 0) {
 		if ((fp = fopen(session->host->error_logfile, "a")) != NULL) {
-			ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+			if (session->config->anonymize_ip) {
+				anonymized_ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+			} else {
+				ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+			}
+
 			strcat(str, "|");
 			print_timestamp(str + strlen(str));
 			if (session->file_on_disk == NULL) {
@@ -466,6 +485,8 @@ void close_logfiles(t_host *host, time_t now) {
 	pthread_mutex_unlock(&accesslog_mutex);
 }
 
+/* Close all open logfile descriptors
+ */
 void close_logfiles_for_cgi_run(t_host *host) {
 	while (host != NULL) {
 		if (*(host->access_fp) != NULL) {
@@ -476,6 +497,8 @@ void close_logfiles_for_cgi_run(t_host *host) {
 }
 
 #ifdef ENABLE_DEBUG
+/* Log debug information
+ */
 void log_debug(t_session *session, char *mesg, ...) {
 	FILE *fp;
 	va_list args;

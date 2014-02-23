@@ -31,7 +31,7 @@
 
 #include <string.h>
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(EFIX64) && !defined(EFI32)
 #include <basetsd.h>
 typedef UINT32 uint32_t;
 #else
@@ -48,6 +48,10 @@ typedef UINT32 uint32_t;
 // Regular implementation
 //
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * \brief          AES context structure
  */
@@ -58,10 +62,6 @@ typedef struct
     uint32_t buf[68];           /*!<  unaligned data    */
 }
 aes_context;
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /**
  * \brief          AES key schedule (encryption)
@@ -100,6 +100,7 @@ int aes_crypt_ecb( aes_context *ctx,
                     const unsigned char input[16],
                     unsigned char output[16] );
 
+#if defined(POLARSSL_CIPHER_MODE_CBC)
 /**
  * \brief          AES-CBC buffer encryption/decryption
  *                 Length should be a multiple of the block
@@ -120,6 +121,7 @@ int aes_crypt_cbc( aes_context *ctx,
                     unsigned char iv[16],
                     const unsigned char *input,
                     unsigned char *output );
+#endif /* POLARSSL_CIPHER_MODE_CBC */
 
 /**
  * \brief          AES-CFB128 buffer encryption/decryption.
@@ -128,7 +130,6 @@ int aes_crypt_cbc( aes_context *ctx,
  * both encryption and decryption. So a context initialized with
  * aes_setkey_enc() for both AES_ENCRYPT and AES_DECRYPT.
  *
- * both 
  * \param ctx      AES context
  * \param mode     AES_ENCRYPT or AES_DECRYPT
  * \param length   length of the input data
@@ -156,6 +157,7 @@ int aes_crypt_cfb128( aes_context *ctx,
  * both encryption and decryption. So a context initialized with
  * aes_setkey_enc() for both AES_ENCRYPT and AES_DECRYPT.
  *
+ * \param ctx           AES context
  * \param length        The length of the data
  * \param nc_off        The offset in the current stream_block (for resuming
  *                      within current cipher stream). The offset pointer to

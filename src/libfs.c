@@ -347,20 +347,20 @@ static int parse_datestr(char *org_datestr, struct tm *date) {
  */
 int if_modified_since(int handle, char *datestr) {
 	struct stat status;
-	struct tm *fdate, rdate;
+	struct tm date;
 	time_t file_date, req_date;
 
 	if (datestr == NULL) {
 		return -1;
 	} else if (fstat(handle, &status) == -1) {
 		return -1;
-	} else if ((fdate = gmtime(&(status.st_mtime))) == NULL) {
+	} else if (gmtime_r(&(status.st_mtime), &date) == NULL) {
 		return -1;
-	} else if ((file_date = mktime(fdate)) == -1) {
+	} else if ((file_date = mktime(&date)) == -1) {
 		return -1;
-	} else if (parse_datestr(datestr, &rdate) == -1) {
+	} else if (parse_datestr(datestr, &date) == -1) {
 		return -1;
-	} else if ((req_date = mktime(&rdate)) == -1) {
+	} else if ((req_date = mktime(&date)) == -1) {
 		return -1;
 	} else if (file_date > req_date) {
 		return 1;
