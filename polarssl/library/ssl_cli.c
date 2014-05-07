@@ -1,7 +1,7 @@
 /*
  *  SSLv3/TLSv1 client-side functions
  *
- *  Copyright (C) 2006-2013, Brainspark B.V.
+ *  Copyright (C) 2006-2014, Brainspark B.V.
  *
  *  This file is part of PolarSSL (http://www.polarssl.org)
  *  Lead Maintainer: Paul Bakker <polarssl_maintainer at polarssl.org>
@@ -30,8 +30,8 @@
 #include "polarssl/debug.h"
 #include "polarssl/ssl.h"
 
-#if defined(POLARSSL_MEMORY_C)
-#include "polarssl/memory.h"
+#if defined(POLARSSL_PLATFORM_C)
+#include "polarssl/platform.h"
 #else
 #define polarssl_malloc     malloc
 #define polarssl_free       free
@@ -233,19 +233,28 @@ static void ssl_write_supported_elliptic_curves_ext( ssl_context *ssl,
     unsigned char *p = buf;
     unsigned char *elliptic_curve_list = p + 6;
     size_t elliptic_curve_len = 0;
-    const ecp_curve_info *curve;
+    const ecp_curve_info *info;
+#if defined(POLARSSL_SSL_SET_CURVES)
+    const ecp_group_id *grp_id;
+#else
     ((void) ssl);
+#endif
 
     *olen = 0;
 
     SSL_DEBUG_MSG( 3, ( "client hello, adding supported_elliptic_curves extension" ) );
 
-    for( curve = ecp_curve_list();
-         curve->grp_id != POLARSSL_ECP_DP_NONE;
-         curve++ )
+#if defined(POLARSSL_SSL_SET_CURVES)
+    for( grp_id = ssl->curve_list; *grp_id != POLARSSL_ECP_DP_NONE; grp_id++ )
     {
-        elliptic_curve_list[elliptic_curve_len++] = curve->tls_id >> 8;
-        elliptic_curve_list[elliptic_curve_len++] = curve->tls_id & 0xFF;
+        info = ecp_curve_info_from_grp_id( *grp_id );
+#else
+    for( info = ecp_curve_list(); info->grp_id != POLARSSL_ECP_DP_NONE; info++ )
+    {
+#endif
+
+        elliptic_curve_list[elliptic_curve_len++] = info->tls_id >> 8;
+        elliptic_curve_list[elliptic_curve_len++] = info->tls_id & 0xFF;
     }
 
     if( elliptic_curve_len == 0 )
@@ -373,6 +382,54 @@ static void ssl_write_session_ticket_ext( ssl_context *ssl,
     *olen += tlen;
 }
 #endif /* POLARSSL_SSL_SESSION_TICKETS */
+
+#if defined(POLARSSL_SSL_ALPN)
+static void ssl_write_alpn_ext( ssl_context *ssl,
+                                unsigned char *buf, size_t *olen )
+{
+    unsigned char *p = buf;
+    const char **cur;
+
+    if( ssl->alpn_list == NULL )
+    {
+        *olen = 0;
+        return;
+    }
+
+    SSL_DEBUG_MSG( 3, ( "client hello, adding alpn extension" ) );
+
+    *p++ = (unsigned char)( ( TLS_EXT_ALPN >> 8 ) & 0xFF );
+    *p++ = (unsigned char)( ( TLS_EXT_ALPN      ) & 0xFF );
+
+    /*
+     * opaque ProtocolName<1..2^8-1>;
+     *
+     * struct {
+     *     ProtocolName protocol_name_list<2..2^16-1>
+     * } ProtocolNameList;
+     */
+
+    /* Skip writing extension and list length for now */
+    p += 4;
+
+    for( cur = ssl->alpn_list; *cur != NULL; cur++ )
+    {
+        *p = (unsigned char)( strlen( *cur ) & 0xFF );
+        memcpy( p + 1, *cur, *p );
+        p += 1 + *p;
+    }
+
+    *olen = p - buf;
+
+    /* List length = olen - 2 (ext_type) - 2 (ext_len) - 2 (list_len) */
+    buf[4] = (unsigned char)( ( ( *olen - 6 ) >> 8 ) & 0xFF );
+    buf[5] = (unsigned char)( ( ( *olen - 6 )      ) & 0xFF );
+
+    /* Extension length = olen - 2 (ext_type) - 2 (ext_len) */
+    buf[2] = (unsigned char)( ( ( *olen - 4 ) >> 8 ) & 0xFF );
+    buf[3] = (unsigned char)( ( ( *olen - 4 )      ) & 0xFF );
+}
+#endif /* POLARSSL_SSL_ALPN */
 
 static int ssl_write_client_hello( ssl_context *ssl )
 {
@@ -586,6 +643,11 @@ static int ssl_write_client_hello( ssl_context *ssl )
     ext_len += olen;
 #endif
 
+#if defined(POLARSSL_SSL_ALPN)
+    ssl_write_alpn_ext( ssl, p + 2 + ext_len, &olen );
+    ext_len += olen;
+#endif
+
     SSL_DEBUG_MSG( 3, ( "client hello, total extension length: %d",
                    ext_len ) );
 
@@ -744,6 +806,54 @@ static int ssl_parse_supported_point_formats_ext( ssl_context *ssl,
 }
 #endif /* POLARSSL_ECDH_C || POLARSSL_ECDSA_C */
 
+#if defined(POLARSSL_SSL_ALPN)
+static int ssl_parse_alpn_ext( ssl_context *ssl,
+                               const unsigned char *buf, size_t len )
+{
+    size_t list_len, name_len;
+    const char **p;
+
+    /* If we didn't send it, the server shouldn't send it */
+    if( ssl->alpn_list == NULL )
+        return( POLARSSL_ERR_SSL_BAD_HS_SERVER_HELLO );
+
+    /*
+     * opaque ProtocolName<1..2^8-1>;
+     *
+     * struct {
+     *     ProtocolName protocol_name_list<2..2^16-1>
+     * } ProtocolNameList;
+     *
+     * the "ProtocolNameList" MUST contain exactly one "ProtocolName"
+     */
+
+    /* Min length is 2 (list_len) + 1 (name_len) + 1 (name) */
+    if( len < 4 )
+        return( POLARSSL_ERR_SSL_BAD_HS_SERVER_HELLO );
+
+    list_len = ( buf[0] << 8 ) | buf[1];
+    if( list_len != len - 2 )
+        return( POLARSSL_ERR_SSL_BAD_HS_SERVER_HELLO );
+
+    name_len = buf[2];
+    if( name_len != list_len - 1 )
+        return( POLARSSL_ERR_SSL_BAD_HS_SERVER_HELLO );
+
+    /* Check that the server chosen protocol was in our list and save it */
+    for( p = ssl->alpn_list; *p != NULL; p++ )
+    {
+        if( name_len == strlen( *p ) &&
+            memcmp( buf + 3, *p, name_len ) == 0 )
+        {
+            ssl->alpn_chosen = *p;
+            return( 0 );
+        }
+    }
+
+    return( POLARSSL_ERR_SSL_BAD_HS_SERVER_HELLO );
+}
+#endif /* POLARSSL_SSL_ALPN */
+
 static int ssl_parse_server_hello( ssl_context *ssl )
 {
     int ret, i, comp;
@@ -858,14 +968,14 @@ static int ssl_parse_server_hello( ssl_context *ssl )
      * Initialize update checksum functions
      */
     ssl->transform_negotiate->ciphersuite_info = ssl_ciphersuite_from_id( i );
-    ssl_optimize_checksum( ssl, ssl->transform_negotiate->ciphersuite_info );
 
     if( ssl->transform_negotiate->ciphersuite_info == NULL )
     {
-        SSL_DEBUG_MSG( 1, ( "ciphersuite info for %02x not found",
-                          ssl->ciphersuite_list[ssl->minor_ver][i] ) );
+        SSL_DEBUG_MSG( 1, ( "ciphersuite info for %04x not found", i ) );
         return( POLARSSL_ERR_SSL_BAD_INPUT_DATA );
     }
+
+    ssl_optimize_checksum( ssl, ssl->transform_negotiate->ciphersuite_info );
 
     SSL_DEBUG_MSG( 3, ( "server hello, session id len.: %d", n ) );
     SSL_DEBUG_BUF( 3,   "server hello, session id", buf + 39, n );
@@ -1014,6 +1124,16 @@ static int ssl_parse_server_hello( ssl_context *ssl )
             break;
 #endif /* POLARSSL_ECDH_C || POLARSSL_ECDSA_C */
 
+#if defined(POLARSSL_SSL_ALPN)
+        case TLS_EXT_ALPN:
+            SSL_DEBUG_MSG( 3, ( "found alpn extension" ) );
+
+            if( ( ret = ssl_parse_alpn_ext( ssl, ext + 4, ext_size ) ) != 0 )
+                return( ret );
+
+            break;
+#endif /* POLARSSL_SSL_ALPN */
+
         default:
             SSL_DEBUG_MSG( 3, ( "unknown extension found: %d (ignoring)",
                            ext_id ) );
@@ -1118,14 +1238,24 @@ static int ssl_parse_server_dh_params( ssl_context *ssl, unsigned char **p,
     defined(POLARSSL_KEY_EXCHANGE_ECDH_ECDSA_ENABLED)
 static int ssl_check_server_ecdh_params( const ssl_context *ssl )
 {
-    SSL_DEBUG_MSG( 2, ( "ECDH curve size: %d",
-                        (int) ssl->handshake->ecdh_ctx.grp.nbits ) );
+    const ecp_curve_info *curve_info;
 
-    if( ssl->handshake->ecdh_ctx.grp.nbits < 163 ||
-        ssl->handshake->ecdh_ctx.grp.nbits > 521 )
+    curve_info = ecp_curve_info_from_grp_id( ssl->handshake->ecdh_ctx.grp.id );
+    if( curve_info == NULL )
     {
+        SSL_DEBUG_MSG( 1, ( "Should never happen" ) );
         return( -1 );
     }
+
+    SSL_DEBUG_MSG( 2, ( "ECDH curve: %s", curve_info->name ) );
+
+#if defined(POLARSSL_SSL_ECP_SET_CURVES)
+    if( ! ssl_curve_is_acceptable( ssl, ssl->handshake->ecdh_ctx.grp.id ) )
+#else
+    if( ssl->handshake->ecdh_ctx.grp.nbits < 163 ||
+        ssl->handshake->ecdh_ctx.grp.nbits > 521 )
+#endif
+        return( -1 );
 
     SSL_DEBUG_ECP( 3, "ECDH: Qp", &ssl->handshake->ecdh_ctx.Qp );
 
@@ -1160,7 +1290,7 @@ static int ssl_parse_server_ecdh_params( ssl_context *ssl,
 
     if( ssl_check_server_ecdh_params( ssl ) != 0 )
     {
-        SSL_DEBUG_MSG( 1, ( "bad server key exchange message (ECDH length)" ) );
+        SSL_DEBUG_MSG( 1, ( "bad server key exchange message (ECDHE curve)" ) );
         return( POLARSSL_ERR_SSL_BAD_HS_SERVER_KEY_EXCHANGE );
     }
 
@@ -1348,7 +1478,7 @@ static int ssl_get_ecdh_params_from_cert( ssl_context *ssl )
 
     if( ssl_check_server_ecdh_params( ssl ) != 0 )
     {
-        SSL_DEBUG_MSG( 1, ( "bad server certificate (ECDH length)" ) );
+        SSL_DEBUG_MSG( 1, ( "bad server certificate (ECDH curve)" ) );
         return( POLARSSL_ERR_SSL_BAD_HS_CERTIFICATE );
     }
 
@@ -1390,7 +1520,11 @@ static int ssl_parse_server_key_exchange( ssl_context *ssl )
     if( ciphersuite_info->key_exchange == POLARSSL_KEY_EXCHANGE_ECDH_RSA ||
         ciphersuite_info->key_exchange == POLARSSL_KEY_EXCHANGE_ECDH_ECDSA )
     {
-        ssl_get_ecdh_params_from_cert( ssl );
+        if( ( ret = ssl_get_ecdh_params_from_cert( ssl ) ) != 0 )
+        {
+            SSL_DEBUG_RET( 1, "ssl_get_ecdh_params_from_cert", ret );
+            return( ret );
+        }
 
         SSL_DEBUG_MSG( 2, ( "<= skip parse server key exchange" ) );
         ssl->state++;

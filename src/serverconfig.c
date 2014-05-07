@@ -73,6 +73,7 @@ static t_host *new_host(void) {
 	host->use_xslt            = false;
 	host->error_xslt_file     = NULL;
 #endif
+	host->enforce_first_hostname = false;
 	host->allow_dot_files     = false;
 	host->use_gz_file         = false;
 	host->access_list         = NULL;
@@ -95,6 +96,7 @@ static t_host *new_host(void) {
 	host->imgref_replacement  = NULL;
 	host->envir_str           = NULL;
 	host->alias               = NULL;
+	host->script_alias        = NULL;
 #ifdef ENABLE_SSL
 	host->require_ssl         = false;
 	host->key_cert_file       = NULL;
@@ -121,8 +123,7 @@ static t_host *new_host(void) {
 	host->deny_body           = NULL;
 	host->webdav_app          = false;
 #ifdef ENABLE_MONITOR
-	host->monitor_stats       = NULL;
-	host->monitor_requests    = false;
+	host->monitor_host_stats  = NULL;
 	host->monitor_host        = false;
 #endif
 	host->file_hashes         = NULL;
@@ -349,7 +350,6 @@ t_config *default_config(void) {
 #ifdef ENABLE_MONITOR
 	config->monitor_enabled    = false;
 	config->monitor_directory  = WORK_DIR"/monitor";
-	config->monitor_stats_interval = 60 * MINUTE;
 #endif
 
 #ifdef ENABLE_SSL
@@ -932,13 +932,6 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		config->monitor_enabled = true;
 
 		return true;
-	} else if (strcmp(key, "monitorstatsinterval") == 0) {
-		if ((config->monitor_stats_interval = str2int(value)) > 0) {
-			if (config->monitor_stats_interval < 360) {
-				config->monitor_stats_interval *= MINUTE;
-				return true;
-			}
-		}
 #endif
 	} else if (strcmp(key, "pidfile") == 0) {
 		if (*value == '/') {
@@ -1287,6 +1280,10 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		if (parse_yesno(value, &(host->follow_symlinks)) == 0) {
 			return true;
 		}
+	} else if (strcmp(key, "enforcefirsthostname") == 0) {
+		if (parse_yesno(value, &(host->enforce_first_hostname)) == 0) {
+			return true;
+		}
 	} else if (strcmp(key, "hostname") == 0) {
 		strlower(value);
 #ifdef ENABLE_MONITOR
@@ -1301,12 +1298,6 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		if (parse_yesno(value, &(host->ignore_dot_hiawatha)) == 0) {
 			return true;
 		}
-#ifdef ENABLE_MONITOR
-	} else if (strcmp(key, "monitorrequests") == 0) {
-		if (parse_yesno(value, &(host->monitor_requests)) == 0) {
-			return true;
-		}
-#endif
 	} else if (strcmp(key, "noextensionas") == 0) {
 		if ((host->no_extension_as = strdup(value)) != NULL) {
 			return true;
@@ -1361,6 +1352,12 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			}
 		}
 #endif
+	} else if (strcmp(key, "scriptalias") == 0) {
+		if (parse_keyvalue(value, &(host->script_alias), ":") != -1) {
+			if (valid_directory(host->script_alias->key) && valid_directory(host->script_alias->value)) {
+				return true;
+			}
+		}
 	} else if (strcmp(key, "secureurl") == 0) {
 		if (parse_yesno(value, &(host->secure_url)) == 0) {
 			return true;

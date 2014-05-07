@@ -59,6 +59,12 @@ typedef struct type_monitor_host_stats {
 	int result_forbidden;
 	int result_not_found;
 	int result_internal_error;
+
+	int time_0_1;
+	int time_1_3;
+	int time_3_10;
+	int time_10_x;
+	int timed_out;
 } t_monitor_host_stats;
 #endif
 
@@ -204,6 +210,7 @@ typedef struct type_host {
 	bool            use_xslt;
 	char            *error_xslt_file;
 #endif
+	bool            enforce_first_hostname;
 	bool            allow_dot_files;
 	bool            use_gz_file;
 	char            *login_message;
@@ -224,6 +231,7 @@ typedef struct type_host {
 	char            *imgref_replacement;
 	t_keyvalue      *envir_str;
 	t_keyvalue      *alias;
+	t_keyvalue      *script_alias;
 #ifdef ENABLE_TOOLKIT
 	t_charlist      toolkit_rules;
 #endif
@@ -254,8 +262,7 @@ typedef struct type_host {
 	bool            webdav_app;
 
 #ifdef ENABLE_MONITOR
-	t_monitor_host_stats *monitor_stats;
-	bool            monitor_requests;
+	t_monitor_host_stats *monitor_host_stats;
 	bool            monitor_host;
 #endif
 	t_file_hash     *file_hashes;
@@ -349,8 +356,7 @@ typedef struct type_config {
 #ifdef ENABLE_MONITOR
 	bool          monitor_enabled;
 	char          *monitor_directory;
-	int           monitor_stats_interval;
-	t_monitor_srv_stats monitor_stats;
+	t_monitor_srv_stats monitor_srv_stats;
 #endif
 #ifdef ENABLE_SSL
 	int           min_ssl_version;

@@ -174,8 +174,8 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 	}
 
 	if (session->body != NULL) {
-		len[19] = '\0';
 		snprintf(len, 19, "%ld", session->content_length);
+		len[19] = '\0';
 		add_to_environment(fcgi_buffer, "CONTENT_LENGTH", len);
 		http_header_to_environment(session, fcgi_buffer, "Content-Type:", "CONTENT_TYPE");
 	}

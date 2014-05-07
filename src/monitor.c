@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <unistd.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -31,13 +32,12 @@
 #define MAX_MONITOR_BUFFER_SIZE 50 * KILOBYTE
 #define MAX_TIMESTAMP_SIZE      16
 #define MAX_FILENAME_SIZE       35
-#define FORCE_SYNC_BUFFER        4
 
 static char *monitor_buffer = NULL;
 static int monitor_buffer_size;
 static pthread_mutex_t monitor_buffer_mutex;
 
-static int stats_delay, force_sync_buffer;
+static int stats_delay;
 
 static char *filename;
 static int filename_offset;
@@ -50,7 +50,7 @@ static void reset_server_stats(t_monitor_srv_stats *stats) {
 	}
 }
 
-/* Reset host record
+/* Reset record
  */
 static void reset_host_stats(t_monitor_host_stats *stats) {
 	if (stats != NULL) {
@@ -65,23 +65,19 @@ static void reset_host_stats(t_monitor_host_stats *stats) {
 	}
 }
 
-/* Replace TAB with SPACE
- */
-static void secure_monitor_value(char *str) {
-	if (str == NULL) {
-		return;
-	}
-	while (*str != '\0') {
-		if ((*str == '\r') || (*str == '\n') || (*str == '\t')) {
-			*str = ' ';
-		}
-		str++;
+static void reset_cgi_stats(t_monitor_host_stats *stats) {
+	if (stats != NULL) {
+		stats->time_0_1 = 0;
+		stats->time_1_3 = 0;
+		stats->time_3_10 = 0;
+		stats->time_10_x = 0;
+		stats->timed_out = 0;
 	}
 }
 
 /* Write monitor buffer to disk
  */
-static int sync_monitor_buffer(void) {
+static int flush_monitor_buffer(void) {
 	int handle, bytes_written, total_written;
 	gzFile gzhandle;
 
@@ -124,13 +120,13 @@ static int sync_monitor_buffer(void) {
 
 /* Make enough space in monitor buffer
  */
-static bool enough_space_for_event(size_t event_size) {
+static bool enough_space_for_entry(size_t event_size) {
 	if (event_size > MAX_MONITOR_BUFFER_SIZE) {
 		return false;
 	}
 
 	if (monitor_buffer_size + event_size > MAX_MONITOR_BUFFER_SIZE) {
-		return sync_monitor_buffer() == 0;
+		return flush_monitor_buffer() == 0;
 	}
 
 	return true;
@@ -156,19 +152,18 @@ int init_monitor_module(t_config *config) {
 
 	host = config->first_host;
 	while (host != NULL) {
-		if ((host->monitor_stats = (t_monitor_host_stats*)malloc(sizeof(t_monitor_host_stats))) == NULL) {
+		if ((host->monitor_host_stats = (t_monitor_host_stats*)malloc(sizeof(t_monitor_host_stats))) == NULL) {
 			return -1;
 		}
-
-		reset_host_stats(host->monitor_stats);
+		reset_host_stats(host->monitor_host_stats);
+		reset_cgi_stats(host->monitor_host_stats);
 
 		host = host->next;
 	}
 
-	reset_server_stats(&(config->monitor_stats));
+	reset_server_stats(&(config->monitor_srv_stats));
 
-	stats_delay = (int)config->monitor_stats_interval / TASK_RUNNER_INTERVAL;
-	force_sync_buffer = FORCE_SYNC_BUFFER;
+	stats_delay = MINUTE / TASK_RUNNER_INTERVAL;
 
 	if (pthread_mutex_init(&monitor_buffer_mutex, NULL) != 0) {
 		return -1;
@@ -180,13 +175,18 @@ int init_monitor_module(t_config *config) {
 /* Stop monitor module
  */
 void shutdown_monitor_module(t_config *config) {
+	time_t now;
+
+	now = time(NULL);
+
 	stats_delay = 0;
-	monitor_stats(config, time(NULL));
-	sync_monitor_buffer();
+	monitor_stats_to_buffer(config, now);
+	flush_monitor_buffer();
 }
 
 static int add_string_to_buffer(char *str) {
 	size_t size;
+	int result = 0;
 
 	if ((monitor_buffer == NULL) || (str == NULL)) {
 		return -1;
@@ -195,59 +195,50 @@ static int add_string_to_buffer(char *str) {
 
 	pthread_mutex_lock(&monitor_buffer_mutex);
 
-	if (enough_space_for_event(size) == false) {
-		pthread_mutex_unlock(&monitor_buffer_mutex);
-		return -1;
+	if (enough_space_for_entry(size) == false) {
+		result = -1;
+	} else {
+		memcpy(monitor_buffer + monitor_buffer_size, str, size);
+		monitor_buffer_size += size;
 	}
-
-	memcpy(monitor_buffer + monitor_buffer_size, str, size);
-	monitor_buffer_size += size;
 
 	pthread_mutex_unlock(&monitor_buffer_mutex);
 
-	return 0;
+	return result;
 }
 
-/* Monitor deamon start
+/* Monitor event
  */
-int monitor_server_start(void) {
-	char str[8 + MAX_TIMESTAMP_SIZE];
+int monitor_event(char *event, ...) {
+	char str[1024];
+	int size;
+	va_list args;
 
-	snprintf(str, MAX_TIMESTAMP_SIZE + 8, "Start\t%ld\n", (long)time(NULL));
+	size = sprintf(str, "event\t");
+
+	va_start(args, event);
+	size += vsnprintf(str + size, 1023 - size, event, args);
+	va_end(args);
+
+	if (size >= 1023) {
+		return -1;
+	}
+
+	if ((size += snprintf(str + size, 1023 - size, "\t%ld\n", (long)time(NULL))) >= 1023) {
+		return -1;
+	}
 
 	return add_string_to_buffer(str);
 }
 
-/* Monitor deamon stop
+/* Host statistics
  */
-int monitor_server_stop(void) {
-	char str[7 + MAX_TIMESTAMP_SIZE];
-
-	snprintf(str, MAX_TIMESTAMP_SIZE + 7, "Stop\t%ld\n", (long)time(NULL));
-
-	return add_string_to_buffer(str);
-}
-
-#ifdef ENABLE_LOADCHECK
-/* Monitor high server load
- */
-int monitor_high_server_load(double load) {
-	char str[35 + MAX_TIMESTAMP_SIZE];
-
-	snprintf(str, MAX_TIMESTAMP_SIZE + 35, "High server load (%0.2f)\t%ld\n", load, (long)time(NULL));
-
-	return add_string_to_buffer(str);
-}
-#endif
-
-/* Status request
- */
-int monitor_stats(t_config *config, time_t now) {
+int monitor_stats_to_buffer(t_config *config, time_t now) {
 	static int timer = 0;
 	time_t timestamp_begin, timestamp_end;
 	t_host *host;
-	char *str = NULL;
-	size_t str_len = 0, len;
+	char str[256];
+	int len;
 
 	if (timer++ < stats_delay) {
 		return 0;
@@ -266,158 +257,116 @@ int monitor_stats(t_config *config, time_t now) {
 			continue;
 		}
 
-		len = 2 * MAX_TIMESTAMP_SIZE + strlen(host->hostname.item[0]) + 7 * 15;
+		if (host->monitor_host_stats->requests + (long)host->monitor_host_stats->bytes_sent + host->monitor_host_stats->bans +
+		    host->monitor_host_stats->exploit_attempts + host->monitor_host_stats->result_forbidden +
+		    host->monitor_host_stats->result_not_found + host->monitor_host_stats->result_internal_error > 0) {
 
-		if (len > str_len) {
-			str_len = len + 100;
-			check_free(str);
-			if ((str = (char*)malloc(str_len)) == NULL) {
-				return -1;
+			len = snprintf(str, 255, "host\t%ld\t%ld\t%s\t%d\t%ld\t%d\t%d\t%d\t%d\t%d\n",
+				(long)timestamp_begin, (long)timestamp_end, host->hostname.item[0],
+				host->monitor_host_stats->requests, (long)host->monitor_host_stats->bytes_sent, host->monitor_host_stats->bans,
+				host->monitor_host_stats->exploit_attempts, host->monitor_host_stats->result_forbidden,
+				host->monitor_host_stats->result_not_found, host->monitor_host_stats->result_internal_error);
+
+			if (len < 255) {
+				add_string_to_buffer(str);
 			}
+
+			reset_host_stats(host->monitor_host_stats);
 		}
 
-		snprintf(str, str_len, "host\t%ld\t%ld\t%s\t%d\t%ld\t%d\t%d\t%d\t%d\t%d\n",
-			(long)timestamp_begin, (long)timestamp_end, host->hostname.item[0],
-			host->monitor_stats->requests, (long)host->monitor_stats->bytes_sent, host->monitor_stats->bans, host->monitor_stats->exploit_attempts,
-			host->monitor_stats->result_forbidden, host->monitor_stats->result_not_found, host->monitor_stats->result_internal_error);
-		str[str_len - 1] = '\0';
+		if (host->monitor_host_stats->time_0_1 + host->monitor_host_stats->time_1_3 +
+		    host->monitor_host_stats->time_3_10 + host->monitor_host_stats->time_10_x + 
+			host->monitor_host_stats->timed_out > 0) {
 
-		if (add_string_to_buffer(str) == -1) {
-			free(str);
-			return -1;
+			len = snprintf(str, 255, "cgi\t%ld\t%ld\t%s\t%d\t%d\t%d\t%d\n", 
+				(long)timestamp_begin, (long)timestamp_end, host->hostname.item[0],
+				host->monitor_host_stats->time_0_1, host->monitor_host_stats->time_1_3,
+				host->monitor_host_stats->time_3_10, host->monitor_host_stats->time_10_x);
+
+			if (len < 255) {
+				add_string_to_buffer(str);
+			}
+
+			if (host->monitor_host_stats->timed_out > 0) {
+				monitor_event( "%d CGI application(s) timed out for %s", host->monitor_host_stats->timed_out, host->hostname.item[0]);
+			}
+
+			reset_cgi_stats(host->monitor_host_stats);
 		}
-
-		reset_host_stats(host->monitor_stats);
 
 		host = host->next;
 	}
 
 	/* Monitor server stats
 	 */
-	len = 2 * MAX_TIMESTAMP_SIZE + 20;
-
-	if (len > str_len) {
-		str_len = len + 100;
-		check_free(str);
-		if ((str = (char*)malloc(str_len)) == NULL) {
-			return -1;
-		}
-
-	}
-
-	snprintf(str, str_len, "server\t%ld\t%ld\t%d\n",
+	len = snprintf(str, 255, "server\t%ld\t%ld\t%d\n",
 		(long)timestamp_begin, (long)timestamp_end,
-		config->monitor_stats.simultaneous_connections);
-	str[str_len - 1] = '\0';
+		config->monitor_srv_stats.simultaneous_connections);
 
-	if (add_string_to_buffer(str) == -1) {
-		free(str);
-		return -1;
+	if (len < 255) {
+		add_string_to_buffer(str);
 	}
 
-	reset_server_stats(&(config->monitor_stats));
+	reset_server_stats(&(config->monitor_srv_stats));
 
-	check_free(str);
-
-	/* Force syncing of monitor buffer
-	 */
-	if (force_sync_buffer-- <= 0) {
-		pthread_mutex_lock(&monitor_buffer_mutex);
-		sync_monitor_buffer();
-		pthread_mutex_unlock(&monitor_buffer_mutex);
-
-		force_sync_buffer = FORCE_SYNC_BUFFER;
-	}
+	flush_monitor_buffer();
 
 	return 0;
 }
 
-/* Monitor request
- */
-int monitor_request(t_session *session) {
-	char *str, *user_agent, *referer;
-	char ip_address[MAX_IP_STR_LEN + 1];
-	size_t str_len;
-	int result;
-
-	if (session->request_uri == NULL) {
-		return -1;
-	}
-
-	secure_monitor_value(session->request_uri);
-
-	if (session->config->anonymize_ip) {
-		anonymized_ip_to_str(&(session->ip_address), ip_address, MAX_IP_STR_LEN);
-	} else {
-		ip_to_str(&(session->ip_address), ip_address, MAX_IP_STR_LEN);
-	}
-	ip_address[MAX_IP_STR_LEN] = '\0';
-
-	if ((user_agent = get_http_header("User-Agent:", session->http_headers)) == NULL) {
-		user_agent = "-";
-	} else {
-		secure_monitor_value(user_agent);
-	}
-
-	if ((referer = get_http_header("Referer:", session->http_headers)) == NULL) {
-		referer = "-";
-	} else {
-		secure_monitor_value(referer);
-	}
-
-	str_len = 20 + MAX_TIMESTAMP_SIZE + strlen(session->host->hostname.item[0]) + strlen(session->request_uri) +
-	             strlen(ip_address) + strlen(user_agent) + strlen(referer);
-	if ((str = (char*)malloc(str_len)) == NULL) {
-		return -1;
-	}
-
-	snprintf(str, str_len, "request\t%ld\t%d\t%s\t%s\t%s\t%s\t%s\n",
-		(long)session->time, session->return_code, session->host->hostname.item[0], session->request_uri, ip_address, user_agent, referer);
-	str[str_len - 1] = '\0';
-
-	result = add_string_to_buffer(str);
-	free(str);
-
-	return result;
-}
-
 /* Stats monitor functions
  */
-void monitor_counter_request(t_session *session) {
-	if (session->host->monitor_stats == NULL) {
+void monitor_count_host(t_session *session) {
+	if (session->host->monitor_host_stats == NULL) {
 		return;
 	}
 
-	session->host->monitor_stats->bytes_sent += session->bytes_sent;
-	session->host->monitor_stats->requests++;
+	session->host->monitor_host_stats->bytes_sent += session->bytes_sent;
+	session->host->monitor_host_stats->requests++;
 
 	switch (session->return_code) {
 		case 403:
-			session->host->monitor_stats->result_forbidden++;
+			session->host->monitor_host_stats->result_forbidden++;
 			break;
 		case 404:
-			session->host->monitor_stats->result_not_found++;
+			session->host->monitor_host_stats->result_not_found++;
 			break;
 		case 500:
-			session->host->monitor_stats->result_internal_error++;
+			session->host->monitor_host_stats->result_internal_error++;
 			break;
 	}
 }
 
-void monitor_counter_ban(t_session *session) {
-	if (session->host->monitor_stats == NULL) {
+void monitor_count_ban(t_session *session) {
+	if (session->host->monitor_host_stats == NULL) {
 		return;
 	}
 
-	session->host->monitor_stats->bans++;
+	session->host->monitor_host_stats->bans++;
 }
 
-void monitor_counter_exploit_attempt(t_session *session) {
-	if (session->host->monitor_stats == NULL) {
+void monitor_count_exploit(t_session *session) {
+	if (session->host->monitor_host_stats == NULL) {
 		return;
 	}
 
-	session->host->monitor_stats->exploit_attempts++;
+	session->host->monitor_host_stats->exploit_attempts++;
+}
+
+void monitor_count_cgi(t_session *session, int runtime, bool timed_out) {
+	if ((runtime >= 0) && (runtime < 1)) {
+		session->host->monitor_host_stats->time_0_1++;
+	} else if ((runtime >= 1) && (runtime < 3)) {
+		session->host->monitor_host_stats->time_1_3++;
+	} else if ((runtime >= 3) && (runtime < 10)) {
+		session->host->monitor_host_stats->time_3_10++;
+	} else {
+		session->host->monitor_host_stats->time_10_x++;
+	}
+
+	if (timed_out) {
+		session->host->monitor_host_stats->timed_out++;
+	}
 }
 
 #endif

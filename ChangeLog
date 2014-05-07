@@ -1,3 +1,15 @@
+hiawatha (9.5) stable; urgency=low
+
+  * Added support for CGI statistics in Hiawatha Monitor.
+  * MonitorRequests and MonitorStatsInterval option removed.
+  * Added support for Origin HTTP header to prevent CSRF.
+  * EnforceFirstHostname option added.
+  * ScriptAlias option added.
+  * PolarSSL updated to version 1.3.6.
+  * Dropped support for PolarSSL 1.2.
+
+ -- Hugo Leisink <hugo@leisink.net>  Wed, 23 Apr 2014 20:55:29 +0200
+
 hiawatha (9.4) stable; urgency=low
 
   * Keep-Alive connections for reverse proxy made optional.

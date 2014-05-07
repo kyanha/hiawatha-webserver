@@ -1,7 +1,7 @@
 /*
  *  Privacy Enhanced Mail (PEM) decoding
  *
- *  Copyright (C) 2006-2013, Brainspark B.V.
+ *  Copyright (C) 2006-2014, Brainspark B.V.
  *
  *  This file is part of PolarSSL (http://www.polarssl.org)
  *  Lead Maintainer: Paul Bakker <polarssl_maintainer at polarssl.org>
@@ -33,8 +33,8 @@
 #include "polarssl/md5.h"
 #include "polarssl/cipher.h"
 
-#if defined(POLARSSL_MEMORY_C)
-#include "polarssl/memory.h"
+#if defined(POLARSSL_PLATFORM_C)
+#include "polarssl/platform.h"
 #else
 #define polarssl_malloc     malloc
 #define polarssl_free       free
@@ -382,10 +382,11 @@ int pem_write_buffer( const char *header, const char *footer,
 {
     int ret;
     unsigned char *encode_buf, *c, *p = buf;
-    size_t len = 0, use_len = 0;
-    size_t add_len = strlen( header ) + strlen( footer ) + ( use_len / 64 ) + 1;
+    size_t len = 0, use_len = 0, add_len = 0;
 
     base64_encode( NULL, &use_len, der_data, der_len );
+    add_len = strlen( header ) + strlen( footer ) + ( use_len / 64 ) + 1;
+
     if( use_len + add_len > buf_len )
     {
         *olen = use_len + add_len;

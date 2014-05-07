@@ -35,7 +35,7 @@
 
 typedef enum { no_cgi, binary, script, fastcgi} t_cgi_type;
 typedef enum { unknown, GET, POST, HEAD, TRACE, PUT, DELETE, CONNECT, WHEN, unsupported } t_req_method;
-typedef enum { missing_slash, require_ssl, location } t_cause_of_301;
+typedef enum { missing_slash, require_ssl, location, enforce_first_hostname } t_cause_of_301;
 
 typedef struct type_session {
 	t_config        *config;
@@ -64,7 +64,8 @@ typedef struct type_session {
 	bool            force_quit;
 	bool            uri_is_dir;
 	bool            encode_gzip;
-	bool            alias_used;
+	t_keyvalue      *alias;
+	t_keyvalue      *script_alias;
 	bool            request_limit;
 	t_http_header   *http_headers;
 	t_ip_addr       ip_address;

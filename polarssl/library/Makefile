@@ -22,9 +22,9 @@ ifdef SHARED
 CFLAGS += -fPIC
 endif
 
-SONAME=libpolarssl.so.5
+SONAME=libpolarssl.so.6
 
-DLEXT=so.5
+DLEXT=so.6
 # OSX shared library extension:
 # DLEXT=dylib
 
@@ -44,14 +44,15 @@ OBJS=	aes.o		aesni.o		arc4.o			\
 		ecp.o		ecp_curves.o				\
 		entropy.o	entropy_poll.o				\
 		error.o		gcm.o		havege.o		\
+		hmac_drbg.o								\
 		md.o		md_wrap.o	md2.o			\
-		md4.o		md5.o		memory.o		\
+		md4.o		md5.o						\
 		memory_buffer_alloc.o	net.o			\
 		oid.o									\
 		padlock.o	pbkdf2.o	pem.o			\
 		pkcs5.o		pkcs11.o	pkcs12.o		\
 		pk.o		pk_wrap.o	pkparse.o		\
-		pkwrite.o	ripemd160.o					\
+		pkwrite.o	platform.o	ripemd160.o		\
 		rsa.o		sha1.o		sha256.o		\
 		sha512.o	ssl_cache.o	ssl_cli.o		\
 		ssl_srv.o   ssl_ciphersuites.o			\

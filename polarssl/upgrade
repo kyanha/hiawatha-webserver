@@ -27,6 +27,11 @@ mv ${dir}ChangeLog .
 mv ${dir}include .
 mv ${dir}library .
 
+if [ -f patches/${1}.diff ]; then
+	echo "Applying patch."
+	patch -p1 < patches/${1}.diff
+fi
+
 echo "Cleaning up."
 rm -f include/.gitignore
 rm -f library/.gitignore

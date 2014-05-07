@@ -32,12 +32,16 @@
 #include "libstr.h"
 #include "libfs.h"
 #include "target.h"
+#include "http.h"
 #include "httpauth.h"
 #include "log.h"
 #include "cgi.h"
 #include "send.h"
 #ifdef ENABLE_CACHE
 #include "cache.h"
+#endif
+#ifdef ENABLE_MONITOR
+#include "monitor.h"
 #endif
 #ifdef ENABLE_TOMAHAWK
 #include "tomahawk.h"
@@ -62,10 +66,10 @@
 #define NEW_FILE -1
 
 char *hs_chunked = "Transfer-Encoding: chunked\r\n";  /* 28 */
+char *fb_alterlist   = "access denied via alterlist";
 
 extern char *fb_filesystem;
 extern char *fb_symlink;
-extern char *fb_alterlist;
 extern char *hs_eol;
 extern char *hs_conn;
 extern char *hs_concl;
@@ -127,6 +131,12 @@ int send_file(t_session *session) {
 	if (session->host->file_hashes != NULL) {
 		if (file_hash_match(session->file_on_disk, session->host->file_hashes) == false) {
 			log_file_error(session, session->file_on_disk, "invalid file hash");
+#ifdef ENABLE_MONITOR
+			if (session->config->monitor_enabled) {
+				monitor_count_exploit(session);
+				monitor_event("Invalid file hash for %s", session->file_on_disk);
+			}
+#endif
 			return 403;
 		}
 	}
@@ -459,6 +469,10 @@ int execute_cgi(t_session *session) {
 	int retval = 200, result, handle, len, header_length;
 	char *end_of_header, *str_begin, *str_end, *code, c, *str;
 	bool in_body = false, send_in_chunks = true, wrap_cgi, check_file_exists;
+	t_cgi_result cgi_result;
+	t_connect_to *connect_to;
+	t_cgi_info cgi_info;
+	pid_t cgi_pid = -1;
 #ifdef CYGWIN
 	char *old_path, *win32_path;
 #endif
@@ -467,10 +481,13 @@ int execute_cgi(t_session *session) {
 	char *cache_buffer = NULL;
 	int  cache_size = 0, cache_time = 0;
 #endif
-	t_cgi_result cgi_result;
-	t_connect_to *connect_to;
-	t_cgi_info cgi_info;
-	pid_t cgi_pid = -1;
+#ifdef ENABLE_MONITOR
+	bool timed_out = false, measure_runtime = false;
+	struct timeval tv_begin, tv_end;
+	struct timezone tz_begin, tz_end;
+	int runtime, diff;
+	char *event_key, *event_value, *event_end;
+#endif
 
 #ifdef ENABLE_DEBUG
 	session->current_task = "execute CGI";
@@ -516,6 +533,12 @@ int execute_cgi(t_session *session) {
 		if (session->host->file_hashes != NULL) {
 			if (file_hash_match(session->file_on_disk, session->host->file_hashes) == false) {
 				log_file_error(session, session->file_on_disk, "invalid file hash");
+#ifdef ENABLE_MONITOR
+				if (session->config->monitor_enabled) {
+					monitor_count_exploit(session);
+					monitor_event("Invalid file hash for %s", session->file_on_disk);
+				}
+#endif
 				return 403;
 			}
 		}
@@ -581,8 +604,12 @@ int execute_cgi(t_session *session) {
 	/* Prevent SQL injection
 	 */
 	if (session->host->prevent_sqli) {
-		if ((result = prevent_sqli(session)) != 0) {
-			return result;
+		result = prevent_sqli(session);
+		if (result == 1) {
+			session->error_cause = ec_SQL_INJECTION;
+		}
+		if (result != 0) {
+			return -1;
 		}
 	}
 
@@ -622,6 +649,12 @@ int execute_cgi(t_session *session) {
 		free(session->file_on_disk);
 		session->file_on_disk = win32_path;
 		free(old_path);
+	}
+#endif
+
+#ifdef ENABLE_MONITOR
+	if (session->config->monitor_enabled) {
+		measure_runtime = gettimeofday(&tv_begin, &tz_begin) == 0;
 	}
 #endif
 
@@ -683,7 +716,7 @@ int execute_cgi(t_session *session) {
 				retval = 500;
 				break;
 			case cgi_TIMEOUT:
-				log_error(session, "CGI timeout");
+				log_error(session, "CGI application timeout");
 				if (in_body) {
 					retval = rs_DISCONNECT;
 				} else {
@@ -695,6 +728,11 @@ int execute_cgi(t_session *session) {
 						kill(cgi_pid, SIGKILL);
 					}
 				}
+#ifdef ENABLE_MONITOR
+				if (session->config->monitor_enabled) {
+					timed_out = true;
+				}
+#endif
 				break;
 			case cgi_FORCE_QUIT:
 				retval = rs_FORCE_QUIT;
@@ -778,6 +816,39 @@ int execute_cgi(t_session *session) {
 
 							}
 
+#ifdef ENABLE_MONITOR
+							/* Log X-Hiawatha-Monitor header
+							 */
+							str = cgi_info.input_buffer;
+							len = header_length;
+							while ((event_key = find_cgi_header(str, len, "X-Hiawatha-Monitor:")) != NULL) {
+								event_value = event_key + 19;
+								while (*event_value == ' ') {
+									event_value++;
+								}
+
+								if ((event_end = strstr(event_value, "\r\n")) == NULL) {
+									break;
+								}
+
+								if (session->config->monitor_enabled) {
+									*event_end = '\0';
+									monitor_event("%s", event_value);
+									*event_end = '\r';
+								}
+
+								event_end += 2;
+								memmove(event_key, event_end, cgi_info.input_len - (event_end - cgi_info.input_buffer));
+
+								diff = event_end - event_key;
+								header_length -= diff;
+								end_of_header -= diff;
+								cgi_info.input_len -= diff;
+
+								len = header_length - (str - cgi_info.input_buffer);
+							}
+#endif
+
 							if (session->expires > -1) {
 								if (find_cgi_header(cgi_info.input_buffer, header_length, "Expires:") != NULL) {
 									session->expires = -1;
@@ -852,11 +923,10 @@ int execute_cgi(t_session *session) {
 							}
 							session->header_sent = true;
 
-							len = cgi_info.input_len - len;
 							/* Send first part of the body
 							 */
 							if (session->request_method != HEAD) {
-								if (len > 0) {
+								if ((len = cgi_info.input_len - len) > 0) {
 									if (send_in_chunks) {
 										result = send_chunk(session, end_of_header, len);
 									} else {
@@ -912,6 +982,18 @@ int execute_cgi(t_session *session) {
 				}
 		} /* switch */
 	} while (retval == 200);
+
+#ifdef ENABLE_MONITOR
+	if (session->config->monitor_enabled && measure_runtime) {
+		if (gettimeofday(&tv_end, &tz_end) == 0) {
+			runtime = tv_end.tv_sec - tv_begin.tv_sec;
+			if (tv_end.tv_usec < tv_begin.tv_usec) {
+				runtime--;
+			}
+			monitor_count_cgi(session, runtime, timed_out);
+		}
+	}
+#endif
 
 	session->time = time(NULL);
 
@@ -1246,7 +1328,7 @@ int handle_delete_request(t_session *session) {
 	int auth_result;
 
 #ifdef ENABLE_DEBUG
-	session->current_task = "handle PUT";
+	session->current_task = "handle DELETE";
 #endif
 
 	/* Access check
@@ -1651,20 +1733,18 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 								header_length -= delta;
 								bytes_read -= delta;
 
-								if (keep_alive) {
+								if ((session->request_method == HEAD) || empty_body_because_of_http_status(code)) {
+									content_length = 0;
+								} else if (keep_alive) {
 									/* Parse content length
 									 */
-									if (session->request_method == HEAD) {
-										content_length = 0;
-									} else if ((str = strncasestr(buffer, hs_conlen, header_length)) != NULL) {
+									if ((str = strncasestr(buffer, hs_conlen, header_length)) != NULL) {
 										str += 16;
 										if ((eol = strchr(str, '\r')) != NULL) {
 											*eol = '\0';
 											content_length = str2int(str);
 											*eol = '\r';
 										}
-									} else if (((code >= 100) && (code < 200)) || (code == 204) || (code == 304)) {
-										content_length = 0;
 									}
 
 									/* Determine if is chunked transfer encoding
@@ -1675,7 +1755,9 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 										chunk_size = header_length;
 										chunk_left = chunk_size;
 									}
-								} else if (session->keep_alive && (strncasestr(buffer, hs_conlen, header_length) == NULL) && (strncasestr(buffer, hs_chunked, header_length) == NULL)) {
+								} else if (session->keep_alive &&
+								          (strncasestr(buffer, hs_conlen, header_length) == NULL) &&
+									      (strncasestr(buffer, hs_chunked, header_length) == NULL)) {
 									/* We need to forward result in chunks
 									 */
 									if (send_buffer(session, buffer, header_length - 2) == -1) {

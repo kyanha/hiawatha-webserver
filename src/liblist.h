@@ -44,6 +44,7 @@ typedef struct type_accesslist {
 typedef struct type_keyvalue {
 	char *key;
 	char *value;
+	size_t key_len, value_len;
 
 	struct type_keyvalue *next;
 } t_keyvalue;

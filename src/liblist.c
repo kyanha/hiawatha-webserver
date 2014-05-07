@@ -75,7 +75,7 @@ t_http_header *parse_http_headers(char *line) {
 		if ((value = strchr(http_header->data, ':')) != NULL) {
 			do {
 				value++;
-			} while ((*value == ' ') && (*value != '\0'));
+			} while (*value == ' ');
 			http_header->value_offset = (value - http_header->data);
 		} else {
 			http_header->value_offset = 0;
@@ -382,11 +382,14 @@ int parse_keyvalue(char *line, t_keyvalue **kvlist, char *delimiter) {
 			free(*kvlist);
 			return -1;
 		}
+		(*kvlist)->key_len = strlen((*kvlist)->key);
+
 		if (((*kvlist)->value = strdup(remove_spaces(value))) == NULL) {
 			free((*kvlist)->key);
 			free(*kvlist);
 			return -1;
 		}
+		(*kvlist)->value_len = strlen((*kvlist)->value);
 	} else {
 		return -1;
 	}

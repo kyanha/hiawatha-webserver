@@ -1,7 +1,7 @@
 /*
  *  The RSA public-key cryptosystem
  *
- *  Copyright (C) 2006-2011, Brainspark B.V.
+ *  Copyright (C) 2006-2014, Brainspark B.V.
  *
  *  This file is part of PolarSSL (http://www.polarssl.org)
  *  Lead Maintainer: Paul Bakker <polarssl_maintainer at polarssl.org>
@@ -43,6 +43,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#if defined(POLARSSL_PLATFORM_C)
+#include "polarssl/platform.h"
+#else
+#define polarssl_printf printf
+#endif
+
 /*
  * Initialize an RSA context
  */
@@ -52,12 +58,20 @@ void rsa_init( rsa_context *ctx,
 {
     memset( ctx, 0, sizeof( rsa_context ) );
 
-    ctx->padding = padding;
-    ctx->hash_id = hash_id;
+    rsa_set_padding( ctx, padding, hash_id );
 
 #if defined(POLARSSL_THREADING_C)
     polarssl_mutex_init( &ctx->mutex );
 #endif
+}
+
+/*
+ * Set padding for an existing RSA context
+ */
+void rsa_set_padding( rsa_context *ctx, int padding, int hash_id )
+{
+    ctx->padding = padding;
+    ctx->hash_id = hash_id;
 }
 
 #if defined(POLARSSL_GENPRIME)
@@ -809,7 +823,7 @@ int rsa_rsaes_pkcs1_v15_decrypt( rsa_context *ctx,
          * (minus one, for the 00 byte) */
         for( i = 0; i < ilen - 3; i++ )
         {
-            pad_done |= ( p[i] == 0xFF );
+            pad_done |= ( p[i] != 0xFF );
             pad_count += ( pad_done == 0 );
         }
 
@@ -1367,7 +1381,7 @@ int rsa_copy( rsa_context *dst, const rsa_context *src )
 #endif
 
     dst->padding = src->padding;
-    dst->hash_id = src->padding;
+    dst->hash_id = src->hash_id;
 
 cleanup:
     if( ret != 0 )
@@ -1495,19 +1509,19 @@ int rsa_self_test( int verbose )
     mpi_read_string( &rsa.QP, 16, RSA_QP );
 
     if( verbose != 0 )
-        printf( "  RSA key validation: " );
+        polarssl_printf( "  RSA key validation: " );
 
     if( rsa_check_pubkey(  &rsa ) != 0 ||
         rsa_check_privkey( &rsa ) != 0 )
     {
         if( verbose != 0 )
-            printf( "failed\n" );
+            polarssl_printf( "failed\n" );
 
         return( 1 );
     }
 
     if( verbose != 0 )
-        printf( "passed\n  PKCS#1 encryption : " );
+        polarssl_printf( "passed\n  PKCS#1 encryption : " );
 
     memcpy( rsa_plaintext, RSA_PT, PT_LEN );
 
@@ -1515,20 +1529,20 @@ int rsa_self_test( int verbose )
                            rsa_plaintext, rsa_ciphertext ) != 0 )
     {
         if( verbose != 0 )
-            printf( "failed\n" );
+            polarssl_printf( "failed\n" );
 
         return( 1 );
     }
 
     if( verbose != 0 )
-        printf( "passed\n  PKCS#1 decryption : " );
+        polarssl_printf( "passed\n  PKCS#1 decryption : " );
 
     if( rsa_pkcs1_decrypt( &rsa, myrand, NULL, RSA_PRIVATE, &len,
                            rsa_ciphertext, rsa_decrypted,
                            sizeof(rsa_decrypted) ) != 0 )
     {
         if( verbose != 0 )
-            printf( "failed\n" );
+            polarssl_printf( "failed\n" );
 
         return( 1 );
     }
@@ -1536,14 +1550,14 @@ int rsa_self_test( int verbose )
     if( memcmp( rsa_decrypted, rsa_plaintext, len ) != 0 )
     {
         if( verbose != 0 )
-            printf( "failed\n" );
+            polarssl_printf( "failed\n" );
 
         return( 1 );
     }
 
 #if defined(POLARSSL_SHA1_C)
     if( verbose != 0 )
-        printf( "passed\n  PKCS#1 data sign  : " );
+        polarssl_printf( "passed\n  PKCS#1 data sign  : " );
 
     sha1( rsa_plaintext, PT_LEN, sha1sum );
 
@@ -1551,25 +1565,25 @@ int rsa_self_test( int verbose )
                         sha1sum, rsa_ciphertext ) != 0 )
     {
         if( verbose != 0 )
-            printf( "failed\n" );
+            polarssl_printf( "failed\n" );
 
         return( 1 );
     }
 
     if( verbose != 0 )
-        printf( "passed\n  PKCS#1 sig. verify: " );
+        polarssl_printf( "passed\n  PKCS#1 sig. verify: " );
 
     if( rsa_pkcs1_verify( &rsa, NULL, NULL, RSA_PUBLIC, POLARSSL_MD_SHA1, 0,
                           sha1sum, rsa_ciphertext ) != 0 )
     {
         if( verbose != 0 )
-            printf( "failed\n" );
+            polarssl_printf( "failed\n" );
 
         return( 1 );
     }
 
     if( verbose != 0 )
-        printf( "passed\n\n" );
+        polarssl_printf( "passed\n\n" );
 #endif /* POLARSSL_SHA1_C */
 
     rsa_free( &rsa );

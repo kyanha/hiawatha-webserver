@@ -19,8 +19,8 @@ echo "-- Checking for required packages"
 packages="make gcc libc6-dev dpkg-dev debhelper fakeroot libxml2-dev libxslt1-dev zlib1g-dev"
 missing=""
 for package in ${packages}; do
-	installed=`dpkg -l ${package} | tail -1 | cut -b1-2`
-	if [ "$installed" != "ii" ]; then
+	installed=`dpkg -l fakeroot | tail -1 | grep "^ii" | wc -l`
+	if [ "$installed" = "0" ]; then
 		missing="${missing} ${package}"
 	fi
 done
@@ -49,6 +49,7 @@ make
 
 # Make Debian package
 #
+echo "-- Building package"
 dh_testdir
 fakeroot dh_testroot
 if [ -f /usr/bin/dh_prep ]; then
@@ -58,7 +59,6 @@ else
 fi
 dh_installdirs
 make install DESTDIR=`pwd`/debian/hiawatha
-echo "-- Building package"
 dh_strip
 gzip -9 debian/hiawatha/usr/share/man/man1/*
 sed "s/#ServerId/ServerId/" config/hiawatha.conf > debian/hiawatha/etc/hiawatha/hiawatha.conf

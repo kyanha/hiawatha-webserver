@@ -84,8 +84,8 @@ void debug_print_ret( const ssl_context *ssl, int level,
     if( ssl->f_dbg == NULL )
         return;
 
-    snprintf( str, maxlen, "%s(%04d): %s() returned %d (0x%x)\n",
-              file, line, text, ret, ret );
+    snprintf( str, maxlen, "%s(%04d): %s() returned %d (-0x%04x)\n",
+              file, line, text, ret, -ret );
 
     str[maxlen] = '\0';
     ssl->f_dbg( ssl->p_dbg, level, str );
@@ -149,10 +149,6 @@ void debug_print_ecp( const ssl_context *ssl, int level,
     snprintf( str, maxlen, "%s(Y)", text );
     str[maxlen] = '\0';
     debug_print_mpi( ssl, level, file, line, str, &X->Y );
-
-    snprintf( str, maxlen, "%s(Z)", text );
-    str[maxlen] = '\0';
-    debug_print_mpi( ssl, level, file, line, str, &X->Z );
 }
 #endif /* POLARSSL_ECP_C */
 

@@ -31,7 +31,7 @@ The following options for cmake are available. Default value is in uppercase.
 	-DENABLE_TOMAHAWK=on|OFF           Enable Tomahawk, the Hiawatha command shell.
 	-DENABLE_TOOLKIT=ON|off            Enable the URL Toolkit.
 	-DENABLE_XSLT=ON|off               Enable XSLT support.
-	-DUSE_SYSTEM_POLARSSL=on|OFF       Compile Hiawatha against the system's PolarSSL library (>=1.2.0).
+	-DUSE_SYSTEM_POLARSSL=on|OFF       Compile Hiawatha against the system's PolarSSL library (>=1.3.0).
 
 The following path settings are available for cmake.
 

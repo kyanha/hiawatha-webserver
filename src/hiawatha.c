@@ -83,7 +83,6 @@ static double current_server_load = 0;
 #endif
 
 char *fb_symlink     = "symlink not allowed";
-char *fb_alterlist   = "access denied via alterlist";
 char *version_string = "Hiawatha v"VERSION
 #ifdef ENABLE_CACHE
 	", cache"
@@ -189,7 +188,7 @@ void task_runner(t_config *config) {
 			/* Monitor stats
 			 */
 			if (config->monitor_enabled) {
-				monitor_stats(config, now);
+				monitor_stats_to_buffer(config, now);
 			}
 #endif
 
@@ -215,7 +214,7 @@ void task_runner(t_config *config) {
 #ifdef ENABLE_MONITOR
 						if (config->monitor_enabled) {
 							if ((current_server_load > config->max_server_load) && (load_monitor_timer == 0)) {
-								monitor_high_server_load(current_server_load);
+								monitor_event("High server load (%0.2f)", current_server_load);
 								load_monitor_timer = 60;
 							}
 						}
@@ -497,7 +496,7 @@ int accept_connection(t_binding *binding, t_config *config) {
 				ban_ip(&(session->ip_address), config->ban_on_max_per_ip, config->kick_on_ban);
 #ifdef ENABLE_MONITOR
 				if (config->monitor_enabled) {
-					monitor_counter_ban(session);
+					monitor_count_ban(session);
 				}
 #endif
 			}
@@ -753,22 +752,25 @@ int run_server(t_settings *settings) {
 #ifdef ENABLE_MONITOR
 	/* Create monitor cache directory
 	 */
-	if (mkdir(config->monitor_directory, S_IRWXU) == -1) {
-		if (errno != EEXIST) {
-			fprintf(stderr, "Error creating monitor directory '%s'\n", config->monitor_directory);
-			return -1;
+	if (config->monitor_enabled) {
+		if (mkdir(config->monitor_directory, S_IRWXU) == -1) {
+			if (errno != EEXIST) {
+				fprintf(stderr, "Error creating monitor directory '%s'\n", config->monitor_directory);
+				return -1;
 #ifndef CYGWIN
-		} else if (chmod(config->monitor_directory, S_IRWXU) == -1) {
-			fprintf(stderr, "Can't change access permissions of monitor directory '%s'\n", config->monitor_directory);
-			return -1;
+			} else if (chmod(config->monitor_directory, S_IRWXU) == -1) {
+				fprintf(stderr, "Can't change access permissions of monitor directory '%s'\n", config->monitor_directory);
+				return -1;
 #endif
+			}
 		}
-	}
+
 #ifndef CYGWIN
-	if ((getuid() == 0) || (geteuid() == 0)) {
-		if (chown(config->monitor_directory, config->server_uid, config->server_gid) == -1) {
-			perror("chown(MonitorDirectory)");
-			return -1;
+		if ((getuid() == 0) || (geteuid() == 0)) {
+			if (chown(config->monitor_directory, config->server_uid, config->server_gid) == -1) {
+				perror("chown(MonitorDirectory)");
+				return -1;
+			}
 		}
 	}
 #endif
@@ -892,7 +894,7 @@ int run_server(t_settings *settings) {
 			fprintf(stderr, "Error initializing Monitor module.\n");
 			return -1;
 		}
-		monitor_server_start();
+		monitor_event("Server start");
 	}
 #endif
 
@@ -1084,7 +1086,7 @@ int run_server(t_settings *settings) {
 
 #ifdef ENABLE_MONITOR
 	if (config->monitor_enabled) {
-		monitor_server_stop();
+		monitor_event("Server stop");
 		shutdown_monitor_module(config);
 	}
 #endif

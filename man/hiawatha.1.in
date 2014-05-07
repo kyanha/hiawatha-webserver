@@ -237,14 +237,9 @@ Default = TLS1.1, Example: MinSSLversion = TLS1.2
 (requires that Hiawatha was compiled with -DENABLE_SSL=on)
 .TP
 .B MonitorServer = <ip-address>
-Specify the IP address of the monitor server. This enables logging of statistical information.
+Specify the IP address of the monitor server. This enables logging of statistical information. Use a X-Hiawatha-Monitor CGI header to log an event.
 .br
 Example: MonitorServer = 192.168.1.2
-.TP
-.B MonitorStatsInterval = <minutes>
-Define the interval at which Hiawatha will make the statistical information available for the Hiawatha Monitor.
-.br
-Default = 60, example: MonitorStatsInterval = 30
 .TP
 .B PIDfile = <filename>
 The name of the file in which Hiawatha will write its process-ID. Don't change unless you know what you are doing (the CGI-wrapper and the MacOS X preference pane need the PID-file at its default location).
@@ -424,7 +419,7 @@ Logfile for the HTTP requests.
 Default = @LOG_DIR@/access.log, example: AccessLogfile = /var/log/hiawatha.acc
 .TP
 .B Alias = <softlink>:<directory>
-An alias is a virtual softlink to a directory. Every request to <websiteroot>/<softlink> will be redirected to <directory>.
+An alias is a virtual softlink to a directory. Every request to <websiteroot>/<softlink> will be rerouted to <directory>.
 .br
 Example: Alias = /doc:/usr/share/doc
 .TP
@@ -462,6 +457,11 @@ Example: DenyBody = ^.*%3Cscript.*%3C%2Fscript%3E.*$
 Accepts URLs like /index.php/parameter if /index.php exists and the extension .php has been configured as a CGI program. '/parameter' will be placed in the environment variable PATH_INFO.
 .br
 Default = no, example: EnablePathInfo = yes
+.TP
+.B EnforceFirstHostname = yes|no
+If the hostname used in the URL is not the same as the first one in the list of the Hostname setting, then Hiawatha will send a 301 redirect with that hostname. This option is ignored if the first hostname starts with a wildcard.
+.br
+Default = no, example EnforceFirstHostname = yes
 .TP
 .B ErrorHandler = <error code>:<filename>[?key=value&...]
 When a 401, 403, 404, 501 or 503 error occures, this file will be send to the browser. The WebsiteRoot and the ErrorHandler together must form the complete path to the file. The generated errorcode can be found via the environment variable HTTP_GENERATED_ERROR. To override the returned HTTP code in a CGI script, use the HTTP Header "Status", for example "Status: 404".
@@ -585,6 +585,11 @@ Example: RunOnAlter = /usr/local/sbin/alter-script
 Define environment settings for CGI programs.
 .br
 Example: Setenv PHPRC = /var/www/conf
+.TP
+.B ScriptAlias = <softlink>:<script>
+A script alias is a virtual softlink to a CGI script. Every request to <websiteroot>/<softlink> will be rerouted to <script>.
+.br
+Example: Alias = /script.cgi:/usr/lib/script.cgi
 .TP
 .B ShowIndex = yes|no|<XSLT file with full path>|xml
 Return a directory listing in HTML format for a directory request when the startfile does not exist. If you want to change the index layout completely, specify the path of a XSLT file. If the XSLT file is not found or 'xml' is used, Hiawatha will output the XML of the directory index. An example of the XML output can be found in extra/index.xml inside the source package.

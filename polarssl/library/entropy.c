@@ -30,6 +30,10 @@
 #include "polarssl/entropy.h"
 #include "polarssl/entropy_poll.h"
 
+#if defined(POLARSSL_FS_IO)
+#include <stdio.h>
+#endif
+
 #if defined(POLARSSL_HAVEGE_C)
 #include "polarssl/havege.h"
 #endif
@@ -80,10 +84,19 @@ int entropy_add_source( entropy_context *ctx,
                         f_source_ptr f_source, void *p_source,
                         size_t threshold )
 {
-    int index = ctx->source_count;
+    int index, ret = 0;
 
+#if defined(POLARSSL_THREADING_C)
+    if( ( ret = polarssl_mutex_lock( &ctx->mutex ) ) != 0 )
+        return( ret );
+#endif
+
+    index = ctx->source_count;
     if( index >= ENTROPY_MAX_SOURCES )
-        return( POLARSSL_ERR_ENTROPY_MAX_SOURCES );
+    {
+        ret = POLARSSL_ERR_ENTROPY_MAX_SOURCES;
+        goto exit;
+    }
 
     ctx->source[index].f_source = f_source;
     ctx->source[index].p_source = p_source;
@@ -91,7 +104,13 @@ int entropy_add_source( entropy_context *ctx,
 
     ctx->source_count++;
 
-    return( 0 );
+exit:
+#if defined(POLARSSL_THREADING_C)
+    if( polarssl_mutex_unlock( &ctx->mutex ) != 0 )
+        return( POLARSSL_ERR_THREADING_MUTEX_ERROR );
+#endif
+
+    return( ret );
 }
 
 /*
@@ -133,18 +152,32 @@ static int entropy_update( entropy_context *ctx, unsigned char source_id,
 int entropy_update_manual( entropy_context *ctx,
                            const unsigned char *data, size_t len )
 {
-    return entropy_update( ctx, ENTROPY_SOURCE_MANUAL, data, len );
+    int ret;
+
+#if defined(POLARSSL_THREADING_C)
+    if( ( ret = polarssl_mutex_lock( &ctx->mutex ) ) != 0 )
+        return( ret );
+#endif
+
+    ret = entropy_update( ctx, ENTROPY_SOURCE_MANUAL, data, len );
+
+#if defined(POLARSSL_THREADING_C)
+    if( polarssl_mutex_unlock( &ctx->mutex ) != 0 )
+        return( POLARSSL_ERR_THREADING_MUTEX_ERROR );
+#endif
+
+    return ( ret );
 }
 
 /*
  * Run through the different sources to add entropy to our accumulator
  */
-int entropy_gather( entropy_context *ctx )
+static int entropy_gather_internal( entropy_context *ctx )
 {
     int ret, i;
     unsigned char buf[ENTROPY_MAX_GATHER];
     size_t olen;
-    
+
     if( ctx->source_count == 0 )
         return( POLARSSL_ERR_ENTROPY_NO_SOURCES_DEFINED );
 
@@ -173,6 +206,28 @@ int entropy_gather( entropy_context *ctx )
     return( 0 );
 }
 
+/*
+ * Thread-safe wrapper for entropy_gather_internal()
+ */
+int entropy_gather( entropy_context *ctx )
+{
+    int ret;
+
+#if defined(POLARSSL_THREADING_C)
+    if( ( ret = polarssl_mutex_lock( &ctx->mutex ) ) != 0 )
+        return( ret );
+#endif
+
+    ret = entropy_gather_internal( ctx );
+
+#if defined(POLARSSL_THREADING_C)
+    if( polarssl_mutex_unlock( &ctx->mutex ) != 0 )
+        return( POLARSSL_ERR_THREADING_MUTEX_ERROR );
+#endif
+
+    return( ret );
+}
+
 int entropy_func( void *data, unsigned char *output, size_t len )
 {
     int ret, count = 0, i, reached;
@@ -198,7 +253,7 @@ int entropy_func( void *data, unsigned char *output, size_t len )
             goto exit;
         }
 
-        if( ( ret = entropy_gather( ctx ) ) != 0 )
+        if( ( ret = entropy_gather_internal( ctx ) ) != 0 )
             goto exit;
 
         reached = 0;
@@ -215,23 +270,18 @@ int entropy_func( void *data, unsigned char *output, size_t len )
     sha512_finish( &ctx->accumulator, buf );
 
     /*
-     * Perform second SHA-512 on entropy
-     */
-    sha512( buf, ENTROPY_BLOCK_SIZE, buf, 0 );
-
-    /*
      * Reset accumulator and counters and recycle existing entropy
      */
     memset( &ctx->accumulator, 0, sizeof( sha512_context ) );
     sha512_starts( &ctx->accumulator, 0 );
     sha512_update( &ctx->accumulator, buf, ENTROPY_BLOCK_SIZE );
-#else /* POLARSSL_ENTROPY_SHA512_ACCUMULATOR */
-    sha256_finish( &ctx->accumulator, buf );
 
     /*
-     * Perform second SHA-256 on entropy
+     * Perform second SHA-512 on entropy
      */
-    sha256( buf, ENTROPY_BLOCK_SIZE, buf, 0 );
+    sha512( buf, ENTROPY_BLOCK_SIZE, buf, 0 );
+#else /* POLARSSL_ENTROPY_SHA512_ACCUMULATOR */
+    sha256_finish( &ctx->accumulator, buf );
 
     /*
      * Reset accumulator and counters and recycle existing entropy
@@ -239,6 +289,11 @@ int entropy_func( void *data, unsigned char *output, size_t len )
     memset( &ctx->accumulator, 0, sizeof( sha256_context ) );
     sha256_starts( &ctx->accumulator, 0 );
     sha256_update( &ctx->accumulator, buf, ENTROPY_BLOCK_SIZE );
+
+    /*
+     * Perform second SHA-256 on entropy
+     */
+    sha256( buf, ENTROPY_BLOCK_SIZE, buf, 0 );
 #endif /* POLARSSL_ENTROPY_SHA512_ACCUMULATOR */
 
     for( i = 0; i < ctx->source_count; i++ )
@@ -256,5 +311,61 @@ exit:
 
     return( ret );
 }
+
+#if defined(POLARSSL_FS_IO)
+int entropy_write_seed_file( entropy_context *ctx, const char *path )
+{
+    int ret = POLARSSL_ERR_ENTROPY_FILE_IO_ERROR;
+    FILE *f;
+    unsigned char buf[ENTROPY_BLOCK_SIZE];
+
+    if( ( f = fopen( path, "wb" ) ) == NULL )
+        return( POLARSSL_ERR_ENTROPY_FILE_IO_ERROR );
+
+    if( ( ret = entropy_func( ctx, buf, ENTROPY_BLOCK_SIZE ) ) != 0 )
+        goto exit;
+
+    if( fwrite( buf, 1, ENTROPY_BLOCK_SIZE, f ) != ENTROPY_BLOCK_SIZE )
+    {
+        ret = POLARSSL_ERR_ENTROPY_FILE_IO_ERROR;
+        goto exit;
+    }
+
+    ret = 0;
+
+exit:
+    fclose( f );
+    return( ret );
+}
+
+int entropy_update_seed_file( entropy_context *ctx, const char *path )
+{
+    FILE *f;
+    size_t n;
+    unsigned char buf[ ENTROPY_MAX_SEED_SIZE ];
+
+    if( ( f = fopen( path, "rb" ) ) == NULL )
+        return( POLARSSL_ERR_ENTROPY_FILE_IO_ERROR );
+
+    fseek( f, 0, SEEK_END );
+    n = (size_t) ftell( f );
+    fseek( f, 0, SEEK_SET );
+
+    if( n > ENTROPY_MAX_SEED_SIZE )
+        n = ENTROPY_MAX_SEED_SIZE;
+
+    if( fread( buf, 1, n, f ) != n )
+    {
+        fclose( f );
+        return( POLARSSL_ERR_ENTROPY_FILE_IO_ERROR );
+    }
+
+    fclose( f );
+
+    entropy_update_manual( ctx, buf, n );
+
+    return( entropy_write_seed_file( ctx, path ) );
+}
+#endif /* POLARSSL_FS_IO */
 
 #endif

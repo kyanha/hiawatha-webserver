@@ -5,7 +5,7 @@
  *
  * \author Adriaan de Jong <dejong@fox-it.com>
  *
- *  Copyright (C) 2006-2013, Brainspark B.V.
+ *  Copyright (C) 2006-2014, Brainspark B.V.
  *
  *  This file is part of PolarSSL (http://www.polarssl.org)
  *  Lead Maintainer: Paul Bakker <polarssl_maintainer at polarssl.org>
@@ -34,14 +34,13 @@
 #include "polarssl/oid.h"
 #include "polarssl/x509_crt.h"
 
-#if defined(POLARSSL_MEMORY_C)
-#include "polarssl/memory.h"
+#if defined(POLARSSL_PLATFORM_C)
+#include "polarssl/platform.h"
 #else
+#include <stdlib.h>
 #define polarssl_malloc     malloc
 #define polarssl_free       free
 #endif
-
-#include <stdlib.h>
 
 int pkcs11_x509_cert_init( x509_crt *cert, pkcs11h_certificate_t pkcs11_cert )
 {
@@ -166,7 +165,7 @@ int pkcs11_sign( pkcs11_context *ctx,
                     const unsigned char *hash,
                     unsigned char *sig )
 {
-    size_t olen, asn_len = 0, oid_size = 0;
+    size_t sig_len = 0, asn_len = 0, oid_size = 0;
     unsigned char *p = sig;
     const char *oid;
 
@@ -175,8 +174,6 @@ int pkcs11_sign( pkcs11_context *ctx,
 
     if( RSA_PRIVATE != mode )
         return POLARSSL_ERR_RSA_BAD_INPUT_DATA;
-
-    olen = ctx->len;
 
     if( md_alg != POLARSSL_MD_NONE )
     {
@@ -188,13 +185,17 @@ int pkcs11_sign( pkcs11_context *ctx,
             return( POLARSSL_ERR_RSA_BAD_INPUT_DATA );
 
         hashlen = md_get_size( md_info );
+        asn_len = 10 + oid_size;
     }
 
-    if( md_alg == POLARSSL_MD_NONE )
+    sig_len = ctx->len;
+    if ( hashlen > ctx_len || asn_len > sig_len ||
+         hashlen + asn_len > sig_len )
     {
-        memcpy( p, hash, hashlen );
+        return( POLARSSL_ERR_RSA_BAD_INPUT_DATA );
     }
-    else
+
+    if( md_alg != POLARSSL_MD_NONE)
     {
         /*
          * DigestInfo ::= SEQUENCE {
@@ -217,15 +218,12 @@ int pkcs11_sign( pkcs11_context *ctx,
         *p++ = 0x00;
         *p++ = ASN1_OCTET_STRING;
         *p++ = hashlen;
-
-        /* Determine added ASN length */
-        asn_len = p - sig;
-
-        memcpy( p, hash, hashlen );
     }
 
+    memcpy( p, hash, hashlen );
+
     if( pkcs11h_certificate_signAny( ctx->pkcs11h_cert, CKM_RSA_PKCS, sig,
-            asn_len + hashlen, sig, &olen ) != CKR_OK )
+            asn_len + hashlen, sig, &sig_len ) != CKR_OK )
     {
         return( POLARSSL_ERR_RSA_BAD_INPUT_DATA );
     }

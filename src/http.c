@@ -407,7 +407,7 @@ int parse_request(t_session *session, int total_bytes) {
 /* Convert the request uri to a filename.
  */
 int uri_to_path(t_session *session) {
-	size_t length, alias_length = 0;
+	size_t length;
 	char *strstart, *strend;
 	t_keyvalue *alias;
 	int retval;
@@ -438,14 +438,38 @@ int uri_to_path(t_session *session) {
 		}
 	}
 
+	/* Search for a script alias
+	 */
+	alias = session->host->script_alias;
+	while (alias != NULL) {
+		if (session->host->enable_path_info) {
+			if ((retval = strncmp(session->uri, alias->key, alias->key_len)) == 0) {
+				if (strlen(session->uri) > alias->key_len) {
+					if (*(session->uri + alias->key_len) != '/') {
+						retval = -1;
+					}
+				}
+			}
+		} else {
+			retval = strcmp(session->uri, alias->key);
+		}
+		if (retval == 0) {
+			if ((session->file_on_disk = strdup(alias->value)) == NULL) {
+				return 500;
+			}
+			session->script_alias = alias;
+			return 200;
+		}
+		alias = alias->next;
+	}
+
 	/* Search for an alias.
 	 */
 	alias = session->host->alias;
 	while (alias != NULL) {
-		alias_length = strlen(alias->key);
-		if (strncmp(session->uri, alias->key, alias_length) == 0) {
-			if ((*(session->uri + alias_length) == '/') || (*(session->uri + alias_length) == '\0')) {
-				session->alias_used = true;
+		if (strncmp(session->uri, alias->key, alias->key_len) == 0) {
+			if ((*(session->uri + alias->key_len) == '/') || (*(session->uri + alias->key_len) == '\0')) {
+				session->alias = alias;
 				break;
 			}
 		}
@@ -476,7 +500,7 @@ int uri_to_path(t_session *session) {
 	} else {
 		length = strlen(alias->value);
 		memcpy(session->file_on_disk, alias->value, length);
-		strstart = session->uri + alias_length;
+		strstart = session->uri + alias->key_len;
 
 	}
 	strcpy(session->file_on_disk + length, strstart);
@@ -488,15 +512,28 @@ int get_path_info(t_session *session) {
 	t_fsbool is_dir;
 	char *slash;
 
-	if (session->alias_used) {
+	if (session->script_alias != NULL) {
+		if (strlen(session->uri) > session->script_alias->key_len) {
+			if ((session->path_info = strdup(session->uri + session->script_alias->key_len)) == NULL) {
+				return 500;
+			}
+		}
+
 		return 200;
+	} else if (session->alias != NULL) {
+		if (session->alias->key_len >= strlen(session->file_on_disk)) {
+			return 500;
+		}
+
+		slash = session->file_on_disk + session->alias->value_len;
+	} else {
+		if (session->host->website_root_len >= strlen(session->file_on_disk)) {
+			return 500;
+		}
+
+		slash = session->file_on_disk + session->host->website_root_len + 1;
 	}
 
-	if (session->host->website_root_len >= strlen(session->file_on_disk)) {
-		return 500;
-	}
-
-	slash = session->file_on_disk + session->host->website_root_len + 1;
 	while (*slash != '\0') {
 		if (*slash == '/') {
 			*slash = '\0';
@@ -547,7 +584,7 @@ bool validate_url(t_session *session) {
 #endif
 #ifdef ENABLE_MONITOR
 	if (session->config->monitor_enabled) {
-		monitor_counter_exploit_attempt(session);
+		monitor_count_exploit(session);
 	}
 #endif
 
@@ -624,7 +661,7 @@ const char *http_error(int code) {
 		{429, "Too Many Requests"},
 		{431, "Request Header Fields Too Large"},
 		{440, "Client SSL Certificate Required"},
-		{441, "Security Threat Detected"},
+		{441, "SQL Injection Detected"},
 
 		/* Server error
 		 */
@@ -650,4 +687,8 @@ const char *http_error(int code) {
 	}
 
 	return NULL;
+}
+
+bool empty_body_because_of_http_status(int status) {
+	return ((status >= 100) && (status < 200)) || (status == 204) || (status == 304);
 }

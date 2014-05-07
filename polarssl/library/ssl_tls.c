@@ -1,7 +1,7 @@
 /*
  *  SSLv3/TLSv1 shared functions
  *
- *  Copyright (C) 2006-2013, Brainspark B.V.
+ *  Copyright (C) 2006-2014, Brainspark B.V.
  *
  *  This file is part of PolarSSL (http://www.polarssl.org)
  *  Lead Maintainer: Paul Bakker <polarssl_maintainer at polarssl.org>
@@ -38,8 +38,13 @@
 #include "polarssl/debug.h"
 #include "polarssl/ssl.h"
 
-#if defined(POLARSSL_MEMORY_C)
-#include "polarssl/memory.h"
+#if defined(POLARSSL_X509_CRT_PARSE_C) && \
+    defined(POLARSSL_X509_CHECK_EXTENDED_KEY_USAGE)
+#include "polarssl/oid.h"
+#endif
+
+#if defined(POLARSSL_PLATFORM_C)
+#include "polarssl/platform.h"
 #else
 #define polarssl_malloc     malloc
 #define polarssl_free       free
@@ -916,6 +921,9 @@ int ssl_psk_derive_premaster( ssl_context *ssl, key_exchange_type_t key_ex )
     }
 
     /* opaque psk<0..2^16-1>; */
+    if( end - p < 2 + (int) ssl->psk_len )
+            return( POLARSSL_ERR_SSL_BAD_INPUT_DATA );
+
     *(p++) = (unsigned char)( ssl->psk_len >> 8 );
     *(p++) = (unsigned char)( ssl->psk_len      );
     memcpy( p, ssl->psk, ssl->psk_len );
@@ -1309,6 +1317,13 @@ static int ssl_encrypt_buf( ssl_context *ssl )
         if( ++ssl->out_ctr[i - 1] != 0 )
             break;
 
+    /* The loops goes to its end iff the counter is wrapping */
+    if( i == 0 )
+    {
+        SSL_DEBUG_MSG( 1, ( "outgoing message counter would wrap" ) );
+        return( POLARSSL_ERR_SSL_COUNTER_WRAPPING );
+    }
+
     SSL_DEBUG_MSG( 2, ( "<= encrypt buf" ) );
 
     return( 0 );
@@ -1616,17 +1631,17 @@ static int ssl_decrypt_buf( ssl_context *ssl )
 
             /*
              * Padding is guaranteed to be incorrect if:
-             *   1. padlen - 1 > ssl->in_msglen
+             *   1. padlen >= ssl->in_msglen
              *
-             *   2. ssl->in_msglen + padlen >
-             *        SSL_MAX_CONTENT_LEN + 256 (max padding)
+             *   2. padding_idx >= SSL_MAX_CONTENT_LEN +
+             *                     ssl->transform_in->maclen
              *
              * In both cases we reset padding_idx to a safe value (0) to
              * prevent out-of-buffer reads.
              */
-            correct &= ( ssl->in_msglen >= padlen - 1 );
-            correct &= ( ssl->in_msglen + padlen <= SSL_MAX_CONTENT_LEN + 256 );
-
+            correct &= ( ssl->in_msglen >= padlen + 1 );
+            correct &= ( padding_idx < SSL_MAX_CONTENT_LEN +
+                                       ssl->transform_in->maclen );
             padding_idx *= correct;
 
             for( i = 1; i <= 256; i++ )
@@ -1774,6 +1789,13 @@ static int ssl_decrypt_buf( ssl_context *ssl )
     for( i = 8; i > 0; i-- )
         if( ++ssl->in_ctr[i - 1] != 0 )
             break;
+
+    /* The loops goes to its end iff the counter is wrapping */
+    if( i == 0 )
+    {
+        SSL_DEBUG_MSG( 1, ( "incoming message counter would wrap" ) );
+        return( POLARSSL_ERR_SSL_COUNTER_WRAPPING );
+    }
 
     SSL_DEBUG_MSG( 2, ( "<= decrypt buf" ) );
 
@@ -2071,7 +2093,8 @@ int ssl_read_record( ssl_context *ssl )
             return( POLARSSL_ERR_SSL_INVALID_RECORD );
         }
 
-        ssl->handshake->update_checksum( ssl, ssl->in_msg, ssl->in_hslen );
+        if( ssl->state != SSL_HANDSHAKE_OVER )
+            ssl->handshake->update_checksum( ssl, ssl->in_msg, ssl->in_hslen );
 
         return( 0 );
     }
@@ -2650,6 +2673,30 @@ int ssl_parse_certificate( ssl_context *ssl )
 
     SSL_DEBUG_CRT( 3, "peer certificate", ssl->session_negotiate->peer_cert );
 
+    /*
+     * On client, make sure the server cert doesn't change during renego to
+     * avoid "triple handshake" attack: https://secure-resumption.com/
+     */
+    if( ssl->endpoint == SSL_IS_CLIENT &&
+        ssl->renegotiation == SSL_RENEGOTIATION )
+    {
+        if( ssl->session->peer_cert == NULL )
+        {
+            SSL_DEBUG_MSG( 1, ( "new server cert during renegotiation" ) );
+            return( POLARSSL_ERR_SSL_BAD_HS_CERTIFICATE );
+        }
+
+        if( ssl->session->peer_cert->raw.len !=
+            ssl->session_negotiate->peer_cert->raw.len ||
+            memcmp( ssl->session->peer_cert->raw.p,
+                    ssl->session_negotiate->peer_cert->raw.p,
+                    ssl->session->peer_cert->raw.len ) != 0 )
+        {
+            SSL_DEBUG_MSG( 1, ( "server cert changed during renegotiation" ) );
+            return( POLARSSL_ERR_SSL_BAD_HS_CERTIFICATE );
+        }
+    }
+
     if( ssl->authmode != SSL_VERIFY_NONE )
     {
         if( ssl->ca_chain == NULL )
@@ -2658,13 +2705,46 @@ int ssl_parse_certificate( ssl_context *ssl )
             return( POLARSSL_ERR_SSL_CA_CHAIN_REQUIRED );
         }
 
+        /*
+         * Main check: verify certificate
+         */
         ret = x509_crt_verify( ssl->session_negotiate->peer_cert,
                                ssl->ca_chain, ssl->ca_crl, ssl->peer_cn,
                               &ssl->session_negotiate->verify_result,
                                ssl->f_vrfy, ssl->p_vrfy );
 
         if( ret != 0 )
+        {
             SSL_DEBUG_RET( 1, "x509_verify_cert", ret );
+        }
+
+        /*
+         * Secondary checks: always done, but change 'ret' only if it was 0
+         */
+
+#if defined(POLARSSL_SSL_SET_CURVES)
+        {
+            const pk_context *pk = &ssl->session_negotiate->peer_cert->pk;
+
+            /* If certificate uses an EC key, make sure the curve is OK */
+            if( pk_can_do( pk, POLARSSL_PK_ECKEY ) &&
+                ! ssl_curve_is_acceptable( ssl, pk_ec( *pk )->grp.id ) )
+            {
+                SSL_DEBUG_MSG( 1, ( "bad certificate (EC key curve)" ) );
+                if( ret == 0 )
+                    ret = POLARSSL_ERR_SSL_BAD_HS_CERTIFICATE;
+            }
+        }
+#endif
+
+        if( ssl_check_cert_usage( ssl->session_negotiate->peer_cert,
+                                  ciphersuite_info,
+                                  ! ssl->endpoint ) != 0 )
+        {
+            SSL_DEBUG_MSG( 1, ( "bad certificate (usage extensions)" ) );
+            if( ret == 0 )
+                ret = POLARSSL_ERR_SSL_BAD_HS_CERTIFICATE;
+        }
 
         if( ssl->authmode != SSL_VERIFY_REQUIRED )
             ret = 0;
@@ -3262,6 +3342,9 @@ static int ssl_handshake_init( ssl_context *ssl )
     {
         ssl->transform_negotiate =
             (ssl_transform *) polarssl_malloc( sizeof(ssl_transform) );
+
+        if( ssl->transform_negotiate != NULL )
+            memset( ssl->transform_negotiate, 0, sizeof(ssl_transform) );
     }
 
     if( ssl->session_negotiate )
@@ -3270,6 +3353,9 @@ static int ssl_handshake_init( ssl_context *ssl )
     {
         ssl->session_negotiate =
             (ssl_session *) polarssl_malloc( sizeof(ssl_session) );
+
+        if( ssl->session_negotiate != NULL )
+            memset( ssl->session_negotiate, 0, sizeof(ssl_session) );
     }
 
     if( ssl->handshake )
@@ -3278,6 +3364,9 @@ static int ssl_handshake_init( ssl_context *ssl )
     {
         ssl->handshake = (ssl_handshake_params *)
             polarssl_malloc( sizeof(ssl_handshake_params) );
+
+        if( ssl->handshake != NULL )
+            memset( ssl->handshake, 0, sizeof(ssl_handshake_params) );
     }
 
     if( ssl->handshake == NULL ||
@@ -3287,10 +3376,6 @@ static int ssl_handshake_init( ssl_context *ssl )
         SSL_DEBUG_MSG( 1, ( "malloc() of ssl sub-contexts failed" ) );
         return( POLARSSL_ERR_SSL_MALLOC_FAILED );
     }
-
-    memset( ssl->handshake, 0, sizeof(ssl_handshake_params) );
-    memset( ssl->transform_negotiate, 0, sizeof(ssl_transform) );
-    memset( ssl->session_negotiate, 0, sizeof(ssl_session) );
 
 #if defined(POLARSSL_SSL_PROTO_SSL3) || defined(POLARSSL_SSL_PROTO_TLS1) || \
     defined(POLARSSL_SSL_PROTO_TLS1_1)
@@ -3373,7 +3458,8 @@ int ssl_init( ssl_context *ssl )
     if( ssl->out_ctr == NULL )
     {
         SSL_DEBUG_MSG( 1, ( "malloc(%d bytes) failed", len ) );
-        polarssl_free( ssl-> in_ctr );
+        polarssl_free( ssl->in_ctr );
+        ssl->in_ctr = NULL;
         return( POLARSSL_ERR_SSL_MALLOC_FAILED );
     }
 
@@ -3382,6 +3468,10 @@ int ssl_init( ssl_context *ssl )
 
 #if defined(POLARSSL_SSL_SESSION_TICKETS)
     ssl->ticket_lifetime = SSL_DEFAULT_TICKET_LIFETIME;
+#endif
+
+#if defined(POLARSSL_SSL_SET_CURVES)
+    ssl->curve_list = ecp_grp_id_list( );
 #endif
 
     if( ( ret = ssl_handshake_init( ssl ) ) != 0 )
@@ -3453,6 +3543,10 @@ int ssl_session_reset( ssl_context *ssl )
         polarssl_free( ssl->session );
         ssl->session = NULL;
     }
+
+#if defined(POLARSSL_SSL_ALPN)
+    ssl->alpn_chosen = NULL;
+#endif
 
     if( ( ret = ssl_handshake_init( ssl ) ) != 0 )
         return( ret );
@@ -3725,6 +3819,14 @@ int ssl_set_psk( ssl_context *ssl, const unsigned char *psk, size_t psk_len,
     if( psk == NULL || psk_identity == NULL )
         return( POLARSSL_ERR_SSL_BAD_INPUT_DATA );
 
+    /*
+     * The length will be check later anyway, but in case it is obviously
+     * too large, better abort now. The PMS is as follows:
+     * other_len (2 bytes) + other + psk_len (2 bytes) + psk
+     */
+    if( psk_len + 4 > POLARSSL_PREMASTER_SIZE )
+        return( POLARSSL_ERR_SSL_BAD_INPUT_DATA );
+
     if( ssl->psk != NULL )
     {
         polarssl_free( ssl->psk );
@@ -3796,6 +3898,16 @@ int ssl_set_dh_param_ctx( ssl_context *ssl, dhm_context *dhm_ctx )
 }
 #endif /* POLARSSL_DHM_C */
 
+#if defined(POLARSSL_SSL_SET_CURVES)
+/*
+ * Set the allowed elliptic curves
+ */
+void ssl_set_curves( ssl_context *ssl, const ecp_group_id *curve_list )
+{
+  ssl->curve_list = curve_list;
+}
+#endif
+
 #if defined(POLARSSL_SSL_SERVER_NAME_INDICATION)
 int ssl_set_hostname( ssl_context *ssl, const char *hostname )
 {
@@ -3829,6 +3941,37 @@ void ssl_set_sni( ssl_context *ssl,
     ssl->p_sni = p_sni;
 }
 #endif /* POLARSSL_SSL_SERVER_NAME_INDICATION */
+
+#if defined(POLARSSL_SSL_ALPN)
+int ssl_set_alpn_protocols( ssl_context *ssl, const char **protos )
+{
+    size_t cur_len, tot_len;
+    const char **p;
+
+    /*
+     * "Empty strings MUST NOT be included and byte strings MUST NOT be
+     * truncated". Check lengths now rather than later.
+     */
+    tot_len = 0;
+    for( p = protos; *p != NULL; p++ )
+    {
+        cur_len = strlen( *p );
+        tot_len += cur_len;
+
+        if( cur_len == 0 || cur_len > 255 || tot_len > 65535 )
+            return( POLARSSL_ERR_SSL_BAD_INPUT_DATA );
+    }
+
+    ssl->alpn_list = protos;
+
+    return( 0 );
+}
+
+const char *ssl_get_alpn_protocol( const ssl_context *ssl )
+{
+    return ssl->alpn_chosen;
+}
+#endif /* POLARSSL_SSL_ALPN */
 
 void ssl_set_max_version( ssl_context *ssl, int major, int minor )
 {
@@ -4610,3 +4753,101 @@ md_type_t ssl_md_alg_from_hash( unsigned char hash )
 }
 
 #endif
+
+#if defined(POLARSSL_SSL_SET_CURVES)
+/*
+ * Check is a curve proposed by the peer is in our list.
+ * Return 1 if we're willing to use it, 0 otherwise.
+ */
+int ssl_curve_is_acceptable( const ssl_context *ssl, ecp_group_id grp_id )
+{
+    const ecp_group_id *gid;
+
+    for( gid = ssl->curve_list; *gid != POLARSSL_ECP_DP_NONE; gid++ )
+        if( *gid == grp_id )
+            return( 1 );
+
+    return( 0 );
+}
+#endif
+
+#if defined(POLARSSL_X509_CRT_PARSE_C)
+int ssl_check_cert_usage( const x509_crt *cert,
+                          const ssl_ciphersuite_t *ciphersuite,
+                          int cert_endpoint )
+{
+#if defined(POLARSSL_X509_CHECK_KEY_USAGE)
+    int usage = 0;
+#endif
+#if defined(POLARSSL_X509_CHECK_EXTENDED_KEY_USAGE)
+    const char *ext_oid;
+    size_t ext_len;
+#endif
+
+#if !defined(POLARSSL_X509_CHECK_KEY_USAGE) &&          \
+    !defined(POLARSSL_X509_CHECK_EXTENDED_KEY_USAGE)
+    ((void) cert);
+    ((void) cert_endpoint);
+#endif
+
+#if defined(POLARSSL_X509_CHECK_KEY_USAGE)
+    if( cert_endpoint == SSL_IS_SERVER )
+    {
+        /* Server part of the key exchange */
+        switch( ciphersuite->key_exchange )
+        {
+            case POLARSSL_KEY_EXCHANGE_RSA:
+            case POLARSSL_KEY_EXCHANGE_RSA_PSK:
+                usage = KU_KEY_ENCIPHERMENT;
+                break;
+
+            case POLARSSL_KEY_EXCHANGE_DHE_RSA:
+            case POLARSSL_KEY_EXCHANGE_ECDHE_RSA:
+            case POLARSSL_KEY_EXCHANGE_ECDHE_ECDSA:
+                usage = KU_DIGITAL_SIGNATURE;
+                break;
+
+            case POLARSSL_KEY_EXCHANGE_ECDH_RSA:
+            case POLARSSL_KEY_EXCHANGE_ECDH_ECDSA:
+                usage = KU_KEY_AGREEMENT;
+                break;
+
+            /* Don't use default: we want warnings when adding new values */
+            case POLARSSL_KEY_EXCHANGE_NONE:
+            case POLARSSL_KEY_EXCHANGE_PSK:
+            case POLARSSL_KEY_EXCHANGE_DHE_PSK:
+            case POLARSSL_KEY_EXCHANGE_ECDHE_PSK:
+                usage = 0;
+        }
+    }
+    else
+    {
+        /* Client auth: we only implement rsa_sign and ecdsa_sign for now */
+        usage = KU_DIGITAL_SIGNATURE;
+    }
+
+    if( x509_crt_check_key_usage( cert, usage ) != 0 )
+        return( -1 );
+#else
+    ((void) ciphersuite);
+#endif /* POLARSSL_X509_CHECK_KEY_USAGE */
+
+#if defined(POLARSSL_X509_CHECK_EXTENDED_KEY_USAGE)
+    if( cert_endpoint == SSL_IS_SERVER )
+    {
+        ext_oid = OID_SERVER_AUTH;
+        ext_len = OID_SIZE( OID_SERVER_AUTH );
+    }
+    else
+    {
+        ext_oid = OID_CLIENT_AUTH;
+        ext_len = OID_SIZE( OID_CLIENT_AUTH );
+    }
+
+    if( x509_crt_check_extended_key_usage( cert, ext_oid, ext_len ) != 0 )
+        return( -1 );
+#endif /* POLARSSL_X509_CHECK_EXTENDED_KEY_USAGE */
+
+    return( 0 );
+}
+#endif /* POLARSSL_X509_CRT_PARSE_C */

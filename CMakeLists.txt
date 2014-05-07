@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.4)
+cmake_minimum_required(VERSION 2.8.2)
 project(Hiawatha C)
 
 # Compiler
@@ -16,7 +16,7 @@ option(ENABLE_TOMAHAWK "Enable Tomahawk in Hiawatha" off)
 option(ENABLE_TOOLKIT  "Enable the URL toolkit in Hiawatha" on)
 option(ENABLE_XSLT     "Enable XSLT support in Hiawatha." on)
 
-option(USE_SYSTEM_POLARSSL "Use the system's PolarSSL (>=1.2.0) library." off)
+option(USE_SYSTEM_POLARSSL "Use the system's PolarSSL (>=1.3.0) library." off)
 
 # Includes
 include(CMakeFiles.txt)
@@ -34,7 +34,7 @@ include(cmake/CopyIfNotExists.cmake)
 
 # Settings
 set(HIAWATHA_VERSION_MAJOR 9)
-set(HIAWATHA_VERSION_MINOR 4)
+set(HIAWATHA_VERSION_MINOR 5)
 set(HIAWATHA_VERSION_PATCH 0)
 string(TOLOWER ${CMAKE_PROJECT_NAME} PROJECT_NAME)
 if(${HIAWATHA_VERSION_PATCH} EQUAL 0)
@@ -99,11 +99,13 @@ include(CPack)
 # PolarSSL
 if(ENABLE_SSL)
 	if(NOT USE_SYSTEM_POLARSSL)
+		option(USE_STATIC_POLARSSL_LIBRARY "Build PolarSSL static library." off)
 		option(USE_SHARED_POLARSSL_LIBRARY "Build PolarSSL as a shared library." on)
 	endif()
 	set(CMAKE_INSTALL_NAME_DIR ${CMAKE_INSTALL_FULL_LIBDIR}/hiawatha)
 	set(LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/hiawatha)
 	if(USE_SYSTEM_POLARSSL)
+		message(WARNING "Make sure the PolarSSL library has been built with the POLARSSL_THREADING_PTHREAD and POLARSSL_THREADING_C flags enabled. Otherwise, the PolarSSL library may crash the Hiawatha webserver.")
 		find_library(POLARSSL polarssl)
 	else()
 		add_definitions(-DPOLARSSL_THREADING_PTHREAD -DPOLARSSL_THREADING_C)

@@ -22,12 +22,7 @@
 #include "libfs.h"
 #include "filehashes.h"
 #include "polarssl/version.h"
-#if POLARSSL_VERSION_NUMBER >= 0x01030000
 #include "polarssl/sha256.h"
-#else
-#include "polarssl/sha2.h"
-#define sha256_file sha2_file
-#endif
 
 void sha2_bin2hex(unsigned char bin[SHA_HASH_SIZE], char hex[FILE_HASH_SIZE + 1]) {
 	int i;

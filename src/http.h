@@ -12,6 +12,7 @@
 #ifndef _HTTP_H
 #define _HTTP_H
 
+#include <stdbool.h>
 #include "session.h"
 
 int fetch_request(t_session *session);
@@ -20,5 +21,6 @@ int uri_to_path(t_session *session);
 int get_path_info(t_session *session);
 bool validate_url(t_session *session);
 const char *http_error(int code);
+bool empty_body_because_of_http_status(int status);
 
 #endif

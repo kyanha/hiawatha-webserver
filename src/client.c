@@ -601,7 +601,7 @@ int register_wrong_password(t_session *session) {
 					log_system(session, "Client banned because of too many wrong passwords");
 #ifdef ENABLE_MONITOR
 					if (session->config->monitor_enabled) {
-						monitor_counter_ban(session);
+						monitor_count_ban(session);
 					}
 #endif
 				}

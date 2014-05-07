@@ -381,9 +381,13 @@ static int serve_client(t_session *session) {
 			}
 		}
 
-		if (tunnel_ssh_connection(session->client_socket) == 0) {
-			log_system(session, "Tunneling SSH connection.");
+		log_system(session, "SSH tunnel requested");
+		if (tunnel_ssh_connection(session->client_socket) != 0) {
+			log_system(session, "SSH tunnel failed");
+		} else {
+			log_system(session, "SSH tunnel terminated");
 		}
+
 		session->keep_alive = false;
 
 		return 200;
@@ -433,11 +437,22 @@ static int serve_client(t_session *session) {
 	 */
 	if (session->binding->use_ssl) {
 		if ((session->host->ca_certificate != NULL) && (ssl_has_peer_cert(&(session->ssl_context)) == false)) {
-			log_error(session, "missing client SSL certificate");
+			log_error(session, "Missing client SSL certificate");
 			return 440;
 		}
 	}
 #endif
+
+	/* Enforce usage of first hostname
+	 */
+	if (session->host->enforce_first_hostname && (session->hostname != NULL)) {
+		if (**(session->host->hostname.item) != '*') {
+			if (strcmp(session->hostname, *(session->host->hostname.item)) != 0) {
+				session->cause_of_301 = enforce_first_hostname;
+				return 301;
+			}
+		}
+	}
 
 	/* Enforce usage of SSL
 	 */
@@ -467,7 +482,7 @@ static int serve_client(t_session *session) {
 					log_system(session, "Client banned because of denied body");
 #ifdef ENABLE_MONITOR
 					if (session->config->monitor_enabled) {
-						monitor_counter_ban(session);
+						monitor_count_ban(session);
 					}
 #endif
 				}
@@ -478,7 +493,7 @@ static int serve_client(t_session *session) {
 #endif
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
-					monitor_counter_exploit_attempt(session);
+					monitor_count_exploit(session);
 				}
 #endif
 
@@ -557,8 +572,12 @@ static int serve_client(t_session *session) {
 			}
 
 			if (session->host->prevent_sqli) {
-				if ((result = prevent_sqli(session)) != 0) {
-					return result;
+				result = prevent_sqli(session);
+				if (result == 1) {
+					session->error_cause = ec_SQL_INJECTION;
+				}
+				if (result != 0) {
+					return -1;
 				}
 			}
 
@@ -616,7 +635,7 @@ static int serve_client(t_session *session) {
 				log_system(session, "Client banned because of URL match in UrlToolkit rule");
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
-					monitor_counter_ban(session);
+					monitor_count_ban(session);
 				}
 #endif
 				return 403;
@@ -834,11 +853,11 @@ static void handle_timeout(t_session *session) {
 		log_system(session, "Client banned because of connection timeout");
 #ifdef ENABLE_MONITOR
 		if (session->config->monitor_enabled) {
-			monitor_counter_ban(session);
+			monitor_count_ban(session);
 		}
 #endif
 	} else {
-		log_system(session, "Timeout while waiting for request");
+		log_system(session, "Timeout while waiting for first request");
 	}
 }
 
@@ -861,7 +880,7 @@ static void handle_request_result(t_session *session, int result) {
 				log_system(session, "Client banned because of sending a too large request");
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
-					monitor_counter_ban(session);
+					monitor_count_ban(session);
 				}
 #endif
 			}
@@ -896,7 +915,7 @@ static void handle_request_result(t_session *session, int result) {
 				log_system(session, "Client banned because of SQL injection on %s", hostname);
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
-					monitor_counter_ban(session);
+					monitor_count_ban(session);
 				}
 #endif
 			}
@@ -911,7 +930,7 @@ static void handle_request_result(t_session *session, int result) {
 				log_system(session, "Client banned because of invalid URL on %s", hostname);
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
-					monitor_counter_ban(session);
+					monitor_count_ban(session);
 				}
 #endif
 			}
@@ -957,7 +976,7 @@ static void handle_request_result(t_session *session, int result) {
 				log_system(session, "Client banned because of sending garbage");
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
-					monitor_counter_ban(session);
+					monitor_count_ban(session);
 				}
 #endif
 			}
@@ -1016,8 +1035,8 @@ static void connection_handler(t_session *session) {
 
 	connections = ++open_connections;
 	if (session->config->monitor_enabled) {
-		if (connections > session->config->monitor_stats.simultaneous_connections) {
-			session->config->monitor_stats.simultaneous_connections = connections;
+		if (connections > session->config->monitor_srv_stats.simultaneous_connections) {
+			session->config->monitor_srv_stats.simultaneous_connections = connections;
 		}
 	}
 #endif
@@ -1074,10 +1093,7 @@ static void connection_handler(t_session *session) {
 
 #ifdef ENABLE_MONITOR
 			if (session->config->monitor_enabled) {
-				monitor_counter_request(session);
-				if (session->host->monitor_requests && (result > 0)) {
-					monitor_request(session);
-				}
+				monitor_count_host(session);
 			}
 #endif
 			reset_session(session);
@@ -1093,7 +1109,7 @@ static void connection_handler(t_session *session) {
 						session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 						if (session->config->monitor_enabled) {
-							monitor_counter_ban(session);
+							monitor_count_ban(session);
 						}
 #endif
 					}

@@ -42,6 +42,8 @@ static const struct {
 	{NULL}
 };
 
+char *GET_method = "GET";
+
 typedef struct type_sqli_pattern {
 	regex_t regex;
 	struct type_sqli_pattern *next;
@@ -67,7 +69,8 @@ static void clear_session(t_session *session) {
 	session->extension = NULL;
 	session->encode_gzip = false;
 	session->path_info = NULL;
-	session->alias_used = false;
+	session->alias = NULL;
+	session->script_alias = NULL;
 	session->vars = NULL;
 	session->http_version = NULL;
 	session->http_headers = NULL;
@@ -549,7 +552,7 @@ int prevent_xss(t_session *session) {
 
 		if ((value == '\"') || (value == '<') || (value == '>') || (value == '\'')) {
 			*str = '_';
-			result += 1;
+			result = 1;
 		}
 		str++;
 	}
@@ -561,7 +564,8 @@ int prevent_xss(t_session *session) {
 #endif
 #ifdef ENABLE_MONITOR
 		if (session->config->monitor_enabled) {
-			monitor_counter_exploit_attempt(session);
+			monitor_count_exploit(session);
+			monitor_event("XSS attempt for %s", session->file_on_disk);
 		}
 #endif
 	}
@@ -618,7 +622,8 @@ static int prevent_sqli_str(t_session *session, char *str, int length) {
 #endif
 #ifdef ENABLE_MONITOR
 			if (session->config->monitor_enabled) {
-				monitor_counter_exploit_attempt(session);
+				monitor_count_exploit(session);
+				monitor_event("SQLi attempt for %s", session->file_on_disk);
 			}
 #endif
 
@@ -635,52 +640,23 @@ static int prevent_sqli_str(t_session *session, char *str, int length) {
 }
 
 int prevent_sqli(t_session *session) {
+	int result;
+
 	if (session->request_uri != NULL) {
-		switch (prevent_sqli_str(session, session->request_uri, strlen(session->request_uri))) {
-			case -1:
-				return 500;
-			case 0:
-				break;
-			default:
-				session->error_cause = ec_SQL_INJECTION;
-				return -1;
+		if ((result = prevent_sqli_str(session, session->request_uri, strlen(session->request_uri))) != 0) {
+			return result;
 		}
 	}
-/*
-	if (session->vars != NULL) {
-		switch (prevent_sqli_str(session, session->vars, strlen(session->vars))) {
-			case -1:
-				return 500;
-			case 0:
-				break;
-			default:
-				session->error_cause = ec_SQL_INJECTION;
-				return -1;
-		}
-	}
-*/
 
 	if (session->body != NULL) {
-		switch (prevent_sqli_str(session, session->body, session->content_length)) {
-			case -1:
-				return 500;
-			case 0:
-				break;
-			default:
-				session->error_cause = ec_SQL_INJECTION;
-				return -1;
+		if ((result = prevent_sqli_str(session, session->body, session->content_length)) != 0) {
+			return result;
 		}
 	}
 
 	if (session->cookie != NULL) {
-		switch (prevent_sqli_str(session, session->cookie, strlen(session->cookie))) {
-			case -1:
-				return 500;
-			case 0:
-				break;
-			default:
-				session->error_cause = ec_SQL_INJECTION;
-				return -1;
+		if ((result = prevent_sqli_str(session, session->cookie, strlen(session->cookie))) != 0) {	
+			return result;
 		}
 	}
 
@@ -693,12 +669,14 @@ int prevent_csrf(t_session *session) {
 	char *referer, *slash;
 	int i, n;
 
-	if (session->request_method == POST) {
+	if (session->request_method != POST) {
 		return 0;
 	}
 
-	if ((referer = get_http_header("Referer:", session->http_headers)) == NULL) {
-		return 0;
+	if ((referer = get_http_header("Origin:", session->http_headers)) == NULL) {
+		if ((referer = get_http_header("Referer:", session->http_headers)) == NULL) {
+			return 0;
+		}
 	}
 
 	if (strncmp(referer, "http://", 7) == 0) {
@@ -707,6 +685,8 @@ int prevent_csrf(t_session *session) {
 		referer += 8;
 	} else {
 		session->cookie = NULL;
+		session->body = NULL;
+		session->content_length = 0;
 
 		log_error(session, "invalid referer while checking for CSRF");
 
@@ -729,21 +709,19 @@ int prevent_csrf(t_session *session) {
 
 	if (session->body != NULL) {
 		log_exploit_attempt(session, "CSRF", session->body);
-#ifdef ENABLE_TOMAHAWK
-		increment_counter(COUNTER_EXPLOIT);
-#endif
-#ifdef ENABLE_MONITOR
-		if (session->config->monitor_enabled) {
-			monitor_counter_exploit_attempt(session);
-		}
-#endif
+		session->body = NULL;
+		session->content_length = 0;
 	} else {
 		log_error(session, "CSRF attempt detected with no request body");
 	}
 
+#ifdef ENABLE_TOMAHAWK
+	increment_counter(COUNTER_EXPLOIT);
+#endif
 #ifdef ENABLE_MONITOR
 	if (session->config->monitor_enabled) {
-		monitor_counter_exploit_attempt(session);
+		monitor_count_exploit(session);
+		monitor_event("CSRF attempt for %s", session->file_on_disk);
 	}
 #endif
 

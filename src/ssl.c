@@ -35,14 +35,6 @@
 #include "polarssl/ssl_cache.h"
 #include "polarssl/error.h"
 
-#if POLARSSL_VERSION_NUMBER < 0x01030000
-#define x509_crt_parse_file x509parse_crtfile
-#define pk_parse_keyfile x509parse_keyfile
-#define x509_crl_parse_file x509parse_crlfile
-#define x509_dn_gets x509parse_dn_gets
-#define x509_serial_gets x509parse_serial_gets
-#endif
-
 typedef struct type_sni_list {
 	t_charlist *hostname;
 	pk_context *private_key;
@@ -54,12 +46,10 @@ typedef struct type_sni_list {
 } t_sni_list;
 
 static int ciphersuites[] = {
-#if POLARSSL_VERSION_NUMBER >= 0x01030000
 	TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
 	TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
 	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
 	TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-#endif
 	TLS_DHE_RSA_WITH_AES_256_CBC_SHA,
 	TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA,
 	TLS_DHE_RSA_WITH_AES_128_CBC_SHA,
@@ -71,9 +61,7 @@ static int ciphersuites[] = {
 	0
 };
 
-#if POLARSSL_VERSION_NUMBER >= 0x01020700
 static int ciphersuites_tls12[] = {
-#if POLARSSL_VERSION_NUMBER >= 0x01030000
 	TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 	TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384,
 	TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
@@ -82,7 +70,6 @@ static int ciphersuites_tls12[] = {
 	TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384,
 	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,
 	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-#endif
 	TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
 	TLS_DHE_RSA_WITH_AES_256_CBC_SHA256,
 	TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256,
@@ -95,11 +82,6 @@ static int ciphersuites_tls12[] = {
 	TLS_RSA_WITH_CAMELLIA_256_CBC_SHA,
 	0
 };
-#endif
-
-#if POLARSSL_VERSION_NUMBER == 0x01020900
-static pthread_mutex_t handshake_mutex;
-#endif
 
 static char *dhm_4096_P =
 	"FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1"
@@ -127,9 +109,6 @@ static char *dhm_4096_P =
 static char *dhm_4096_G = "02";
 
 static char *ssl_error_logfile;
-#if POLARSSL_VERSION_NUMBER < 0x01030000
-static rsa_context rsa;
-#endif
 static pthread_mutex_t random_mutex;
 static pthread_mutex_t cache_mutex;
 static ssl_cache_context cache;
@@ -141,10 +120,6 @@ static entropy_context entropy;
  */
 int init_ssl_module(char *logfile) {
 	ssl_error_logfile = logfile;
-
-#if POLARSSL_VERSION_NUMBER < 0x01030000
-	rsa_init(&rsa, RSA_PKCS_V15, 0);
-#endif
 
 	entropy_init(&entropy);
 	if (ctr_drbg_init(&ctr_drbg, entropy_func, &entropy, (unsigned char*)"Hiawatha_RND", 10) != 0) {
@@ -159,10 +134,6 @@ int init_ssl_module(char *logfile) {
 		return -1;
 	} else if (pthread_mutex_init(&cache_mutex, NULL) != 0) {
 		return -1;
-#if POLARSSL_VERSION_NUMBER == 0x01020900
-	} else if (pthread_mutex_init(&handshake_mutex, NULL) != 0) {
-		return -1;
-#endif
 	}
 
 	return 0;
@@ -214,30 +185,6 @@ static int ssl_random(void *p_rng, unsigned char *output, size_t len) {
 	return result;
 }
 
-/* Required to use the SSL cache in a multithreaded application
- */
-#if POLARSSL_VERSION_NUMBER < 0x01030000
-static int ssl_get_cache(void *data, ssl_session *session) {
-	int result;
-
-	pthread_mutex_lock(&cache_mutex);
-	result = ssl_cache_get(data, session);
-	pthread_mutex_unlock(&cache_mutex);
-
-	return result;
-}
-
-static int ssl_set_cache(void *data, const ssl_session *session) {
-	int result;
-
-	pthread_mutex_lock(&cache_mutex);
-	result = ssl_cache_set(data, session);
-	pthread_mutex_unlock(&cache_mutex);
-
-	return result;
-}
-#endif
-
 static void print_ssl_error(char *message, int code) {
 	char cause[1024];
 
@@ -259,11 +206,7 @@ int ssl_load_key_cert(char *file, pk_context **private_key, x509_crt **certifica
 	if ((*private_key = (pk_context*)malloc(sizeof(pk_context))) == NULL) {
 		return -1;
 	}
-#if POLARSSL_VERSION_NUMBER >= 0x01030000
 	pk_init(*private_key);
-#else
-	memset(*private_key, 0, sizeof(pk_context));
-#endif
 
 	if ((result = pk_parse_keyfile(*private_key, file, NULL)) != 0) {
 		print_ssl_error("Error loading RSA private key", result);
@@ -273,11 +216,7 @@ int ssl_load_key_cert(char *file, pk_context **private_key, x509_crt **certifica
 	if ((*certificate = (x509_crt*)malloc(sizeof(x509_crt))) == NULL) {
 		return -1;
 	}
-#if POLARSSL_VERSION_NUMBER >= 0x01030000
 	x509_crt_init(*certificate);
-#else
-	memset(*certificate, 0, sizeof(x509_crt));
-#endif
 
 	if ((result = x509_crt_parse_file(*certificate, file)) != 0) {
 		print_ssl_error("Error loading X.509 certificates", result);
@@ -299,11 +238,7 @@ int ssl_load_ca_cert(char *file, x509_crt **ca_certificate) {
 	if ((*ca_certificate = (x509_crt*)malloc(sizeof(x509_crt))) == NULL) {
 		return -1;
 	}
-#if POLARSSL_VERSION_NUMBER >= 0x01030000
 	x509_crt_init(*ca_certificate);
-#else
-	memset(*ca_certificate, 0, sizeof(x509_crt));
-#endif
 
 	if ((result = x509_crt_parse_file(*ca_certificate, file)) != 0) {
 		print_ssl_error("Error loading X.509 CA certificate", result);
@@ -325,11 +260,7 @@ int ssl_load_ca_crl(char *file, x509_crl **ca_crl) {
 	if ((*ca_crl = (x509_crl*)malloc(sizeof(x509_crl))) == NULL) {
 		return -1;
 	}
-#if POLARSSL_VERSION_NUMBER >= 0x01030000
 	x509_crl_init(*ca_crl);
-#else
-	memset(*ca_crl, 0, sizeof(x509_crl));
-#endif
 
 	if ((result = x509_crl_parse_file(*ca_crl, file)) != 0) {
 		print_ssl_error("Error loading X.509 CA CRL", result);
@@ -409,20 +340,12 @@ int ssl_accept(t_ssl_accept_data *sad) {
 #endif
 	ssl_set_bio(sad->context, net_recv, sad->client_fd, net_send, sad->client_fd);
 	ssl_set_sni(sad->context, sni_callback, sad);
-#if POLARSSL_VERSION_NUMBER < 0x01030000
-	ssl_set_session_cache(sad->context, ssl_get_cache, &cache, ssl_set_cache, &cache);
-#else
 	ssl_set_session_cache(sad->context, ssl_cache_get, &cache, ssl_cache_set, &cache);
-#endif
 
-#if POLARSSL_VERSION_NUMBER >= 0x01020700
 	ssl_set_ciphersuites_for_version(sad->context, ciphersuites, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_0);
 	ssl_set_ciphersuites_for_version(sad->context, ciphersuites, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1);
 	ssl_set_ciphersuites_for_version(sad->context, ciphersuites, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_2);
 	ssl_set_ciphersuites_for_version(sad->context, ciphersuites_tls12, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_3);
-#else
-	ssl_set_ciphersuites(sad->context, ciphersuites);
-#endif
 
 	ssl_set_own_cert(sad->context, sad->certificate, sad->private_key);
 	if (sad->dh_size == 1024) {
@@ -438,9 +361,6 @@ int ssl_accept(t_ssl_accept_data *sad) {
 	setsockopt(*(sad->client_fd), SOL_SOCKET, SO_RCVTIMEO, (void*)&timer, sizeof(struct timeval));
 	start_time = time(NULL);
 
-#if POLARSSL_VERSION_NUMBER == 0x01020900
-	pthread_mutex_lock(&handshake_mutex);
-#endif
 	result = SSL_HANDSHAKE_OKE;
 	while ((handshake = ssl_handshake(sad->context)) != 0) {
 		if (handshake == POLARSSL_ERR_SSL_BAD_HS_PROTOCOL_VERSION) {
@@ -462,9 +382,6 @@ int ssl_accept(t_ssl_accept_data *sad) {
 			break;
 		}
 	}
-#if POLARSSL_VERSION_NUMBER == 0x01020900
-	pthread_mutex_unlock(&handshake_mutex);
-#endif
 
 	if (result == SSL_HANDSHAKE_OKE) {
 		timer.tv_sec = 0;
@@ -576,9 +493,6 @@ void ssl_close(ssl_context *ssl) {
 /* Clean up SSL library
  */
 void ssl_shutdown(void) {
-#if POLARSSL_VERSION_NUMBER < 0x01030000
-	rsa_free(&rsa);
-#endif
 	ssl_cache_free(&cache);
 }
 

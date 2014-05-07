@@ -23,17 +23,13 @@
 int  init_monitor_module(t_config *config);
 void shutdown_monitor_module(t_config *config);
 
-int  monitor_server_start(void);
-int  monitor_server_stop(void);
-#ifdef ENABLE_LOADCHECK
-int  monitor_high_server_load(double load);
-#endif
-int  monitor_stats(t_config *config, time_t now);
-int  monitor_request(t_session *session);
+int  monitor_event(char *event, ...);
+int  monitor_stats_to_buffer(t_config *config, time_t now);
 
-void monitor_counter_request(t_session *session);
-void monitor_counter_ban(t_session *session);
-void monitor_counter_exploit_attempt(t_session *session);
+void monitor_count_host(t_session *session);
+void monitor_count_ban(t_session *session);
+void monitor_count_exploit(t_session *session);
+void monitor_count_cgi(t_session *session, int time, bool timed_out);
 
 #endif
 

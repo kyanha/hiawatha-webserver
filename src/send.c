@@ -56,6 +56,7 @@ char *hs_caco    = "Cache-Control: ";            /* 15 */
 char *hs_public  = "public\r\n";                 /*  8 */
 char *hs_private = "private\r\n";                /*  9 */
 char *hs_expires = "Expires: ";                  /*  9 */
+char *hs_http    = "http://";                    /*  7 */
 char *hs_https   = "https://";                   /*  8 */
 char *hs_hsts    = "Strict-Transport-Security: max-age=31536000\r\n"; /* 45 */
 char *hs_range   = "Accept-Ranges: bytes\r\n";   /* 22 */
@@ -486,6 +487,23 @@ int send_http_code_header(t_session *session) {
 		case 301:
 			if (send_buffer(session, hs_lctn, 10) == -1) {
 				return -1;
+			}
+
+			if (session->cause_of_301 == enforce_first_hostname) {
+#ifdef ENABLE_SSL
+				if (session->binding->use_ssl || session->host->require_ssl) {
+					if (send_buffer(session, hs_https, 8) == -1) {
+						return -1;
+					}
+				} else
+#endif
+				if (send_buffer(session, hs_http, 7) == -1) {
+					return -1;
+				}
+				
+				if (send_buffer(session, *(session->host->hostname.item), strlen(*(session->host->hostname.item))) == -1) {
+					return -1;
+				}
 			}
 
 			if (session->cause_of_301 == location) {
