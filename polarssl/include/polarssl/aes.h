@@ -38,6 +38,7 @@ typedef UINT32 uint32_t;
 #include <inttypes.h>
 #endif
 
+/* padlock.c and aesni.c rely on these values! */
 #define AES_ENCRYPT     1
 #define AES_DECRYPT     0
 
@@ -54,6 +55,11 @@ extern "C" {
 
 /**
  * \brief          AES context structure
+ *
+ * \note           buf is able to hold 32 extra bytes, which can be used:
+ *                 - for alignment purposes if VIA padlock is used, and/or
+ *                 - to simplify key expansion in the 256-bit case by
+ *                 generating an extra round key
  */
 typedef struct
 {
@@ -147,6 +153,29 @@ int aes_crypt_cfb128( aes_context *ctx,
                        unsigned char iv[16],
                        const unsigned char *input,
                        unsigned char *output );
+
+/**
+ * \brief          AES-CFB8 buffer encryption/decryption.
+ *
+ * Note: Due to the nature of CFB you should use the same key schedule for
+ * both encryption and decryption. So a context initialized with
+ * aes_setkey_enc() for both AES_ENCRYPT and AES_DECRYPT.
+ *
+ * \param ctx      AES context
+ * \param mode     AES_ENCRYPT or AES_DECRYPT
+ * \param length   length of the input data
+ * \param iv       initialization vector (updated after use)
+ * \param input    buffer holding the input data
+ * \param output   buffer holding the output data
+ *
+ * \return         0 if successful
+ */
+int aes_crypt_cfb8( aes_context *ctx,
+                    int mode,
+                    size_t length,
+                    unsigned char iv[16],
+                    const unsigned char *input,
+                    unsigned char *output );
 
 /**
  * \brief               AES-CTR buffer encryption/decryption

@@ -637,18 +637,18 @@ int x509_time_expired( const x509_time *to )
     min = st.wMinute;
     sec = st.wSecond;
 #else
-    struct tm *lt;
+    struct tm lt;
     time_t tt;
 
     tt = time( NULL );
-    lt = localtime( &tt );
+    localtime_r( &tt, &lt );
 
-    year = lt->tm_year + 1900;
-    mon = lt->tm_mon + 1;
-    day = lt->tm_mday;
-    hour = lt->tm_hour;
-    min = lt->tm_min;
-    sec = lt->tm_sec;
+    year = lt.tm_year + 1900;
+    mon = lt.tm_mon + 1;
+    day = lt.tm_mday;
+    hour = lt.tm_hour;
+    min = lt.tm_min;
+    sec = lt.tm_sec;
 #endif
 
     if( year  > to->year )

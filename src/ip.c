@@ -231,7 +231,7 @@ int parse_ip_port(char *line, t_ip_addr *ip, int *port) {
 
 /* Write an IP address to a logfile.
  */
-int ip_to_str(char *str, t_ip_addr *ip, int max_len) {
+int ip_to_str(t_ip_addr *ip, char *str, int max_len) {
 	if (inet_ntop(ip->family, &(ip->value), str, max_len) == NULL) {
 		strncpy(str, unknown_ip, max_len);
 		str[max_len - 1] = '\0';
@@ -243,7 +243,7 @@ int ip_to_str(char *str, t_ip_addr *ip, int max_len) {
 
 /* Anonymize an IP address and write it to a logfile.
  */
-int anonymized_ip_to_str(char *str, t_ip_addr *ip, int max_len) {
+int anonymized_ip_to_str(t_ip_addr *ip, char *str, int max_len) {
 	t_ip_addr anonymized_ip;
 	int mask;
 
@@ -270,21 +270,35 @@ int anonymized_ip_to_str(char *str, t_ip_addr *ip, int max_len) {
 		return -1;
 	}
 
-	return ip_to_str(str, &anonymized_ip, max_len); 
+	return ip_to_str(&anonymized_ip, str, max_len); 
 }
 
 /* Convert hostname to an IP address
  */
 int hostname_to_ip(char *hostname, t_ip_addr *ip) {
-	struct hostent *hostinfo;
+	struct addrinfo *addrinfo;
 
-	if ((hostinfo = gethostbyname(hostname)) == NULL) {
+    if (getaddrinfo(hostname, NULL, NULL, &addrinfo) != 0) {
 		return -1;
 	}
 
-	memcpy(&ip->value, hostinfo->h_addr, hostinfo->h_length);
-	ip->family = hostinfo->h_addrtype;
-	ip->size = hostinfo->h_length;
+	while ((addrinfo->ai_next != NULL) && (addrinfo->ai_family != AF_INET)) {
+		addrinfo = addrinfo->ai_next;
+	}
+
+	if (addrinfo->ai_family == AF_INET) {
+		ip->size = IPv4_LEN;
+		memcpy(&ip->value, &((struct sockaddr_in*)(addrinfo->ai_addr))->sin_addr, ip->size);
+#ifdef ENABLE_IPV6
+	} else if (addrinfo->ai_family == AF_INET6) {
+		ip->size = IPv6_LEN;
+		memcpy(&ip->value, &((struct sockaddr_in6*)(addrinfo->ai_addr))->sin6_addr, ip->size);
+#endif
+	} else {
+		return -1;
+	}
+
+	ip->family = addrinfo->ai_family;
 
 	return 0;
 }

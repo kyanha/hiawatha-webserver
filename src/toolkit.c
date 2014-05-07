@@ -96,6 +96,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 	new_rule->parameter = NULL;
 	new_rule->header = NULL;
 	new_rule->value = 0;
+	new_rule->caco_private = true;
 	new_rule->case_insensitive = false;
 	new_rule->next = NULL;
 
@@ -104,7 +105,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		key = "match";
 	}
 
-	if (strcasecmp(key, "call") == 0) {
+	if (strcmp(key, "call") == 0) {
 		/* Call
 		 */
 		new_rule->operation = to_sub;
@@ -112,7 +113,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		if ((new_rule->parameter = strdup(value)) == NULL) {
 			return false;
 		}
-	} else if (strcasecmp(key, "header") == 0) {
+	} else if (strcmp(key, "header") == 0) {
 		/* Header
 		 */
 		new_rule->condition = tc_header;
@@ -294,14 +295,33 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 				return false;
 			}
 
-			if (rest != NULL) {
-				if (strcasecmp(rest, "exit") == 0) {
-					new_rule->flow = tf_exit;
-				} else if (strcasecmp(rest, "return") == 0) {
-					new_rule->flow = tf_return;
-				} else {
-					return false;
-				}
+			/* public / private
+			 */
+			if (rest == NULL) {
+				return true;
+			}
+			split_string(rest, &value, &rest, ' ');
+			if (strcasecmp(value, "private") == 0) {
+				new_rule->caco_private = true;
+			} else if (strcasecmp(value, "public") == 0) {
+				new_rule->caco_private = false;
+			} else if (rest == NULL) {
+				rest = value;
+			} else {
+				return false;
+			}
+
+			/* exit / return
+			 */
+			if (rest == NULL) {
+				return true;
+			}
+			if (strcasecmp(rest, "exit") == 0) {
+				new_rule->flow = tf_exit;
+			} else if (strcasecmp(rest, "return") == 0) {
+				new_rule->flow = tf_return;
+			} else {
+				return false;
 			}
 		} else if (strcasecmp(value, "goto") == 0) {
 			/* Match Goto
@@ -386,7 +406,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		} else {
 			return false;
 		}
-	} else if (strcasecmp(key, "requesturi") == 0) {
+	} else if (strcmp(key, "requesturi") == 0) {
 		/* RequestURI
 		 */
 		new_rule->condition = tc_request_uri;
@@ -412,7 +432,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		} else {
 			return false;
 		}
-	} else if (strcasecmp(key, "skip") == 0) {
+	} else if (strcmp(key, "skip") == 0) {
 		/* Skip
 		 */
 		new_rule->operation = to_skip;
@@ -779,6 +799,7 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 				/* Send Expire HTTP header
 				 */
 				options->expire = rule->value;
+				options->caco_private = rule->caco_private;
 				break;
 			case to_skip:
 				/* Skip

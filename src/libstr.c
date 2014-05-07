@@ -116,7 +116,9 @@ char *uncomment(char *str) {
 
 	if ((hash = strstr(str, " #")) != NULL) {
 		*hash = '\0';
-	} else if ((hash = strstr(str, "\t#")) != NULL) {
+	}
+	
+	if ((hash = strstr(str, "\t#")) != NULL) {
 		*hash = '\0';
 	}
 
@@ -278,20 +280,24 @@ static bool char_needs_encoding(char c) {
 }
 int url_encode(char *str, char **encoded) {
 	char *c, *e;
-	int replace = 0;
+	int replaced = 0;
+
+	if (str == NULL) {
+		return -1;
+	}
 
 	c = str;
 	while (*c != '\0') {
 		if (char_needs_encoding(*c)) {
-			replace++;
+			replaced++;
 		}
 		c++;
 	}
 
-	if (replace == 0) {
+	if (replaced == 0) {
 		*encoded = NULL;
 		return 0;
-	} else if ((*encoded = (char*)malloc(strlen(str) + (2 * replace) + 1)) == NULL) {
+	} else if ((*encoded = (char*)malloc(strlen(str) + (2 * replaced) + 1)) == NULL) {
 		return -1;
 	}
 
@@ -309,7 +315,7 @@ int url_encode(char *str, char **encoded) {
 	}
 	*e = '\0';
 
-	return replace;
+	return replaced;
 }
 
 /* Decode the URL encoded characters (%XX).
@@ -335,6 +341,74 @@ void url_decode(char *str) {
 	}
 
 	*dest = '\0';
+}
+
+/* Encode string to UTF-8
+int utf8_encode(char *str, char **encoded) {
+	int len = 0, extra = 0;
+	unsigned char *r, *w;
+
+	if (str == NULL) {
+		return -1;
+	}
+
+	r = (unsigned char*)str;
+	while (*r != '\0') {
+		len++;
+		if (*r >= 0x80) {
+			extra++;
+		}
+		r++;
+	}
+
+	if (extra == 0) {
+		*encoded = NULL;
+		return 0;
+	} else if ((*encoded = (char*)malloc(len + extra + 1)) == NULL) {
+		return -1;
+	}
+
+	r = (unsigned char*)str;
+	w = (unsigned char*)*encoded;
+	while (*r != '\0') {
+		if (*r >= 0xC0) {
+			*(w++) = 0xC3;
+			*(w++) = *(r++) - 0x40;
+			continue;
+		} else if (*r >= 0x80) {
+			*(w++) = 0xC2;
+		}
+		*(w++) = *(r++);
+	}
+	*w = '\0';
+
+	return extra;
+}
+*/
+
+/* Decode UTF-8 string
+ */
+void utf8_decode(char *str) {
+	unsigned char *r, *w;
+
+	if (str == NULL) {
+		return;
+	}
+
+	r = (unsigned char*)str;
+	w = (unsigned char*)str;
+	while (*r != '\0') {
+		if ((*r == 0xC2) && (*(r+1) >= 0x80) && (*(r+1) < 0xC0)) {
+			r++;
+			*(w++) = *(r++);
+		} else if ((*r == 0xC3) && (*(r+1) >= 0x80) && (*(r+1) < 0xC0)) {
+			r++;
+			*(w++) = *(r++) + 0x40;
+		} else {
+			*(w++) = *(r++);
+		}
+	}
+	*w = '\0';
 }
 
 /* Scan for characters with ASCII value < 32.
@@ -478,7 +552,9 @@ int filesize2str(char *buffer, int len, off_t fsize) {
 	return result;
 }
 
-
+/* Add 'str' with length 'len' to 'buffer' with size 'size'. If it does not
+ * fit, expand buffer with 'extra_size' bytes.
+ */
 int add_str(char **buffer, int *size, int extra_size, int *len, char *str) {
 	size_t str_len;
 	char *new;

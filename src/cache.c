@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include "alternative.h"
 #include "libfs.h"
 #include "libstr.h"
 #include "session.h"
@@ -30,8 +31,8 @@
 #define MAX_CACHE_INDEX 250
 #define EXTENSION_SIZE 10
 
-extern char *hs_conn;
 extern char *hs_conlen;
+extern char *hs_chunked;
 
 static t_cached_object *cache[MAX_CACHE_INDEX];
 static pthread_mutex_t cache_mutex[MAX_CACHE_INDEX];
@@ -68,14 +69,15 @@ static t_cached_object *remove_from_cache(t_cached_object *object, int index) {
 	}
 
 	pthread_mutex_lock(&cache_size_mutex);
-	cache_size -= object->size;
+	cache_size -= (object->header_length + object->content_length);
 	pthread_mutex_unlock(&cache_size_mutex);
 
 	if (object == cache[index]) {
 		cache[index] = object->next;
 	}
 
-	clear_free(object->data, object->size);
+	check_clear_free(object->header, object->header_length);
+	clear_free(object->content, object->content_length);
 	free(object->file);
 	free(object);
 
@@ -111,7 +113,7 @@ static bool add_object_to_cache(t_cached_object *object) {
 	cache[index] = object;
 
 	pthread_mutex_lock(&cache_size_mutex);
-	cache_size += object->size;
+	cache_size += (object->header_length + object->content_length);
 	pthread_mutex_unlock(&cache_size_mutex);
 
 	pthread_mutex_unlock(&cache_mutex[index]);
@@ -142,58 +144,104 @@ static char *make_url(t_session *session, char *request_uri) {
 	return url;
 }
 
-static void secure_header(char *buffer) {
-	char *header_end, *pos;
+static void secure_header(char *buffer, int size) {
+	char *eoh, *pos;
+	int header_length;
 
-	if ((header_end = strstr(buffer, "\r\n\r\n")) == NULL) {
+	if ((eoh = strnstr(buffer, "\r\n\r\n", size)) == NULL) {
 		return;
 	}
-	
-	*header_end = '\0';
 
+	header_length = eoh + 4 - buffer;
+	
 	/* Remove cookies
 	 */
-	if ((pos = strcasestr(buffer, "Set-Cookie:")) != NULL) {
+	if ((pos = strncasestr(buffer, "Set-Cookie:", header_length)) != NULL) {
 		strcpy(pos, "X-Empty: ");
 		pos += 9;
 		do {
 			*(pos++) = ' ';
 		} while ((*pos != '\r') && (*pos != '\0'));
 	}
-
-	*header_end = '\r';
 }
 
 static t_cached_object *add_output_to_cache(t_session *session, char *output, int size, int time, t_cot_type cot_type) {
 	t_cached_object *object;
-	char *data;
+	char *header, *content, *eoh, conlen[64];
+	int header_length, content_length, conlen_len = 0;
+	bool add_conlen;
 
-	if ((data = (char*)malloc(size + 1)) == NULL) {
+	if ((output == NULL) || (size == 0)) {
 		return NULL;
 	}
-	memcpy(data, output, size);
-	*(data + size) = '\0';
 
-	secure_header(output);
+	if ((eoh = strstr(output, "\r\n\r\n")) == NULL) {
+		return NULL;
+	}
+
+	header_length = eoh + 4 - output;
+	content_length = size - header_length;
+
+	add_conlen = true;
+	if (strncasestr(output, hs_chunked, header_length) != NULL) {
+		add_conlen = false;
+	} else if (strncasestr(output, hs_conlen, header_length) != NULL) {
+		add_conlen = false;
+	}
+
+	if (add_conlen) {
+		if ((conlen_len = snprintf(conlen, 63, "%s%d\r\n", hs_conlen, content_length)) >= 63) {
+			return NULL;
+		}
+	}
+
+	if ((header = (char*)malloc(header_length + conlen_len + 1)) == NULL) {
+		return NULL;
+	}
+
+	if ((content = (char*)malloc(content_length + 1)) == NULL) {
+		free(header);
+		return NULL;
+	}
+
+	if (add_conlen) {
+		memcpy(header, output, header_length - 2);
+		memcpy(header + header_length - 2, conlen, conlen_len);
+		memcpy(header + header_length - 2 + conlen_len, "\r\n", 2);
+		*(header + header_length + conlen_len) = '\0';
+	} else {
+		memcpy(header, output, header_length);
+		*(header + header_length) = '\0';
+	}
+
+	memcpy(content, output + header_length, content_length);
+	*(content + content_length) = '\0';
+
+	secure_header(header, header_length);
 
 	if ((object = (t_cached_object*)malloc(sizeof(t_cached_object))) == NULL) {
-		clear_free(data, size);
+		clear_free(header, header_length);
+		clear_free(content, content_length);
 		return NULL;
 	} else if ((object->file = make_url(session, NULL)) == NULL) {
-		clear_free(data, size);
+		clear_free(header, header_length);
+		clear_free(content, content_length);
 		free(object);
 		return NULL;
 	}
 
 	object->deadline = session->time + time;
-	object->size = size;
 	object->in_use = 0;
 	object->type = cot_type;
-	object->data = data;
+	object->header = header;
+	object->header_length = header_length + conlen_len;
+	object->content = content;
+	object->content_length = content_length;
 	copy_ip(&(object->last_ip), &(session->ip_address));
 
 	if (add_object_to_cache(object) == false) {
-		clear_free(object->data, size);
+		clear_free(header, header_length);
+		clear_free(content, content_length);
 		free(object->file);
 		free(object);
 
@@ -304,28 +352,30 @@ static void remove_output_from_cache(t_session *session, char *request_uri, t_co
 	free(url);
 }
 
-static void handle_remove_from_cache_header(t_session *session, char *buffer, t_cot_type cot_type) {
+static void handle_remove_from_cache_header(t_session *session, char *buffer, int size, t_cot_type cot_type) {
 	char *begin, *end;
 
-	if ((begin = find_cgi_header(buffer, "X-Hiawatha-Cache-Remove:")) != NULL) {
-		begin += 25;
-		while (*begin == ' ') {
-			begin++;
-		}
+	if ((begin = find_cgi_header(buffer, size, "X-Hiawatha-Cache-Remove:")) == NULL) {
+		return;
+	}
 
-		end = begin;
-		while ((*end != '\r') && (*end != '\0')) {
-			end++;
+	begin += 25;
+	while (*begin == ' ') {
+		begin++;
+	}
+
+	end = begin;
+	while ((*end != '\r') && (*end != '\0')) {
+		end++;
+	}
+	if (*end == '\r') {
+		*end = '\0';
+		if (strcmp(begin, "all") == 0) {
+			flush_output_cache(session, cot_type);
+		} else {
+			remove_output_from_cache(session, begin, cot_type);
 		}
-		if (*end == '\r') {
-			*end = '\0';
-			if (strcmp(begin, "all") == 0) {
-				flush_output_cache(session, cot_type);
-			} else {
-				remove_output_from_cache(session, begin, cot_type);
-			}
-			*end = '\r';
-		}
+		*end = '\r';
 	}
 }
 
@@ -397,10 +447,11 @@ int clear_cache() {
 				/* Object unused, so remove
 				 */
 				pthread_mutex_lock(&cache_size_mutex);
-				cache_size -= object->size;
+				cache_size -= (object->header_length + object->content_length);
 				pthread_mutex_unlock(&cache_size_mutex);
 
-				clear_free(object->data, object->size);
+				check_clear_free(object->header, object->header_length);
+				clear_free(object->content, object->content_length);
 				free(object->file);
 				free(object);
 
@@ -436,14 +487,14 @@ void print_cache_list(FILE *fp) {
 		object = cache[i];
 		while (object != NULL) {
 			fprintf(fp, "  Filename  : %s\n", object->file);
-			fprintf(fp, "  File size : %.2f kB\n", (float)(object->size) / KILOBYTE);
+			fprintf(fp, "  File size : %.2f kB\n", (float)(object->header_length + object->content_length) / KILOBYTE);
 			if ((secs = object->deadline - now) > 0) {
 				fprintf(fp, "  Time left : %d seconds\n\n", secs);
 			} else {
 				fprintf(fp, "  File marked for removal from cache\n\n");
 			}
 			files++;
-			size = size + object->size;
+			size += object->header_length + object->content_length;
 			object = object->next;
 		}
 
@@ -473,7 +524,7 @@ t_cached_object *add_file_to_cache(t_session *session, char *file) {
 		return NULL;
 	} else if (stat(file, &status) == -1) {
 		return NULL;
-	} else if ((size = status.st_size) == -1) {
+	} else if ((size = status.st_size) <= 0) {
 		return NULL;
 	} else if (size > session->config->cache_max_filesize) {
 		return NULL;
@@ -484,7 +535,7 @@ t_cached_object *add_file_to_cache(t_session *session, char *file) {
 	} else if ((object->file = strdup(file)) == NULL) {
 		free(object);
 		return NULL;
-	} else if ((object->data = (char*)malloc(size)) == NULL) {
+	} else if ((object->content = (char*)malloc(size)) == NULL) {
 		free(object->file);
 		free(object);
 		return NULL;
@@ -492,9 +543,9 @@ t_cached_object *add_file_to_cache(t_session *session, char *file) {
 
 	if ((fd = open(file, O_RDONLY)) != -1) {
 		while ((off_t)bytes_total < size) {
-			if ((bytes_read = read(fd, object->data + bytes_total, size - bytes_total)) == -1) {
+			if ((bytes_read = read(fd, object->content + bytes_total, size - bytes_total)) == -1) {
 				if (errno != EINTR) {
-					clear_free(object->data, size);
+					clear_free(object->content, size);
 					free(object->file);
 					free(object);
 					close(fd);
@@ -507,23 +558,24 @@ t_cached_object *add_file_to_cache(t_session *session, char *file) {
 		}
 		close(fd);
 	} else {
-		clear_free(object->data, size);
+		clear_free(object->content, size);
 		free(object->file);
 		free(object);
 
 		return NULL;
 	}
 
+	object->header = NULL;
+	object->header_length = 0;
+	object->content_length = size;
 	object->last_changed = status.st_mtime;
 	object->deadline = session->time + TIME_IN_CACHE;
-	object->size = size;
 	object->in_use = 1;
 	object->type = cot_file;
 	copy_ip(&(object->last_ip), &(session->ip_address));
-	object->close_connection = false;
 
 	if (add_object_to_cache(object) == false) {
-		clear_free(object->data, size);
+		clear_free(object->content, size);
 		free(object->file);
 		free(object);
 
@@ -551,7 +603,7 @@ t_cached_object *search_cache_for_file(t_session *session, char *file) {
 
 	object = cache[index];
 	while (object != NULL) {
-		if ((object->type == cot_file) && (object->size == size)) {
+		if ((object->type == cot_file) && (object->content_length == size)) {
 			if (strcmp(object->file, file) == 0) {
 				if (stat(file, &status) == 0) {
 					if ((object->deadline > session->time) && (status.st_mtime == object->last_changed)) {
@@ -584,11 +636,11 @@ t_cached_object *search_cache_for_file(t_session *session, char *file) {
  *
  * CGI functions
  */
-int cgi_cache_time(char *buffer) {
+int cgi_cache_time(char *buffer, int size) {
 	char *begin, *end;
 	int cache_time;
 
-	if ((begin = find_cgi_header(buffer, "X-Hiawatha-Cache:")) == NULL) {
+	if ((begin = find_cgi_header(buffer, size, "X-Hiawatha-Cache:")) == NULL) {
 		return 0;
 	}
 
@@ -625,43 +677,11 @@ t_cached_object *search_cache_for_cgi_output(t_session *session) {
 }
 
 t_cached_object *add_cgi_output_to_cache(t_session *session, char *output, int size, int time) {
-	char *eoh, cl[32], *new_output;
-	size_t content_length, cl_len;
-	t_cached_object *object;
-
-	if ((eoh = strstr(output, "\r\n\r\n")) != NULL) {
-		*eoh = '\0';
-
-		if (strstr(output, hs_conlen) == NULL) {
-			content_length = size - strlen(output) - 4;
-			*eoh = '\r';
-
-			if ((cl_len = snprintf(cl, 31, "%s%ld\r\n", hs_conlen, content_length)) > 30) {
-				return NULL;
-			}
-
-			if ((new_output = malloc(cl_len + size)) == NULL) {
-				return NULL;
-			}
-
-			memcpy(new_output, cl, cl_len);
-			memcpy(new_output + cl_len, output, size);
-
-			object = add_output_to_cache(session, new_output, cl_len + size, time, cot_cgi);
-
-			free(new_output);
-
-			return object;
-		}
-
-		*eoh = '\r';
-	}
-
 	return add_output_to_cache(session, output, size, time, cot_cgi);
 }
 
-void handle_remove_header_for_cgi_cache(t_session *session, char *buffer) {
-	handle_remove_from_cache_header(session, buffer, cot_cgi);
+void handle_remove_header_for_cgi_cache(t_session *session, char *buffer, int size) {
+	handle_remove_from_cache_header(session, buffer, size, cot_cgi);
 }
 
 /* ===============================================
@@ -669,11 +689,11 @@ void handle_remove_header_for_cgi_cache(t_session *session, char *buffer) {
  * Reverse Proxy functions
  */
 #ifdef ENABLE_RPROXY
-int rproxy_cache_time(t_session *session, char *buffer) {
+int rproxy_cache_time(t_session *session, char *buffer, int size) {
 	int cache_time;
 	char *value, *no_cache = "no-cache", extension[EXTENSION_SIZE];
 
-	if ((cache_time = cgi_cache_time(buffer)) > 0) {
+	if ((cache_time = cgi_cache_time(buffer, size)) > 0) {
 		return cache_time;
 	}
 
@@ -704,18 +724,12 @@ t_cached_object *search_cache_for_rproxy_output(t_session *session) {
 	return search_cache_for_output(session, cot_rproxy);
 }
 
-t_cached_object *add_rproxy_output_to_cache(t_session *session, char *output, int size, int time, bool keep_alive) {
-	t_cached_object *object;
-
-	if ((object = add_output_to_cache(session, output, size, time, cot_rproxy)) != NULL) {
-		object->close_connection = (keep_alive == false);
-	}
-
-	return object;
+t_cached_object *add_rproxy_output_to_cache(t_session *session, char *output, int size, int time) {
+	return add_output_to_cache(session, output, size, time, cot_rproxy);
 }
 
-void handle_remove_header_for_rproxy_cache(t_session *session, char *buffer) {
-	handle_remove_from_cache_header(session, buffer, cot_rproxy);
+void handle_remove_header_for_rproxy_cache(t_session *session, char *buffer, int size) {
+	handle_remove_from_cache_header(session, buffer, size, cot_rproxy);
 }
 
 #endif

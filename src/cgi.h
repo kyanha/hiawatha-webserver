@@ -59,7 +59,7 @@ typedef struct type_cgi_info {
 } t_cgi_info;
 
 int fix_crappy_cgi_headers(t_cgi_info *cgi_info);
-char *find_cgi_header(char *buffer, char *header);
+char *find_cgi_header(char *buffer, int size, char *header);
 
 /* FastCGI server loadbalancer
  */

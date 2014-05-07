@@ -57,7 +57,7 @@ static int rsa_can_do( pk_type_t type )
 #if defined(POLARSSL_RSA_C)
 static size_t rsa_get_size( const void *ctx )
 {
-    return( 8 * ((rsa_context *) ctx)->len );
+    return( 8 * ((const rsa_context *) ctx)->len );
 }
 
 static int rsa_verify_wrap( void *ctx, md_type_t md_alg,
@@ -303,10 +303,19 @@ static int ecdsa_sign_wrap( void *ctx, md_type_t md_alg,
                    unsigned char *sig, size_t *sig_len,
                    int (*f_rng)(void *, unsigned char *, size_t), void *p_rng )
 {
+    /* Use deterministic ECDSA by default if available */
+#if defined(POLARSSL_ECDSA_DETERMINISTIC)
+    ((void) f_rng);
+    ((void) p_rng);
+
+    return( ecdsa_write_signature_det( (ecdsa_context *) ctx,
+                hash, hash_len, sig, sig_len, md_alg ) );
+#else
     ((void) md_alg);
 
     return( ecdsa_write_signature( (ecdsa_context *) ctx,
                 hash, hash_len, sig, sig_len, f_rng, p_rng ) );
+#endif
 }
 
 static void *ecdsa_alloc_wrap( void )
@@ -346,7 +355,7 @@ const pk_info_t ecdsa_info = {
 
 static size_t rsa_alt_get_size( const void *ctx )
 {
-    rsa_alt_context *rsa_alt = (rsa_alt_context *) ctx;
+    const rsa_alt_context *rsa_alt = (const rsa_alt_context *) ctx;
 
     return( rsa_alt->key_len_func( rsa_alt->key ) );
 }

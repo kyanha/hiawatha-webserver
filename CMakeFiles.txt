@@ -92,9 +92,14 @@ endif()
 # configuration files
 set(config_files
 	config/cgi-wrapper.conf
-	config/index.xslt
 	config/mimetype.conf
 )
+if(ENABLE_XSLT)
+	set(config_files ${config_files}
+		config/error.xslt
+		config/index.xslt
+	)
+endif()
 
 set(config_files_in
 	config/hiawatha.conf

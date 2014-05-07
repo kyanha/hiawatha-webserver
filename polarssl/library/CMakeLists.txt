@@ -2,6 +2,7 @@ option(USE_SHARED_POLARSSL_LIBRARY "Build PolarSSL as a shared library." OFF)
 
 set(src
      aes.c
+     aesni.c
      arc4.c
      asn1parse.c
      asn1write.c
@@ -17,6 +18,7 @@ set(src
      des.c
      dhm.c
      ecp.c
+     ecp_curves.c
      ecdh.c
      ecdsa.c
      entropy.c
@@ -43,6 +45,7 @@ set(src
      pk_wrap.c
      pkparse.c
      pkwrite.c
+     ripemd160.c
      rsa.c
      sha1.c
      sha256.c
@@ -69,6 +72,11 @@ if(WIN32)
 set(libs ws2_32)
 endif(WIN32)
 
+if(CMAKE_COMPILER_IS_GNUCC)
+  set(CMAKE_C_FLAGS_CHECK "${CMAKE_C_FLAGS_CHECK} -Wmissing-declarations -Wmissing-prototypes")
+  set(CMAKE_C_FLAGS_CHECKFULL "${CMAKE_C_FLAGS_CHECK} -Wcast-qual")
+endif(CMAKE_COMPILER_IS_GNUCC)
+
 if(NOT USE_SHARED_POLARSSL_LIBRARY)
 
 add_library(polarssl STATIC ${src})
@@ -76,11 +84,15 @@ add_library(polarssl STATIC ${src})
 else(NOT USE_SHARED_POLARSSL_LIBRARY)
 
 add_library(polarssl SHARED ${src})
-set_target_properties(polarssl PROPERTIES VERSION 1.3.2 SOVERSION 5)
+set_target_properties(polarssl PROPERTIES VERSION 1.3.4 SOVERSION 5)
 
 endif(NOT USE_SHARED_POLARSSL_LIBRARY)
 
 target_link_libraries(polarssl ${libs})
+
+if(ZLIB_FOUND)
+target_link_libraries(polarssl ${ZLIB_LIBRARIES})
+endif(ZLIB_FOUND)
 
 install(TARGETS polarssl
         DESTINATION ${LIB_INSTALL_DIR}

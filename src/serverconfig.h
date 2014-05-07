@@ -35,6 +35,8 @@
 #include "filehashes.h"
 
 #define MAX_START_FILE_LENGTH 32
+#define MAX_RANDOM_HEADER_LENGTH 1000
+#define MAX_RANDOM_HEADER_LENGTH_MASK 1023
 
 typedef enum { root, part } t_pathmatch;
 typedef enum { no_auth, basic, digest } t_auth_method;
@@ -200,6 +202,7 @@ typedef struct type_host {
 #ifdef ENABLE_XSLT
 	char            *show_index;
 	bool            use_xslt;
+	char            *error_xslt_file;
 #endif
 	bool            allow_dot_files;
 	bool            use_gz_file;
@@ -233,6 +236,7 @@ typedef struct type_host {
 	x509_crt        *certificate;
 	x509_crt        *ca_certificate;
 	x509_crl        *ca_crl;
+	int             random_header_length;
 #endif
 #ifdef ENABLE_RPROXY
 	t_rproxy        *rproxy;
@@ -244,6 +248,7 @@ typedef struct type_host {
 	bool            enable_path_info;
 	bool            trigger_on_cgi_status;
 	bool            secure_url;
+	bool            ignore_dot_hiawatha;
 	t_charlist      fast_cgi;
 	t_deny_body     *deny_body;
 	bool            webdav_app;

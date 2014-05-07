@@ -52,6 +52,7 @@
 static volatile int open_connections = 0;
 #endif
 
+extern char *hs_conlen;
 char *hs_forwarded  = "X-Forwarded-For:"; /* 16 */
 char *fb_filesystem = "access denied via filesystem";
 char *fb_accesslist = "access denied via accesslist";
@@ -80,6 +81,34 @@ static t_session_list *session_list = NULL;
 static volatile int waiting_workers = 0;
 static volatile int thread_pool_size = 0;
 #endif
+
+/* Send HTTP error message
+ */
+static int send_code(t_session *session) {
+	int result;
+
+	if ((result = send_http_code_header(session)) != 0) {
+		return result;
+	}
+
+	if (((session->return_code >= 100) && (session->return_code < 200)) ||
+	    (session->return_code == 204) || (session->return_code == 304)) {
+		if (send_buffer(session, hs_conlen, 16) == -1) {
+			return -1;
+		}	
+		return send_buffer(session, "0\r\n\r\n", 5);
+	}
+
+#ifdef ENABLE_XSLT
+	if (session->host->error_xslt_file != NULL) {
+		if (show_http_code_body(session) == 0) {
+			return 0;
+		}
+	}
+#endif
+
+	return send_http_code_body(session);
+}
 
 /* Check if the requested file is a CGI program.
  */
@@ -119,6 +148,9 @@ static int handle_error(t_session *session, int error_code) {
 	t_error_handler *error_handler;
 	char *new_fod;
 	int result = -1;
+#ifdef ENABLE_XSLT
+	char *xslt_file;
+#endif
 
 	error_handler = session->host->error_handlers;
 	while (error_handler != NULL) {
@@ -158,8 +190,9 @@ static int handle_error(t_session *session, int error_code) {
 	if (session->cgi_type != no_cgi) {
 		result = execute_cgi(session);
 #ifdef ENABLE_XSLT
-	} else if (can_transform_with_xslt(session)) {
-		result = handle_xml_file(session);
+	} else if ((xslt_file = find_xslt_file(session)) != NULL) {
+		result = handle_xml_file(session, xslt_file);
+		free(xslt_file);
 #endif
 	} else switch (is_directory(session->file_on_disk)) {
 		case error:
@@ -299,6 +332,9 @@ static int serve_client(t_session *session) {
 	t_deny_body *deny_body;
 	t_req_method request_method;
 	t_ip_addr ip;
+#ifdef ENABLE_XSLT
+	char *xslt_file;
+#endif
 #ifdef ENABLE_TOOLKIT
 	int i;
 	t_toolkit_options toolkit_options;
@@ -345,7 +381,9 @@ static int serve_client(t_session *session) {
 			}
 		}
 
-		tunnel_ssh_connection(session->client_socket);
+		if (tunnel_ssh_connection(session->client_socket) == 0) {
+			log_system(session, "Tunneling SSH connection.");
+		}
 		session->keep_alive = false;
 
 		return 200;
@@ -377,12 +415,9 @@ static int serve_client(t_session *session) {
 	/* Find host record
 	 */
 	if (session->hostname != NULL) {
-#ifdef ENABLE_IPV6
-		remove_port_from_hostname(session->hostname, session->binding);
-#else
-		remove_port_from_hostname(session->hostname);
-#endif
-		reset_http_header_strlen("Host:", session->http_headers);
+		if (remove_port_from_hostname(session) == -1) {
+			return 500;
+		}
 
 		if ((host_record = get_hostrecord(session->config->first_host, session->hostname, session->binding)) != NULL) {
 			session->host = host_record;
@@ -484,11 +519,19 @@ static int serve_client(t_session *session) {
 
 			if (duplicate_host(session) == false) {
 				return 500;
-			} else if ((result = uri_to_path(session)) != 200) {
+			}
+
+			if ((result = uri_to_path(session)) != 200) {
 				return result;
-			} else if (load_user_config(session) == -1) {
-				return 500;
-			} else if ((result = copy_directory_settings(session)) != 200) {
+			}
+
+			if (session->host->ignore_dot_hiawatha == false) {
+				if (load_user_config(session) == -1) {
+					return 500;
+				}
+			}
+
+			if ((result = copy_directory_settings(session)) != 200) {
 				return result;
 			}
 
@@ -603,6 +646,7 @@ static int serve_client(t_session *session) {
 
 			if (toolkit_options.expire > -1) {
 				session->expires = toolkit_options.expire;
+				session->caco_private = toolkit_options.caco_private;
 			}
 		}
 	}
@@ -638,8 +682,10 @@ static int serve_client(t_session *session) {
 
 	/* Load configfile from directories
 	 */
-	if (load_user_config(session) == -1) {
-		return 500;
+	if (session->host->ignore_dot_hiawatha == false) {
+		if (load_user_config(session) == -1) {
+			return 500;
+		}
 	}
 
 	if ((result = copy_directory_settings(session)) != 200) {
@@ -718,8 +764,9 @@ static int serve_client(t_session *session) {
 				session->body = NULL;
 				result = execute_cgi(session);
 #ifdef ENABLE_XSLT
-			} else if (can_transform_with_xslt(session)) {
-				result = handle_xml_file(session);
+			} else if ((xslt_file = find_xslt_file(session)) != NULL) {
+				result = handle_xml_file(session, xslt_file);
+				free(xslt_file);
 #endif
 			} else {
 				result = send_file(session);
@@ -749,8 +796,9 @@ static int serve_client(t_session *session) {
 			if (session->cgi_type != no_cgi) {
 				result = execute_cgi(session);
 #ifdef ENABLE_XSLT
-			} else if (can_transform_with_xslt(session)) {
-				result = handle_xml_file(session);
+			} else if ((xslt_file = find_xslt_file(session)) != NULL) {
+				result = handle_xml_file(session, xslt_file);
+				free(xslt_file);
 #endif
 			} else {
 				result = 405;
@@ -767,6 +815,9 @@ static int serve_client(t_session *session) {
 			if ((result == 204) && (session->host->run_on_alter != NULL)) {
 				run_program(session, session->host->run_on_alter, result);
 			}
+			break;
+		case WHEN:
+			send_code(session);
 			break;
 		default:
 			result = 400;
@@ -988,10 +1039,13 @@ static void connection_handler(t_session *session) {
 		session->current_task = "ssl accept";
 #endif
 		switch (ssl_accept(&sad)) {
-			case -2:
+			case SSL_HANDSHAKE_NO_MATCH:
+				log_system(session, "No cypher overlap during SSL handshake.");
+				break;
+			case SSL_HANDSHAKE_TIMEOUT:
 				handle_timeout(session);
 				break;
-			case 0:
+			case SSL_HANDSHAKE_OKE:
 				session->socket_open = true;
 				break;
 		}
@@ -1003,6 +1057,12 @@ static void connection_handler(t_session *session) {
 		do {
 			result = serve_client(session);
 			handle_request_result(session, result);
+#ifdef ENABLE_TOMAHAWK
+			if (session->parsing_oke) {
+				show_request_to_admins(session->method, session->request_uri, session->http_version, &(session->ip_address),
+				                       session->http_headers, session->return_code, session->bytes_sent);
+			}
+#endif
 
 #ifdef ENABLE_DEBUG
 			session->current_task = "request done";

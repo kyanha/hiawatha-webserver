@@ -96,8 +96,8 @@
 	<th class="size">filesize</th>
 </tr>
 <xsl:for-each select="files/file">
-<tr class="file" onClick="javascript:window.location.href='{@url_encoded}'">
-	<td class="{@type}"><a href="{@url_encoded}"><xsl:value-of select="." /></a></td>
+<tr class="file" onClick="javascript:window.location.href='{.}'">
+	<td class="{@type}"><a href="{.}"><xsl:value-of select="." /></a></td>
 	<td><xsl:value-of select="@timestamp" /></td>
 	<td class="size"><xsl:value-of select="@size" /></td>
 </tr>

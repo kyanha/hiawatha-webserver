@@ -50,6 +50,7 @@ typedef struct type_toolkit_rule {
 	bool neg_match;
 	char *header;
 	int value;
+	bool caco_private;
 	bool case_insensitive;
 
 	struct type_toolkit_rule *next;
@@ -69,6 +70,7 @@ typedef struct type_toolkit_options {
 	char *fastcgi_server;
 	int  ban;
 	int  expire;
+	bool caco_private;
 #ifdef ENABLE_SSL
 	bool use_ssl;
 #endif

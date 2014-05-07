@@ -20,9 +20,10 @@
 #include "session.h"
 
 void init_xslt_module();
-bool can_transform_with_xslt(t_session *session);
-int transform_xml(t_session *session);
+char *find_xslt_file(t_session *session);
+int transform_xml(t_session *session, char *xslt_file);
 int show_index(t_session *session);
+int show_http_code_body(t_session *session);
 
 #endif
 

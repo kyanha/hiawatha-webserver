@@ -4,11 +4,11 @@ cd `dirname $0`
 
 if [ "$1" = "" ]; then
 	echo "Usage: ${0} <version>"
-	exit;
+	exit
 fi
 
 echo "Downloading PolarSSL version ${1}."
-wget -qO polarssl.tgz https://polarssl.org/download/polarssl-${1}-gpl.tgz?do=yes
+wget --no-check-certificate -qO polarssl.tgz "https://polarssl.org/download/polarssl-${1}-gpl.tgz?do=yes"
 
 if [ ! -s polarssl.tgz ]; then 
 	rm -f polarssl.tgz

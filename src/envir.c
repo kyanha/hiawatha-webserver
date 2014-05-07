@@ -165,7 +165,7 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 #endif
 		add_to_environment_chroot(session, fcgi_buffer, "DOCUMENT_ROOT", session->host->website_root);
 
-	if (ip_to_str(ip, &(session->ip_address), MAX_IP_STR_LEN) != -1) {
+	if (ip_to_str(&(session->ip_address), ip, MAX_IP_STR_LEN) != -1) {
 		add_to_environment(fcgi_buffer, "REMOTE_ADDR", ip);
 	}
 
@@ -189,7 +189,7 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 	if (session->binding->binding_id != NULL) {
 		add_to_environment(fcgi_buffer, "SERVER_BINDING", session->binding->binding_id);
 	}
-	if (ip_to_str(ip, &(session->binding->interface), MAX_IP_STR_LEN) != -1) {
+	if (ip_to_str(&(session->binding->interface), ip, MAX_IP_STR_LEN) != -1) {
 		add_to_environment(fcgi_buffer, "SERVER_ADDR", ip);
 	}
 	add_to_environment(fcgi_buffer, "REDIRECT_STATUS", "200");
@@ -202,45 +202,6 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 		}
 		add_to_environment(fcgi_buffer, "REMOTE_USER", session->remote_user);
 	}
-
-/*
-	http_header_to_environment(session, fcgi_buffer, "Accept:", "HTTP_ACCEPT");
-	http_header_to_environment(session, fcgi_buffer, "Accept-Charset:", "HTTP_ACCEPT_CHARSET");
-	http_header_to_environment(session, fcgi_buffer, "Accept-Encoding:", "HTTP_ACCEPT_ENCODING");
-	http_header_to_environment(session, fcgi_buffer, "Accept-Language:", "HTTP_ACCEPT_LANGUAGE");
-	http_header_to_environment(session, fcgi_buffer, "Authorization:", "HTTP_AUTHORIZATION");
-	http_header_to_environment(session, fcgi_buffer, "Client-IP:", "HTTP_CLIENT_IP");
-	http_header_to_environment(session, fcgi_buffer, "DNT:", "HTTP_DNT");
-	http_header_to_environment(session, fcgi_buffer, "Expect:", "HTTP_EXPECT");
-	http_header_to_environment(session, fcgi_buffer, "From:", "HTTP_FROM");
-	http_header_to_environment(session, fcgi_buffer, "Host:", "HTTP_HOST");
-	http_header_to_environment(session, fcgi_buffer, "If-Modified-Since:", "HTTP_IF_MODIFIED_SINCE");
-	http_header_to_environment(session, fcgi_buffer, "If-Unmodified-Since:", "HTTP_IF_UNMODIFIED_SINCE");
-	http_header_to_environment(session, fcgi_buffer, "Range:", "HTTP_RANGE");
-	http_header_to_environment(session, fcgi_buffer, "Referer:", "HTTP_REFERER");
-	http_header_to_environment(session, fcgi_buffer, "User-Agent:", "HTTP_USER_AGENT");
-	http_header_to_environment(session, fcgi_buffer, "Via:", "HTTP_VIA");
-*/
-
-	/* Webdav headers
-	 */
-/*
-	if (session->host->webdav_app) {
-		http_header_to_environment(session, fcgi_buffer, "Depth:", "HTTP_DEPTH");
-		http_header_to_environment(session, fcgi_buffer, "Destination:", "HTTP_DESTINATION");
-		http_header_to_environment(session, fcgi_buffer, "If:", "HTTP_IF");
-		http_header_to_environment(session, fcgi_buffer, "Overwrite:", "HTTP_OVERWRITE");
-	}
-*/
-
-	/* CloudFlare headers
-	 */
-/*
-	http_header_to_environment(session, fcgi_buffer, "CF-Connecting-IP:", "HTTP_CF_CONNECTING_IP");
-	http_header_to_environment(session, fcgi_buffer, "CF-IPCountry:", "HTTP_CF_IPCOUNTRY");
-	http_header_to_environment(session, fcgi_buffer, "CF-RAY:", "HTTP_CF_RAY");
-	http_header_to_environment(session, fcgi_buffer, "CF-Visitor:", "HTTP_CF_VISITOR");
-*/
 
 	/* Convert X-* HTTP headers to HTTP_* environment variables
 	 */
@@ -297,6 +258,7 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 			add_to_environment(fcgi_buffer, "SSL_CERT_SERIAL", serial_nr);
 		}
 		add_to_environment(fcgi_buffer, "SSL_VERSION", ssl_version_string(&(session->ssl_context)));
+		add_to_environment(fcgi_buffer, "SSL_CIPHER", ssl_cipher_string(&(session->ssl_context)));
 	}
 #endif
 }

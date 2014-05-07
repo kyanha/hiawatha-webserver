@@ -347,9 +347,9 @@ int monitor_request(t_session *session) {
 	secure_monitor_value(session->request_uri);
 
 	if (session->config->anonymize_ip) {
-		anonymized_ip_to_str(ip_address, &(session->ip_address), MAX_IP_STR_LEN);
+		anonymized_ip_to_str(&(session->ip_address), ip_address, MAX_IP_STR_LEN);
 	} else {
-		ip_to_str(ip_address, &(session->ip_address), MAX_IP_STR_LEN);
+		ip_to_str(&(session->ip_address), ip_address, MAX_IP_STR_LEN);
 	}
 	ip_address[MAX_IP_STR_LEN] = '\0';
 

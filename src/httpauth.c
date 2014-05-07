@@ -238,6 +238,17 @@ static int find_algoritm_and_salt(char *line) {
 		return -1;
 	}
 
+	if (strcmp(end + 1, "rounds=") == 0) {
+		end += 7;
+		do {
+			end++;
+		} while ((*end != '\0') && (*end != '$'));
+
+		if (*end == '\0') {
+			return -1;
+		}
+	}
+
 	do {
 		end++;
 	} while ((*end != '\0') && (*end != '$'));
@@ -254,7 +265,7 @@ static int find_algoritm_and_salt(char *line) {
 static int basic_http_authentication(t_session *session, char *auth_str) {
 	size_t auth_len;
 	int retval, len;
-	char *auth_user, *auth_passwd, *passwd, *encrypted, salt[21];
+	char *auth_user, *auth_passwd, *passwd, *encrypted, salt[41];
 #ifdef HAVE_CRYPT_R
 	struct crypt_data crypt_data;
 #else
@@ -304,7 +315,7 @@ static int basic_http_authentication(t_session *session, char *auth_str) {
 	}
 
 	len = find_algoritm_and_salt(passwd);
-	if ((len != -1) && (len <= 20)) {
+	if ((len != -1) && (len <= 40)) {
 		memcpy(salt, passwd, len);
 		salt[len] = '\0';
 	} else {

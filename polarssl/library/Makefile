@@ -34,13 +34,14 @@ DLEXT=dll
 LDFLAGS += -lws2_32
 endif
 
-OBJS=	aes.o		arc4.o		asn1parse.o		\
+OBJS=	aes.o		aesni.o		arc4.o			\
+		asn1parse.o								\
 		asn1write.o base64.o	bignum.o		\
 		blowfish.o	camellia.o					\
 		certs.o		cipher.o	cipher_wrap.o	\
 		ctr_drbg.o	debug.o		des.o			\
 		dhm.o		ecdh.o		ecdsa.o			\
-		ecp.o									\
+		ecp.o		ecp_curves.o				\
 		entropy.o	entropy_poll.o				\
 		error.o		gcm.o		havege.o		\
 		md.o		md_wrap.o	md2.o			\
@@ -50,7 +51,7 @@ OBJS=	aes.o		arc4.o		asn1parse.o		\
 		padlock.o	pbkdf2.o	pem.o			\
 		pkcs5.o		pkcs11.o	pkcs12.o		\
 		pk.o		pk_wrap.o	pkparse.o		\
-		pkwrite.o								\
+		pkwrite.o	ripemd160.o					\
 		rsa.o		sha1.o		sha256.o		\
 		sha512.o	ssl_cache.o	ssl_cli.o		\
 		ssl_srv.o   ssl_ciphersuites.o			\

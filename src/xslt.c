@@ -23,6 +23,7 @@
 #include <libxslt/transform.h>
 #include <libxslt/xsltutils.h>
 #include "libstr.h"
+#include "http.h"
 #include "send.h"
 #include "log.h"
 #ifdef ENABLE_TOMAHAWK
@@ -41,6 +42,7 @@
 extern char *hs_conlen;
 extern char *fb_filesystem;
 extern char *fb_symlink;
+extern char *unknown_http_code;
 
 /* Translate spacial characters
  */
@@ -270,7 +272,7 @@ void init_xslt_module() {
 	xmlInitParser();
 }
 
-bool can_transform_with_xslt(t_session *session) {
+char *find_xslt_file(t_session *session) {
 	char *xslt, *slash;
 	size_t len;
 	FILE *fp;
@@ -278,74 +280,72 @@ bool can_transform_with_xslt(t_session *session) {
 	/* Check virtual host settings
 	 */
 	if (session->host->use_xslt == false) {
-		return false;
+		return NULL;
 	}
 
 	/* Check extension
 	 */
 	if (session->extension == NULL) {
-		return false;
+		return NULL;
 	} else if (strcmp(session->extension, "xml") != 0) {
-		return false;
+		return NULL;
 	}
 
 	/* Check for XSLT existence: <file>.xslt
 	 */
 	if ((len = strlen(session->file_on_disk)) < 4) {
-		return false;
+		return NULL;
 	} else if ((xslt = (char*)malloc(len + 2)) == NULL) {
-		return false;
+		return NULL;
 	}
 	memcpy(xslt, session->file_on_disk, len - 3);
 	memcpy(xslt + len - 3, "xslt\0", 5);
 	if ((fp = fopen(xslt, "r")) != NULL) {
 		fclose(fp);
-		session->xslt_file = xslt;
-		return true;
+		return xslt;
 	}
 	free(xslt);
 
 	/* Check for XSLT existence: index.xslt in directory
 	 */
 	if ((slash = strrchr(session->file_on_disk, '/')) == NULL) {
-		return false;
+		return NULL;
 	}
 	len = slash - session->file_on_disk;
 	if ((xslt = (char*)malloc(len + XSLT_INDEX_LEN)) == NULL) {
-		return false;
+		return NULL;
 	}
 	memcpy(xslt, session->file_on_disk, len);
 	memcpy(xslt + len, XSLT_INDEX, XSLT_INDEX_LEN);
 	if ((fp = fopen(xslt, "r")) != NULL) {
 		fclose(fp);
-		session->xslt_file = xslt;
-		return true;
+		return xslt;
 	}
 	free(xslt);
 
 	/* Check for XSLT existence: /index.xslt
 	 */
 	if ((xslt = (char*)malloc(session->host->website_root_len + XSLT_INDEX_LEN)) == NULL) {
-		return false;
+		return NULL;
 	}
 	memcpy(xslt, session->host->website_root, session->host->website_root_len);
 	memcpy(xslt + session->host->website_root_len, XSLT_INDEX, XSLT_INDEX_LEN);
 	if ((fp = fopen(xslt, "r")) != NULL) {
 		fclose(fp);
-		session->xslt_file = xslt;
-		return true;
+		return xslt;
 	}
 	free(xslt);
 
-	return false;
+	return NULL;
 }
 
 /* Apply XSLT sheet
  */
-static int apply_xslt_sheet(t_session *session, xmlDocPtr data_xml) {
+static int apply_xslt_sheet(t_session *session, xmlDocPtr data_xml, char *xslt_file) {
 	xmlDocPtr style_xml, result_xml;
 	xsltStylesheetPtr xslt;
 	xmlChar *raw_xml;
+	FILE *fp;
 	char value[VALUE_SIZE + 1];
 	const char **params;
 	int result = 200, raw_size;
@@ -359,18 +359,24 @@ static int apply_xslt_sheet(t_session *session, xmlDocPtr data_xml) {
 
 	/* Read XSLT sheet
 	 */
-	if (session->xslt_file == NULL) {
-		log_file_error(session, session->xslt_file, "XSLT file not set");
+	if (xslt_file == NULL) {
+		log_file_error(session, xslt_file, "XSLT file not set");
 		return 500;
 	}
 
-	if ((style_xml = xmlReadFile(session->xslt_file, NULL, 0)) == NULL) {
-		log_file_error(session, session->xslt_file, "XSLT file contains invalid XML");
+	if ((fp = fopen(xslt_file, "r")) == NULL) {
+		log_file_error(session, xslt_file, "XSLT file does not exist");
+		return 500;
+	}
+	fclose(fp);
+
+	if ((style_xml = xmlReadFile(xslt_file, NULL, 0)) == NULL) {
+		log_file_error(session, xslt_file, "XSLT file contains invalid XML");
 		return 500;
 	}
 
 	if ((xslt = xsltParseStylesheetDoc(style_xml)) == NULL) {
-		log_file_error(session, session->xslt_file, "invalid XSLT");
+		log_file_error(session, xslt_file, "invalid XSLT");
 		xmlFreeDoc(style_xml);
 		return 500;
 	}
@@ -429,16 +435,16 @@ static int apply_xslt_sheet(t_session *session, xmlDocPtr data_xml) {
 
 /* Apply XSLT to XML file
  */
-int transform_xml(t_session *session) {
+int transform_xml(t_session *session, char *xslt_file) {
 	xmlDocPtr data_xml;
 	int result;
 
 	if (send_header(session) == -1) {
-		return 500;
+		return -1;
 	}
 
 	data_xml = xmlReadFile(session->file_on_disk, NULL, 0);
-	result = apply_xslt_sheet(session, data_xml);
+	result = apply_xslt_sheet(session, data_xml, xslt_file);
 	xmlFreeDoc(data_xml);
 
 	return result;
@@ -490,11 +496,6 @@ int show_index(t_session *session) {
 	struct tm s;
 	t_filelist *filelist = NULL, *file;
 	t_keyvalue *alias;
-
-/*
-	FILE *fp;
-	char line[LINE_SIZE + 1];
-*/
 
 #ifdef ENABLE_DEBUG
 	session->current_task = "show index";
@@ -633,6 +634,8 @@ int show_index(t_session *session) {
 	/* Loop through files
 	 */
 	while (file != NULL) {
+		utf8_decode(file->name);
+
 		if (file->is_dir && root_dir) {
 			if (strcmp(file->name, "..") == 0) {
 				file = file->next;
@@ -652,7 +655,7 @@ int show_index(t_session *session) {
 
 		/* Timestamp
 		 */
-		s = *localtime(&(file->time));
+		localtime_r(&(file->time), &s);
 		strftime(timestr, 32, "%d %b %Y, %X", &s);
 		*(timestr + 32) = '\0';
 
@@ -771,31 +774,6 @@ int show_index(t_session *session) {
 		return -1;
 	}
 
-/*
-	if ((fp = fopen_neighbour(".hiawatha_index", "r", session->file_on_disk)) != NULL) {
-		if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "<data>") == -1) {
-			free(text_xml);
-			return -1;
-		}
-
-		while (fgets(line, LINE_SIZE, fp) != NULL) {
-			line[LINE_SIZE] = '\0';
-
-			if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, line) == -1) {
-				free(text_xml);
-				return -1;
-			}
-		}
-
-		fclose(fp);
-
-		if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "</data>") == -1) {
-			free(text_xml);
-			return -1;
-		}
-	}
-*/
-
 	if (session->remote_user != NULL) {
 		if (add_tag(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "remote_user", session->remote_user) == -1) {
 			free(text_xml);
@@ -864,12 +842,83 @@ int show_index(t_session *session) {
 
 	close(handle);
 
-	session->xslt_file = session->host->show_index;
 	data_xml = xmlReadMemory(text_xml, text_size, "index.xml", NULL, 0);
+	result = apply_xslt_sheet(session, data_xml, session->host->show_index);
 
-	result = apply_xslt_sheet(session, data_xml);
+	xmlFreeDoc(data_xml);
+	free(text_xml);
 
-	session->xslt_file = NULL;
+	return result;
+}
+
+/* Show body of HTTP error message
+ */
+int show_http_code_body(t_session *session) {
+	xmlDocPtr data_xml;
+	char *text_xml;
+	int text_size, text_max, result;
+	char ecode[5], *emesg;
+
+	ecode[4] = '\0';
+	snprintf(ecode, 4, "%d", session->return_code);
+
+	if ((emesg = (char*)http_error(session->return_code)) == NULL) {
+		emesg = unknown_http_code;
+	}
+
+	text_max = XML_CHUNK_LEN;
+	if ((text_xml = (char*)malloc(text_max)) == NULL) {
+		return -1;
+	}
+	text_size = 0;
+
+	/* Start XML
+	 */
+	if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>\n<error>") == -1) {
+		free(text_xml);
+		return -1;
+	}
+
+	if (add_tag(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "code", ecode) == -1) {
+		free(text_xml);
+		return -1;
+	}
+
+	if (add_tag(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "message", emesg) == -1) {
+		free(text_xml);
+		return -1;
+	}
+
+	if (add_tag(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "hostname", *(session->host->hostname.item)) == -1) {
+		free(text_xml);
+		return -1;
+	}
+
+	if (add_tag(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "request_method", session->method) == -1) {
+		free(text_xml);
+		return -1;
+	}
+
+	if (add_tag(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "request_uri", session->request_uri) == -1) {
+		free(text_xml);
+		return -1;
+	}
+
+	if (session->config->server_string != NULL) {
+		if (add_tag(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "software", session->config->server_string) == -1) {
+			free(text_xml);
+			return -1;
+		}
+	}
+	
+	if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "</error>") == -1) {
+		free(text_xml);
+		return -1;
+	}
+
+	data_xml = xmlReadMemory(text_xml, text_size, "index.xml", NULL, 0);
+	result = apply_xslt_sheet(session, data_xml, session->host->error_xslt_file);
+
 	xmlFreeDoc(data_xml);
 	free(text_xml);
 

@@ -82,7 +82,6 @@ static bool must_quit = false;
 static double current_server_load = 0;
 #endif
 
-char *hs_conlen      = "Content-Length: "; /* 16 */
 char *fb_symlink     = "symlink not allowed";
 char *fb_alterlist   = "access denied via alterlist";
 char *version_string = "Hiawatha v"VERSION
@@ -524,6 +523,24 @@ int accept_connection(t_binding *binding, t_config *config) {
 	return 0;
 }
 
+/* Change UID and GID
+ */
+int change_uid_gid(t_config *config) {
+	if (setgroups(config->groups.number, config->groups.array) == -1) {
+		return -1;
+	}
+
+	if (setgid(config->server_gid) == -1) {
+		return -1;
+	}
+
+	if (setuid(config->server_uid) == -1) {
+		return -1;
+	}
+
+	return 0;
+}
+
 /* Run the Hiawatha webserver.
  */
 int run_server(t_settings *settings) {
@@ -533,7 +550,6 @@ int run_server(t_settings *settings) {
 	struct pollfd      *poll_data, *current_poll;
 #ifdef ENABLE_TOMAHAWK
 	int                number_of_admins;
-	t_admin            *admin;
 	struct sockaddr_in caddr;
 	socklen_t          size;
 	int                admin_socket;
@@ -758,6 +774,10 @@ int run_server(t_settings *settings) {
 #endif
 #endif
 
+	/* Initialize random generator
+	 */
+	srand((unsigned)time(NULL));
+
 	/* Create logfiles
 	 */
 	touch_logfiles(config);
@@ -765,17 +785,12 @@ int run_server(t_settings *settings) {
 	/* Change userid
 	 */
 #ifndef CYGWIN
-	if ((getuid() == 0) || (geteuid() == 0)) do {
-		if (setgroups(config->groups.number, config->groups.array) != -1) {
-			if (setgid(config->server_gid) != -1) {
-				if (setuid(config->server_uid) != -1) {
-					break;
-				}
-			}
+	if ((getuid() == 0) || (geteuid() == 0)) {
+		if (change_uid_gid(config) == -1) {
+			fprintf(stderr, "\nError while changing uid/gid!\n");
+			return -1;
 		}
-		fprintf(stderr, "\nError while changing uid/gid!\n");
-		return -1;
-	} while (false);
+	}
 #endif
 
 	if (settings->daemon == false) {
@@ -989,18 +1004,8 @@ int run_server(t_settings *settings) {
 	do {
 #ifdef ENABLE_TOMAHAWK
 		current_poll = poll_data + number_of_bindings;
-		number_of_admins = 0;
-		admin = first_admin();
-		while (admin != NULL) {
-			current_poll->fd = admin->socket;
-			current_poll->events = POLL_EVENT_BITS;
-			admin->poll_data = current_poll;
-
-			number_of_admins++;
-			current_poll++;
-			admin = next_admin();
-		}
-
+		number_of_admins = prepare_admins_for_poll(current_poll);
+		
 		switch (poll(poll_data, number_of_bindings + number_of_admins, 1000)) {
 #else
 		switch (poll(poll_data, number_of_bindings, 1000)) {
@@ -1016,15 +1021,7 @@ int run_server(t_settings *settings) {
 			default:
 #ifdef ENABLE_TOMAHAWK
 				/* Connected admins */
-				admin = first_admin();
-				while (admin != NULL) {
-					if (admin->poll_data->revents != 0) {
-						if (handle_admin(admin, config) == cc_DISCONNECT) {
-							remove_admin(admin->socket);
-						}
-					}
-					admin = next_admin();
-				}
+				handle_admins(config);
 #endif
 
 				/* HTTP(S) ports */

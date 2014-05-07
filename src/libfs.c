@@ -292,52 +292,51 @@ static int parse_datestr(char *org_datestr, struct tm *date) {
 		return -1;
 	}
 
-	do {
-		if (memcmp(datestr + 3, ", ", 2) != 0) {
-			break;
-		} else if ((*(datestr + 7) != ' ') || (*(datestr + 11) != ' ') || (*(datestr + 16) != ' ')) {
-			break;
-		} else if ((*(datestr + 19) != ':') || (*(datestr + 22) != ':')) {
-			break;
-		} else if (memcmp(datestr + 25, " GMT", 4) != 0) {
-			break;
-		}
+	if (memcmp(datestr + 3, ", ", 2) != 0) {
+		goto fail;
+	} else if ((*(datestr + 7) != ' ') || (*(datestr + 11) != ' ') || (*(datestr + 16) != ' ')) {
+		goto fail;
+	} else if ((*(datestr + 19) != ':') || (*(datestr + 22) != ':')) {
+		goto fail;
+	} else if (memcmp(datestr + 25, " GMT", 4) != 0) {
+		goto fail;
+	}
 
-		*(datestr + 7) = *(datestr + 11) = *(datestr + 16) = *(datestr + 19) = *(datestr + 22) = *(datestr + 25) = '\0';
-		if ((*datestr + 5) == ' ') {
-			*(datestr + 5) = '0';
-		}
+	*(datestr + 7) = *(datestr + 11) = *(datestr + 16) = *(datestr + 19) = *(datestr + 22) = *(datestr + 25) = '\0';
+	if ((*datestr + 5) == ' ') {
+		*(datestr + 5) = '0';
+	}
 
-		if ((date->tm_mday = str2int(datestr + 5)) <= 0) {
-			break;
-		} else if ((date->tm_mon = month2int(datestr + 8)) == -1) {
-			break;
-		} else if ((date->tm_year = str2int(datestr + 12)) < 1900) {
-			break;
-		} else if ((date->tm_hour = str2int(datestr + 17)) == -1) {
-			break;
-		} else if ((date->tm_min = str2int(datestr + 20)) == -1) {
-			break;
-		} else if ((date->tm_sec = str2int(datestr + 23)) == -1) {
-			break;
-		}
+	if ((date->tm_mday = str2int(datestr + 5)) <= 0) {
+		goto fail;
+	} else if ((date->tm_mon = month2int(datestr + 8)) == -1) {
+		goto fail;
+	} else if ((date->tm_year = str2int(datestr + 12)) < 1900) {
+		goto fail;
+	} else if ((date->tm_hour = str2int(datestr + 17)) == -1) {
+		goto fail;
+	} else if ((date->tm_min = str2int(datestr + 20)) == -1) {
+		goto fail;
+	} else if ((date->tm_sec = str2int(datestr + 23)) == -1) {
+		goto fail;
+	}
 
-		if (date->tm_mday > 31) {
-			break;
-		} else if (date->tm_hour > 23) {
-			break;
-		} else if (date->tm_min > 59) {
-			break;
-		} else if (date->tm_sec > 59) {
-			break;
-		}
+	if (date->tm_mday > 31) {
+		goto fail;
+	} else if (date->tm_hour > 23) {
+		goto fail;
+	} else if (date->tm_min > 59) {
+		goto fail;
+	} else if (date->tm_sec > 59) {
+		goto fail;
+	}
 
-		date->tm_year -= 1900;
-		date->tm_isdst = 0;
+	date->tm_year -= 1900;
+	date->tm_isdst = 0;
 
-		result = 0;
-	} while (false);
+	result = 0;
 
+fail:
 	free(datestr);
 
 	return result;

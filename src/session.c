@@ -61,6 +61,7 @@ static void clear_session(t_session *session) {
 	session->uri = NULL;
 	session->uri_len = 0;
 	session->uri_is_dir = false;
+	session->parsing_oke = false;
 	session->request_uri = NULL;
 	session->request_method = unknown;
 	session->extension = NULL;
@@ -95,17 +96,16 @@ static void clear_session(t_session *session) {
 	session->bytes_sent = 0;
 	session->output_size = 0;
 	session->return_code = 200;
+	session->error_cause = ec_NONE;
 	session->error_code = -1;
 	session->tempdata = NULL;
 	session->uploaded_file = NULL;
 	session->uploaded_size = 0;
 	session->location = NULL;
 	session->expires = -1;
+	session->caco_private = true;
 #ifdef ENABLE_TOOLKIT
 	session->toolkit_fastcgi = NULL;
-#endif
-#ifdef ENABLE_XSLT
-	session->xslt_file = NULL;
 #endif
 #ifdef ENABLE_DEBUG
 	session->current_task = NULL;
@@ -146,8 +146,6 @@ void init_session(t_session *session) {
 void reset_session(t_session *session) {
 	int size;
 
-	session->error_cause = ec_NONE;
-
 	check_clear_free(session->file_on_disk, CHECK_USE_STRLEN);
 #ifdef CIFS
 	check_free(session->extension);
@@ -157,9 +155,6 @@ void reset_session(t_session *session) {
 	check_free(session->path_info);
 	check_free(session->request_uri);
 	check_free(session->location);
-#ifdef ENABLE_XSLT
-	check_free(session->xslt_file);
-#endif
 	if (session->uploaded_file != NULL) {
 		unlink(session->uploaded_file);
 		free(session->uploaded_file);
@@ -225,6 +220,8 @@ void determine_request_method(t_session *session) {
 		session->request_method = GET;
 	} else if (strncmp(session->request, "POST ", 5) == 0) {
 		session->request_method = POST;
+	} else if (strncmp(session->request, "BREW ", 5) == 0) {
+		session->request_method = POST;
 	} else if (strncmp(session->request, "HEAD ", 5) == 0) {
 		session->request_method = HEAD;
 	} else if (strncmp(session->request, "TRACE ", 6) == 0) {
@@ -235,6 +232,8 @@ void determine_request_method(t_session *session) {
 		session->request_method = DELETE;
 	} else if (strncmp(session->request, "CONNECT ", 8) == 0) {
 		session->request_method = CONNECT;
+	} else if (strncmp(session->request, "WHEN ", 5) == 0) {
+		session->request_method = WHEN;
 	} else if (strncmp(session->request, "OPTIONS ", 8) == 0) {
 		session->request_method = unsupported;
 	} else if (strncmp(session->request, "PROPFIND ", 9) == 0) {
@@ -357,35 +356,37 @@ bool is_volatile_object(t_session *session) {
  */
 int load_user_config(t_session *session) {
 	char *search, *conffile;
-	int length, result;
+	size_t length;
+	int result;
 
 	if (session->file_on_disk == NULL) {
 		return 0;
+	} else if ((length = strlen(session->file_on_disk)) <= 1) {
+		return 0;
+	} else if ((conffile = (char*)malloc(length + 10)) == NULL) {
+		return -1;
 	}
 
-	search = session->file_on_disk;
+	search = session->file_on_disk + 1;
 	while (*search != '\0') {
 		if (*search == '/') {
 			length = search - session->file_on_disk + 1;
-			if ((conffile = (char*)malloc(length + 10)) == NULL) {
-				return -1;
-			} else {
-				memcpy(conffile, session->file_on_disk, length);
-				memcpy(conffile + length, ".hiawatha\0", 10);
-				result = read_user_configfile(conffile, session->host, &(session->tempdata));
 
-				if (result != 0) {
-					log_file_error(session, conffile, "error in configuration file on line %d", result);
-					free(conffile);
-					return -1;
-				}
+			memcpy(conffile, session->file_on_disk, length);
+			memcpy(conffile + length, ".hiawatha\0", 10);
+			result = read_user_configfile(conffile, session->host, &(session->tempdata));
 
+			if (result != 0) {
+				log_file_error(session, conffile, "error in configuration file on line %d", result);
 				free(conffile);
+				return -1;
 			}
 		}
 
 		search++;
 	}
+
+	free(conffile);
 
 	return 0;
 }
@@ -478,22 +479,28 @@ int copy_directory_settings(t_session *session) {
 
 /* Remove port from hostname
  */
-#ifdef ENABLE_IPV6
-int remove_port_from_hostname(char *hostname, t_binding *binding) {
-#else
-int remove_port_from_hostname(char *hostname) {
-#endif
-	char *c;
+int remove_port_from_hostname(t_session *session) {
+	char *c, *hostname;
 
-	if (hostname == NULL) {
+	if (session->hostname == NULL) {
 		return -1;
 	}
 
 #ifdef ENABLE_IPV6
-	if (binding->interface.family == AF_INET6) {
-		if ((*hostname == '[') && ((c = strchr(hostname, ']')) != NULL)) {
-			if (*(c + 1) == ':') {
-				*(c + 1) = '\0';
+	if (session->binding->interface.family == AF_INET6) {
+		if ((*(session->hostname) == '[') && ((c = strchr(session->hostname, ']')) != NULL)) {
+			c++;
+
+			if (*c == ':') {
+				if ((hostname = strdup(session->hostname)) == NULL) {
+					return -1;
+				} else if (register_tempdata(&(session->tempdata), hostname, tc_data) == -1) {
+					free(hostname);
+					return -1;
+				}
+
+				*(hostname + (c - session->hostname)) = '\0';
+				session->hostname = hostname;
 			}
 
 			return 0;
@@ -501,12 +508,20 @@ int remove_port_from_hostname(char *hostname) {
 	}
 #endif
 
-	if ((c = strrchr(hostname, ':')) != NULL) {
-		if (c == hostname) {
+	if ((c = strrchr(session->hostname, ':')) != NULL) {
+		if (c == session->hostname) {
+			return 0;
+		}
+
+		if ((hostname = strdup(session->hostname)) == NULL) {
+			return -1;
+		} else if (register_tempdata(&(session->tempdata), hostname, tc_data) == -1) {
+			free(hostname);
 			return -1;
 		}
 
-		*c = '\0';
+		*(hostname + (c - session->hostname)) = '\0';
+		session->hostname = hostname;
 	}
 
 	return 0;
@@ -678,7 +693,7 @@ int prevent_csrf(t_session *session) {
 	char *referer, *slash;
 	int i, n;
 
-	if (strcmp(session->method, "POST") != 0) {
+	if (session->request_method == POST) {
 		return 0;
 	}
 

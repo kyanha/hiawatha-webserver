@@ -54,19 +54,14 @@ typedef struct type_sni_list {
 } t_sni_list;
 
 static int ciphersuites[] = {
-#if POLARSSL_VERSION_NUMBER < 0x01030000
-	TLS_RSA_WITH_RC4_128_SHA,
-#else
-	TLS_ECDHE_RSA_WITH_RC4_128_SHA,
+#if POLARSSL_VERSION_NUMBER >= 0x01030000
 	TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+	TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
 	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+	TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
 #endif
 	TLS_DHE_RSA_WITH_AES_256_CBC_SHA,
 	TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA,
-#if POLARSSL_VERSION_NUMBER >= 0x01030000
-	TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-	TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-#endif
 	TLS_DHE_RSA_WITH_AES_128_CBC_SHA,
 	TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA,
 	TLS_RSA_WITH_AES_256_CBC_SHA,
@@ -80,10 +75,10 @@ static int ciphersuites[] = {
 static int ciphersuites_tls12[] = {
 #if POLARSSL_VERSION_NUMBER >= 0x01030000
 	TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-	TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 	TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384,
 	TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
 	TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_CBC_SHA384,
+	TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 	TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384,
 	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,
 	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
@@ -423,14 +418,10 @@ int ssl_accept(t_ssl_accept_data *sad) {
 #if POLARSSL_VERSION_NUMBER >= 0x01020700
 	ssl_set_ciphersuites_for_version(sad->context, ciphersuites, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_0);
 	ssl_set_ciphersuites_for_version(sad->context, ciphersuites, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1);
-	ssl_set_ciphersuites_for_version(sad->context, ciphersuites + 1, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_2);
+	ssl_set_ciphersuites_for_version(sad->context, ciphersuites, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_2);
 	ssl_set_ciphersuites_for_version(sad->context, ciphersuites_tls12, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_3);
 #else
-	int skip = 0;
-	if ((sad->min_ssl_version >= SSL_MINOR_VERSION_2) && (ciphersuites[0] == TLS_RSA_WITH_RC4_128_SHA)) {
-		skip = 1;
-	}
-	ssl_set_ciphersuites(sad->context, ciphersuites + skip);
+	ssl_set_ciphersuites(sad->context, ciphersuites);
 #endif
 
 	ssl_set_own_cert(sad->context, sad->certificate, sad->private_key);
@@ -450,18 +441,24 @@ int ssl_accept(t_ssl_accept_data *sad) {
 #if POLARSSL_VERSION_NUMBER == 0x01020900
 	pthread_mutex_lock(&handshake_mutex);
 #endif
-	result = 0;
+	result = SSL_HANDSHAKE_OKE;
 	while ((handshake = ssl_handshake(sad->context)) != 0) {
+		if (handshake == POLARSSL_ERR_SSL_BAD_HS_PROTOCOL_VERSION) {
+			result = SSL_HANDSHAKE_NO_MATCH;
+			break;
+		}
+
 		if ((handshake != POLARSSL_ERR_NET_WANT_READ) && (handshake != POLARSSL_ERR_NET_WANT_WRITE)) {
 			ssl_free(sad->context);
 			sad->context = NULL;
-			result = -1;
+			result = SSL_HANDSHAKE_ERROR;
 			break;
 		}
+
 		if (time(NULL) - start_time >= sad->timeout) {
 			ssl_free(sad->context);
 			sad->context = NULL;
-			result = -2;
+			result = SSL_HANDSHAKE_TIMEOUT;
 			break;
 		}
 	}
@@ -469,7 +466,7 @@ int ssl_accept(t_ssl_accept_data *sad) {
 	pthread_mutex_unlock(&handshake_mutex);
 #endif
 
-	if (result == 0) {
+	if (result == SSL_HANDSHAKE_OKE) {
 		timer.tv_sec = 0;
 		timer.tv_usec = 0;
 		setsockopt(*(sad->client_fd), SOL_SOCKET, SO_RCVTIMEO, (void*)&timer, sizeof(struct timeval));
@@ -561,6 +558,12 @@ char *ssl_version_string(ssl_context *context) {
 	return (char*)ssl_get_version(context);
 }
 
+/* Get SSL cipher
+ */
+char *ssl_cipher_string(ssl_context *context) {
+	return (char*)ssl_get_ciphersuite(context);
+}
+
 /* Close SSL connection
  */
 void ssl_close(ssl_context *ssl) {
@@ -602,13 +605,13 @@ int ssl_connect(ssl_context *ssl, int *sock, char *hostname) {
 	if (hostname != NULL) {
 		ssl_set_hostname(ssl, hostname);
 	}
-	ssl_set_ciphersuites(ssl, ciphersuites + (ciphersuites[0] == TLS_RSA_WITH_RC4_128_SHA ? 1 : 0));
+	ssl_set_ciphersuites(ssl, ciphersuites);
 
 	if (ssl_handshake(ssl) != 0) {
-		return -1;
+		return SSL_HANDSHAKE_ERROR;
 	}
 
-	return 0;
+	return SSL_HANDSHAKE_OKE;
 }
 
 int ssl_send_completely(ssl_context *ssl, const char *buffer, int size) {

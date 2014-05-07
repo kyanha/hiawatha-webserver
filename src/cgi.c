@@ -90,14 +90,14 @@ int fix_crappy_cgi_headers(t_cgi_info *cgi_info) {
 	return 0;
 }
 
-char *find_cgi_header(char *buffer, char *header) {
+char *find_cgi_header(char *buffer, int size, char *header) {
 	char *pos;
 
 	if ((header == NULL) || (buffer == NULL)) {
 		return NULL;
 	}
 
-	if ((pos = strcasestr(buffer, header)) != NULL) {
+	if ((pos = strncasestr(buffer, header, size)) != NULL) {
 		if (pos == buffer) {
 			return buffer;
 		}
@@ -314,20 +314,19 @@ pid_t fork_cgi_process(t_session *session, t_cgi_info *cgi_info) {
 	char *pos, slash = '/', *run[10], cgi_time[16], buffer[UPLOADED_FILE_BUFFER_SIZE];
 	pid_t cgi_pid;
 
-	do {
-		if (pipe(post_pipe) != -1) {
-			if (pipe(html_pipe) != -1) {
-				if (pipe(error_pipe) != -1) {
-					break;
-				}
-				close(html_pipe[0]);
-				close(html_pipe[1]);
-			}
-			close(post_pipe[0]);
-			close(post_pipe[1]);
-		}
+	if (pipe(post_pipe) == -1) {
 		return -1;
-	} while (false);
+	} else if (pipe(html_pipe) == -1) {
+		close(post_pipe[0]);
+		close(post_pipe[1]);
+		return -1;
+	} else if (pipe(error_pipe) == -1) {
+		close(html_pipe[0]);
+		close(html_pipe[1]);
+		close(post_pipe[0]);
+		close(post_pipe[1]);
+		return -1;
+	}
 
 	switch (cgi_pid = fork()) {
 		case -1:

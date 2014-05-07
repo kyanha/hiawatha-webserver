@@ -61,13 +61,14 @@
 
 #define NEW_FILE -1
 
-static char *hs_chunked = "Transfer-Encoding: chunked\r\n";
+char *hs_chunked = "Transfer-Encoding: chunked\r\n";  /* 28 */
 
 extern char *fb_filesystem;
 extern char *fb_symlink;
 extern char *fb_alterlist;
 extern char *hs_eol;
 extern char *hs_conn;
+extern char *hs_concl;
 extern char *hs_conlen;
 extern char *hs_contyp;
 extern char *hs_forwarded;
@@ -274,145 +275,149 @@ int send_file(t_session *session) {
 		}
 	}
 
-	do {
-		retval = -1;
-		if (send_header(session) == -1) {
-			break;
-		}
-		if (session->return_code == 401) {
-			if (session->host->auth_method == basic) {
-				send_basic_auth(session);
-			} else {
-				send_digest_auth(session);
+	retval = -1;
+	if (send_header(session) == -1) {
+		goto fail;
+	}
+	if (session->return_code == 401) {
+		if (session->host->auth_method == basic) {
+			if (send_basic_auth(session) == -1) {
+				goto fail;
+			}
+		} else {
+			if (send_digest_auth(session) == -1) {
+				goto fail;
 			}
 		}
+	}
 
-		value[VALUE_SIZE] = '\0';
+	value[VALUE_SIZE] = '\0';
 
-		/* Last-Modified
-		 */
-		if (fstat(handle, &status) == -1) {
-			break;
-		} else if (gmtime_r(&(status.st_mtime), &fdate) == NULL) {
-			break;
-		} else if (send_buffer(session, "Last-Modified: ", 15) == -1) {
-			break;
-		} else if (strftime(value, VALUE_SIZE, "%a, %d %b %Y %X GMT\r\n", &fdate) == 0) {
-			break;
+	/* Last-Modified
+	 */
+	if (fstat(handle, &status) == -1) {
+		goto fail;
+	} else if (gmtime_r(&(status.st_mtime), &fdate) == NULL) {
+		goto fail;
+	} else if (send_buffer(session, "Last-Modified: ", 15) == -1) {
+		goto fail;
+	} else if (strftime(value, VALUE_SIZE, "%a, %d %b %Y %X GMT\r\n", &fdate) == 0) {
+		goto fail;
+	} else if (send_buffer(session, value, strlen(value)) == -1) {
+		goto fail;
+	}
+
+	/* Content-Range
+	 */
+	if (session->return_code == 206) {
+		if (send_buffer(session, "Content-Range: bytes ", 21) == -1) {
+			goto fail;
+		} else if (snprintf(value, VALUE_SIZE, "%lld-%lld/%lld\r\n", (long long)send_begin, (long long)send_end, (long long)file_size) == -1) {
+			goto fail;
 		} else if (send_buffer(session, value, strlen(value)) == -1) {
-			break;
+			goto fail;
 		}
+	}
 
-		/* Content-Range
-		 */
-		if (session->return_code == 206) {
-			if (send_buffer(session, "Content-Range: bytes ", 21) == -1) {
-				break;
-			} else if (snprintf(value, VALUE_SIZE, "%lld-%lld/%lld\r\n", (long long)send_begin, (long long)send_end, (long long)file_size) == -1) {
-				break;
-			} else if (send_buffer(session, value, strlen(value)) == -1) {
-				break;
+	if (send_buffer(session, hs_conlen, 16) == -1) {
+		goto fail;
+	} else if (snprintf(value, VALUE_SIZE, "%lld\r\n\r\n", (long long)send_size) == -1) {
+		goto fail;
+	} else if (send_buffer(session, value, strlen(value)) == -1) {
+		goto fail;
+	}
+	session->header_sent = true;
+
+	if ((session->request_method != HEAD) && (send_size > 0)) {
+		if (is_volatile_object(session) && (file_size <= MAX_VOLATILE_SIZE)) {
+			/* volatile object
+			 */
+			if ((buffer = (char*)malloc(send_size)) == NULL) {
+				goto fail;
 			}
-		}
 
-		if (send_buffer(session, hs_conlen, 16) == -1) {
-			break;
-		} else if (snprintf(value, VALUE_SIZE, "%lld\r\n\r\n", (long long)send_size) == -1) {
-			break;
-		} else if (send_buffer(session, value, strlen(value)) == -1) {
-			break;
-		}
-		session->header_sent = true;
-
-		retval = 200;
-		if (session->request_method != HEAD) {
-			if (is_volatile_object(session) && (file_size <= MAX_VOLATILE_SIZE)) {
-				/* volatile object
-				 */
-				if ((buffer = (char*)malloc(send_size)) != NULL) {
-					total_bytes = 0;
-					do {
-						if ((bytes_read = read(handle, buffer + total_bytes, send_size - total_bytes)) == -1) {
-							if (errno == EINTR) {
-								bytes_read = 0;
-							}
-						} else {
-							total_bytes += bytes_read;
-						}
-					} while ((bytes_read != -1) && (total_bytes < send_size));
-
-					if (bytes_read != -1) {
-						if (send_buffer(session, buffer, send_size) == -1) {
-							retval = -1;
-						}
-					} else {
-						retval = -1;
+			total_bytes = 0;
+			do {
+				if ((bytes_read = read(handle, buffer + total_bytes, send_size - total_bytes)) == -1) {
+					if (errno == EINTR) {
+						bytes_read = 0;
 					}
-
-					memset(buffer, 0, send_size);
 				} else {
-					retval = -1;
+					total_bytes += bytes_read;
 				}
-			} else {
-				/* Normal file
-				 */
+			} while ((bytes_read != -1) && (total_bytes < send_size));
+
+			if (bytes_read == -1) {
+				goto fail;
+			} else if (send_buffer(session, buffer, send_size) == -1) {
+				goto fail;
+			}
+
+			memset(buffer, 0, send_size);
+		} else {
+			/* Normal file
+			 */
 #ifdef ENABLE_CACHE
 #ifdef ENABLE_MONITOR
-				if (session->host->monitor_host) {
-					cached_object = NULL;
-				} else
+			if (session->host->monitor_host) {
+				cached_object = NULL;
+			} else
 #endif
-					if ((cached_object = search_cache_for_file(session, session->file_on_disk)) == NULL) {
-						cached_object = add_file_to_cache(session, session->file_on_disk);
-					}
-
-				if (cached_object != NULL) {
-					if (send_begin + send_size > cached_object->size) {
-						done_with_cached_object(cached_object, true);
-						cached_object = NULL;
-					}
+				if ((cached_object = search_cache_for_file(session, session->file_on_disk)) == NULL) {
+					cached_object = add_file_to_cache(session, session->file_on_disk);
 				}
 
-				if (cached_object != NULL) {
-					if (send_buffer(session, cached_object->data + send_begin, send_size) == -1) {
-						retval = -1;
-					}
-					done_with_cached_object(cached_object, false);
-				} else
-#endif
-				if ((buffer = (char*)malloc(FILE_BUFFER_SIZE)) != NULL) {
-					while ((send_size > 0) && (retval == 200)) {
-						switch ((bytes_read = read(handle, buffer, FILE_BUFFER_SIZE))) {
-							case -1:
-								if (errno != EINTR) {
-									retval = -1;
-								}
-								break;
-							case 0:
-								send_size = 0;
-								break;
-							default:
-								if (bytes_read > send_size) {
-									bytes_read = send_size;
-								}
-								if (send_buffer(session, buffer, bytes_read) == -1) {
-									retval = -1;
-								}
-								send_size -= bytes_read;
-						}
-					}
-
-					memset(buffer, 0, FILE_BUFFER_SIZE);
-				} else {
-					retval = -1;
+			if (cached_object != NULL) {
+				if (send_begin + send_size > cached_object->content_length) {
+					done_with_cached_object(cached_object, true);
+					cached_object = NULL;
 				}
 			}
 
-			if (buffer != NULL) {
-				free(buffer);
+			if (cached_object != NULL) {
+				if (send_buffer(session, cached_object->content + send_begin, send_size) == -1) {
+					goto fail;
+				}
+				done_with_cached_object(cached_object, false);
+			} else
+#endif
+			if ((buffer = (char*)malloc(FILE_BUFFER_SIZE)) == NULL) {
+				goto fail;
+			} else {
+				do {
+					switch ((bytes_read = read(handle, buffer, FILE_BUFFER_SIZE))) {
+						case -1:
+							if (errno != EINTR) {
+								goto fail;
+							}
+							break;
+						case 0:
+							send_size = 0;
+							break;
+						default:
+							if (bytes_read > send_size) {
+								bytes_read = send_size;
+							}
+							if (send_buffer(session, buffer, bytes_read) == -1) {
+								goto fail;
+							}
+							send_size -= bytes_read;
+					}
+				} while (send_size > 0);
+
+				memset(buffer, 0, FILE_BUFFER_SIZE);
 			}
 		}
-	} while (false);
+
+	}
+	
+	retval = 200;
+
+fail:
+	if (buffer != NULL) {
+		free(buffer);
+	}
+
 	close(handle);
 
 	return retval;
@@ -451,8 +456,8 @@ static int extract_http_code(char *data) {
 /* Run a CGI program and send output to the client.
  */
 int execute_cgi(t_session *session) {
-	int retval = 200, result, handle, len;
-	char *end_of_header, *str_begin, *str_end, *code, c;
+	int retval = 200, result, handle, len, header_length;
+	char *end_of_header, *str_begin, *str_end, *code, c, *str;
 	bool in_body = false, send_in_chunks = true, wrap_cgi, check_file_exists;
 #ifdef CYGWIN
 	char *old_path, *win32_path;
@@ -588,7 +593,9 @@ int execute_cgi(t_session *session) {
 		if ((cached_object = search_cache_for_cgi_output(session)) != NULL) {
 			if (send_header(session) == -1) {
 				retval = rs_DISCONNECT;
-			} else if (send_buffer(session, cached_object->data, cached_object->size) == -1) {
+			} else if (send_buffer(session, cached_object->header, cached_object->header_length) == -1) {
+				retval = rs_DISCONNECT;
+			} else if (send_buffer(session, cached_object->content, cached_object->content_length) == -1) {
 				retval = rs_DISCONNECT;
 			}
 
@@ -750,9 +757,10 @@ int execute_cgi(t_session *session) {
 						}
 
 						if (end_of_header != NULL) {
-							*(end_of_header + 2) = '\0';
+							header_length = end_of_header + 4 - cgi_info.input_buffer;
+
 							if (session->throttle == 0) {
-								if ((str_begin = strcasestr(cgi_info.input_buffer, hs_contyp)) != NULL) {
+								if ((str_begin = strncasestr(cgi_info.input_buffer, hs_contyp, header_length)) != NULL) {
 									if ((str_end = strchr(str_begin, '\r')) != NULL) {
 										str_begin += 14;
 										c = *str_end;
@@ -763,8 +771,15 @@ int execute_cgi(t_session *session) {
 								}
 							}
 
+							if ((str = find_cgi_header(cgi_info.input_buffer, header_length, hs_conn)) != NULL) {
+								if (strncmp(str + 12, hs_concl, 7) == 0) {
+									session->keep_alive = false;
+								}
+
+							}
+
 							if (session->expires > -1) {
-								if (find_cgi_header(cgi_info.input_buffer, "Expires:") != NULL) {
+								if (find_cgi_header(cgi_info.input_buffer, header_length, "Expires:") != NULL) {
 									session->expires = -1;
 								}
 							}
@@ -773,7 +788,7 @@ int execute_cgi(t_session *session) {
 							/* Look for store-in-cache CGI header
 							 */
 							if (session->request_method == GET) {
-								if ((cache_time = cgi_cache_time(cgi_info.input_buffer)) > 0) {
+								if ((cache_time = cgi_cache_time(cgi_info.input_buffer, header_length)) > 0) {
 									if ((cache_buffer = (char*)malloc(session->config->cache_max_filesize + 1)) != NULL) {
 										*(cache_buffer + session->config->cache_max_filesize) = '\0';
 									}
@@ -782,12 +797,12 @@ int execute_cgi(t_session *session) {
 
 							/* Look for remove-from-cache CGI header
 							 */
-							handle_remove_header_for_cgi_cache(session, cgi_info.input_buffer);
+							handle_remove_header_for_cgi_cache(session, cgi_info.input_buffer, header_length);
 #endif
 
-							if (find_cgi_header(cgi_info.input_buffer, "Location:") != NULL) {
+							if (find_cgi_header(cgi_info.input_buffer, header_length, "Location:") != NULL) {
 								session->return_code = 302;
-							} else if ((code = strcasestr(cgi_info.input_buffer, "Status:")) != NULL) {
+							} else if ((code = strncasestr(cgi_info.input_buffer, "Status:", header_length)) != NULL) {
 								result = extract_http_code(code + 7);
 
 								if ((result <= 0) || (result > 999)) {
@@ -816,13 +831,12 @@ int execute_cgi(t_session *session) {
 								break;
 							}
 
-							if ((strcasestr(cgi_info.input_buffer, hs_conlen) != NULL) || (session->keep_alive == false)) {
+							if ((strncasestr(cgi_info.input_buffer, hs_conlen, header_length) != NULL) || (session->keep_alive == false)) {
 								send_in_chunks = false;
 							} else if (send_buffer(session, hs_chunked, 28) == -1) {
 								retval = rs_DISCONNECT;
 								break;
 							}
-							*(end_of_header + 2) = '\r';
 
 							/* Send the header.
 							 */
@@ -899,6 +913,8 @@ int execute_cgi(t_session *session) {
 		} /* switch */
 	} while (retval == 200);
 
+	session->time = time(NULL);
+
 #ifdef ENABLE_CACHE
 	/* Add cache buffer to cache
 	 */
@@ -943,11 +959,10 @@ int execute_cgi(t_session *session) {
 /* Handle TRACE requests
  */
 int handle_trace_request(t_session *session) {
-	int result = -1, code, body_size;
+	int code, body_size;
 	size_t len;
 	char buffer[MAX_TRACE_HEADER + 1];
 	t_http_header *header;
-
 
 #ifdef ENABLE_DEBUG
 	session->current_task = "handle TRACE";
@@ -968,60 +983,51 @@ int handle_trace_request(t_session *session) {
 
 	buffer[MAX_TRACE_HEADER] = '\0';
 
-	do {
-		/* Header
-		 */
-		if (snprintf(buffer, MAX_TRACE_HEADER, "%d\r\nContent-Type: message/http\r\n\r\n", body_size) < 0) {
-			break;
-		} else if (send_header(session) == -1) {
-			break;
-		} else if (send_buffer(session, hs_conlen, 16) == -1) {
-			break;
-		} else if (send_buffer(session, buffer, strlen(buffer)) == -1) {
-			break;
-		}
-		session->header_sent = true;
+	/* Header
+	 */
+	if (snprintf(buffer, MAX_TRACE_HEADER, "%d\r\nContent-Type: message/http\r\n\r\n", body_size) < 0) {
+		return 500;
+	} else if (send_header(session) == -1) {
+		return -1;
+	} else if (send_buffer(session, hs_conlen, 16) == -1) {
+		return -1;
+	} else if (send_buffer(session, buffer, strlen(buffer)) == -1) {
+		return -1;
+	}
+	session->header_sent = true;
 
-		/* Body
-		 */
-		if ((code = snprintf(buffer, MAX_TRACE_HEADER, "%s %s", session->method, session->uri)) < 0) {
-			break;
-		} else if (code >= MAX_TRACE_HEADER) {
-			break;
-		} else if (session->vars != NULL) {
-			len = strlen(buffer);
-			if ((code = snprintf(buffer + len, MAX_TRACE_HEADER - len, "?%s", session->vars)) < 0) {
-				break;
-			} else if (code >= MAX_TRACE_HEADER) {
-				break;
-			}
-		}
+	/* Body
+	 */
+	if ((code = snprintf(buffer, MAX_TRACE_HEADER, "%s %s", session->method, session->uri)) < 0) {
+		return -1;
+	} else if (code >= MAX_TRACE_HEADER) {
+		return -1;
+	} else if (session->vars != NULL) {
 		len = strlen(buffer);
-		if ((code = snprintf(buffer + len, MAX_TRACE_HEADER - len, " %s\r\n", session->http_version)) < 0) {
-			break;
-		} else if (send_buffer(session, buffer, strlen(buffer)) == -1) {
-			break;
+		if ((code = snprintf(buffer + len, MAX_TRACE_HEADER - len, "?%s", session->vars)) < 0) {
+			return -1;
+		} else if (code >= MAX_TRACE_HEADER) {
+			return -1;
 		}
+	}
+	len = strlen(buffer);
+	if ((code = snprintf(buffer + len, MAX_TRACE_HEADER - len, " %s\r\n", session->http_version)) < 0) {
+		return -1;
+	} else if (send_buffer(session, buffer, strlen(buffer)) == -1) {
+		return -1;
+	}
 
-		header = session->http_headers;
-		while (header != NULL) {
-			if (send_buffer(session, header->data, header->length) == -1) {
-				result = -1;
-				break;
-			} else if (send_buffer(session, "\n", 1) == -1) {
-				result = -1;
-				break;
-			}
-			header = header->next;
+	header = session->http_headers;
+	while (header != NULL) {
+		if (send_buffer(session, header->data, header->length) == -1) {
+			return -1;
+		} else if (send_buffer(session, "\n", 1) == -1) {
+			return -1;
 		}
-		if (result == -1) {
-			break;
-		}
+		header = header->next;
+	}
 
-		result = 200;
-	} while (false);
-
-	return result;
+	return 200;
 }
 
 /* Determine allowance of alter requests
@@ -1289,7 +1295,7 @@ int handle_delete_request(t_session *session) {
 }
 
 #ifdef ENABLE_XSLT
-int handle_xml_file(t_session *session) {
+int handle_xml_file(t_session *session, char *xslt_file) {
 	int handle;
 
 #ifdef ENABLE_DEBUG
@@ -1324,27 +1330,77 @@ int handle_xml_file(t_session *session) {
 		}
 	}
 
-	return transform_xml(session);
+	return transform_xml(session, xslt_file);
 }
 #endif
 
 #ifdef ENABLE_RPROXY
-static int find_chunk_size(char *buffer) {
-	int chunk_extra_size, chunk_size;
+static int remove_header(char *buffer, char *header, int header_length, int size) {
+	char *pos;
+	size_t len;
 
-	if (strstr(buffer, "\r\n") == NULL) {
+	if ((pos = strncasestr(buffer, header, header_length)) == NULL) {
+		return 0;
+	}
+
+	len = strlen(header);
+	while (*(pos + len) != '\n') {
+		if (*(pos + len) == '\0') {
+			return 0;
+		}
+		len++;
+	}
+	len++;
+
+	memmove(pos, pos + len, size - len - (pos - buffer));
+
+	return len;
+}
+
+static int find_chunk_size(char *buffer, int size, int *chunk_size, int *chunk_left) {
+	int extra, total;
+	char *c;
+
+	if (*chunk_left > 0) {
+		if (*chunk_left >= size) {
+			*chunk_left -= size;
+			return 0;
+		}
+		buffer += *chunk_left;
+		size -= *chunk_left;
+		*chunk_left = 0;
+	}
+
+	if ((c = strstr(buffer, "\r\n")) == NULL) {
+		return -1;
+	} else if (c - buffer > 10) {
 		return -1;
 	}
 
-	chunk_extra_size = 4;
-	chunk_size = 0;
-	while (*buffer != '\r') {
-		chunk_size = (16 * chunk_size) + (int)hex_to_int(*buffer);
-		chunk_extra_size++;
-		buffer++;
+	*chunk_size = 0;
+	extra = 4;
+	c = buffer;
+	while (*c != '\r') {
+		*chunk_size = (16 * (*chunk_size)) + (int)hex_to_int(*c);
+		extra++;
+		c++;
 	}
 
-	return chunk_extra_size + chunk_size;
+	if (*chunk_size == 0) { 
+		return 0;
+	}
+
+	total = *chunk_size + extra;
+
+	if (total < size) {
+		return find_chunk_size(buffer + total, size - total, chunk_size, chunk_left);
+	}
+
+	if (total > size) {
+		*chunk_left = total - size;
+	}
+
+	return 0;
 }
 
 int proxy_request(t_session *session, t_rproxy *rproxy) {
@@ -1352,9 +1408,9 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	t_rproxy_webserver webserver;
 	t_rproxy_result rproxy_result;
 	char buffer[RPROXY_BUFFER_SIZE + 1], *end_of_header, *str, *eol;
-	int bytes_read, bytes_in_buffer = 0, result = 200, code, poll_result, send_size;
-	int can_read, content_length = -1, content_read = 0, chunk_size, chunk_total, header_size;
-	bool header_read = false, keep_reading = true, keep_alive, chunked_transfer = false;
+	int bytes_read, bytes_in_buffer = 0, result = 200, code, poll_result, send_result, delta;
+	int content_length = -1, content_read = 0, chunk_size = 0, chunk_left = 0, header_length;
+	bool header_read = false, keep_reading = true, keep_alive, chunked_transfer = false, send_in_chunks = false;
 	struct pollfd poll_data;
 	time_t deadline;
 #ifdef ENABLE_CACHE
@@ -1367,19 +1423,29 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	session->current_task = "proxy request";
 #endif
 
-	keep_alive = session->keep_alive;
-
 #ifdef ENABLE_CACHE
 	/* Search for CGI output in cache
 	 */
 	if (session->request_method == GET) {
 		if ((cached_object = search_cache_for_rproxy_output(session)) != NULL) {
-			if (send_buffer(session, cached_object->data, cached_object->size) == -1) {
-				result = rs_DISCONNECT;
+			if (session->keep_alive) {
+				if (send_buffer(session, cached_object->header, cached_object->header_length) == -1) {
+					result = rs_DISCONNECT;
+				}
+			} else {
+				if (send_buffer(session, cached_object->header, cached_object->header_length - 2) == -1) {
+					result = rs_DISCONNECT;
+				} else if (send_buffer(session, hs_conn, 12) == -1) {
+					result = rs_DISCONNECT;
+				} else if (send_buffer(session, hs_concl, 7) == -1) {
+					result = rs_DISCONNECT;
+				} else if (send_buffer(session, "\r\n", 2) == -1) {
+					result = rs_DISCONNECT;
+				}
 			}
-
-			if (cached_object->close_connection) {
-				session->keep_alive = false;
+			
+			if (send_buffer(session, cached_object->content, cached_object->content_length) == -1) {
+				result = rs_DISCONNECT;
 			}
 
 			done_with_cached_object(cached_object, false);
@@ -1389,14 +1455,27 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	}
 #endif
 
+	keep_alive = session->keep_alive && rproxy->keep_alive;
+
 	/* Intialize data structure
 	 */
-	init_rproxy_options(&options, session->client_socket, &(session->ip_address),
-	                    session->method, session->request_uri, session->http_headers,
-	                    session->body, session->content_length, session->remote_user);
+	options.client_socket = session->client_socket;
+	options.client_ip = &(session->ip_address);
+	options.port = session->binding->port;
+	options.method = session->method;
+	options.uri = session->request_uri;
+	options.hostname = session->hostname;
+	options.http_headers = session->http_headers;
+	options.body = session->body;
+	options.content_length = session->content_length;
+	options.remote_user = session->remote_user;
+#ifdef ENABLE_SSL
+	options.use_ssl = session->binding->use_ssl;
+#endif
 #ifdef ENABLE_CACHE
 	options.cache_extensions = &(session->config->cache_rproxy_extensions);
 #endif
+
 	init_rproxy_result(&rproxy_result);
 
 	if (session->rproxy_kept_alive && ((same_ip(&(session->rproxy_addr), &(rproxy->ip_addr)) == false) || (session->rproxy_port != rproxy->port))) {
@@ -1446,7 +1525,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 #ifdef ENABLE_SSL
 		webserver.use_ssl = rproxy->use_ssl;
 		if (webserver.use_ssl) {
-			if (ssl_connect(&(webserver.ssl), &(webserver.socket), rproxy->hostname) == -1) {
+			if (ssl_connect(&(webserver.ssl), &(webserver.socket), rproxy->hostname) == SSL_HANDSHAKE_ERROR) {
 				close(webserver.socket);
 				return 503;
 			}
@@ -1456,7 +1535,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 
 	/* Send request to webserver
 	 */
-	if (send_request_to_webserver(&webserver, &options, rproxy, &rproxy_result) == -1) {
+	if (send_request_to_webserver(&webserver, &options, rproxy, &rproxy_result, session->keep_alive) == -1) {
 		result = -1;
 	}
 	session->bytes_sent += rproxy_result.bytes_sent;
@@ -1490,18 +1569,10 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 				if (time(NULL) > deadline) {
 					result = 504;
 					keep_reading = false;
+					keep_alive = false;
 				}
 				break;
 			default:
-				if (content_length == -1) {
-					can_read = RPROXY_BUFFER_SIZE - bytes_in_buffer;
-				} else {
-					can_read = content_length - content_read;
-					if (can_read > RPROXY_BUFFER_SIZE) {
-						can_read = RPROXY_BUFFER_SIZE;
-					}
-				}
-
 				if (RPROXY_BUFFER_SIZE - bytes_in_buffer > 0) {
 #ifdef ENABLE_SSL
 					if (webserver.use_ssl) {
@@ -1534,7 +1605,12 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 							/* Look for header
 							 */
 							if ((end_of_header = strstr(buffer, "\r\n\r\n")) != NULL) {
-								*(end_of_header + 2) = '\0';
+								header_length = end_of_header + 4 - buffer;
+
+								if (strncmp(buffer, "HTTP/1.0 ", 9) == 0) {
+									buffer[7] = '1';
+								}
+
 								if ((code = extract_http_code(buffer)) != -1) {
 									session->return_code = code;
 								}
@@ -1543,65 +1619,118 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 									result = code;
 									keep_reading = false;
 									keep_alive = false;
-									*end_of_header = '\r';
 									break;
 								}
 
 #ifdef ENABLE_CACHE
 								if ((code == 200) && (session->request_method == GET)) {
-									if ((cache_time = rproxy_cache_time(session, buffer)) > 0) {
+									if ((cache_time = rproxy_cache_time(session, buffer, header_length)) > 0) {
 										if ((cache_buffer = (char*)malloc(session->config->cache_max_filesize + 1)) != NULL) {
 											*(cache_buffer + session->config->cache_max_filesize) = '\0';
 										}
 									}
 								}
 
-								handle_remove_header_for_rproxy_cache(session, buffer);
+								handle_remove_header_for_rproxy_cache(session, buffer, header_length);
 #endif
 
-								/* Parse content length
+								/* Check for close-connection
 								 */
-								if (session->request_method == HEAD) {
-									content_length = 0;
-								} else if (((code >= 100) && (code < 200)) || (code == 204) ||
-								            (code == 302) || (code == 303) || (code == 304)) {
-									content_length = 0;
-								} else if ((str = strcasestr(buffer, hs_conlen)) != NULL) {
-									str += strlen(hs_conlen);
-									if ((eol = strchr(str, '\r')) != NULL) {
-										*eol = '\0';
-										content_length = str2int(str);
-										*eol = '\r';
-									}
-								} else {
-									content_length = 0;
-								}
-
-								/* Determine if is chunked transfer encoding
-								 */
-								if (strcasestr(buffer, hs_chunked) != NULL) {
-									chunked_transfer = true;
-									content_length = -1;
-									header_size = end_of_header + 4 - buffer;
-								}
-
-								/* Determine connection type
-								 */
-								if (strncmp(buffer, "HTTP/1.0 ", 9) == 0) {
-									keep_alive = false;
-								} else if (strncmp(buffer, "HTTP/1.1 ", 9) == 0) {
-									if ((str = strcasestr(buffer, hs_conn)) != NULL) {
-										str += strlen(hs_conn);
+								if (session->keep_alive) {
+									if ((str = strncasestr(buffer, hs_conn, header_length)) != NULL) {
+										str += 12;
 										if (strncmp(str, "close\r\n", 7) == 0) {
 											keep_alive = false;
 										}
 									}
 								}
 
-								content_read = bytes_in_buffer - (end_of_header + 4 - buffer);
+								delta = remove_header(buffer, hs_conn, header_length, bytes_in_buffer);
+								bytes_in_buffer -= delta;
+								end_of_header -= delta;
+								header_length -= delta;
+								bytes_read -= delta;
+
+								if (keep_alive) {
+									/* Parse content length
+									 */
+									if (session->request_method == HEAD) {
+										content_length = 0;
+									} else if ((str = strncasestr(buffer, hs_conlen, header_length)) != NULL) {
+										str += 16;
+										if ((eol = strchr(str, '\r')) != NULL) {
+											*eol = '\0';
+											content_length = str2int(str);
+											*eol = '\r';
+										}
+									} else if (((code >= 100) && (code < 200)) || (code == 204) || (code == 304)) {
+										content_length = 0;
+									}
+
+									/* Determine if is chunked transfer encoding
+									 */
+									if (strncasestr(buffer, hs_chunked, header_length) != NULL) {
+										chunked_transfer = true;
+										content_length = -1;
+										chunk_size = header_length;
+										chunk_left = chunk_size;
+									}
+								} else if (session->keep_alive && (strncasestr(buffer, hs_conlen, header_length) == NULL) && (strncasestr(buffer, hs_chunked, header_length) == NULL)) {
+									/* We need to forward result in chunks
+									 */
+									if (send_buffer(session, buffer, header_length - 2) == -1) {
+										result = -1;
+										keep_reading = false;
+										keep_alive = false;
+										break;
+									} else if (send_buffer(session, hs_chunked, 28) == -1) {
+										result = -1;
+										keep_reading = false;
+										keep_alive = false;
+										break;
+									} else if (send_buffer(session, "\r\n", 2) == -1) {
+										result = -1;
+										keep_reading = false;
+										keep_alive = false;
+										break;
+									} else if (send_buffer(session, NULL, 0) == -1) {
+										result = -1;
+										keep_reading = false;
+										keep_alive = false;
+										break;
+									}
+
+#ifdef ENABLE_CACHE
+									/* Add output to cache buffer
+									 */
+									if (cache_buffer != NULL) {
+										if ((off_t)(cache_size + header_length) > session->config->cache_max_filesize) {
+											clear_free(cache_buffer, cache_size);
+											cache_buffer = NULL;
+										} else {
+											memcpy(cache_buffer + cache_size, buffer, header_length);
+											cache_size += header_length;
+											*(cache_buffer + cache_size) = '\0';
+										}
+									}
+#endif
+
+									if ((content_read = bytes_in_buffer - header_length) > 0) {
+										memmove(buffer, end_of_header + 4, content_read);
+									}
+									bytes_in_buffer = content_read;
+									send_in_chunks = true;
+								}
+
+								if (send_in_chunks == false) {
+									content_read = bytes_in_buffer - header_length;
+								}
+
 								header_read = true;
 
-								*(end_of_header + 2)= '\r';
+								if (bytes_in_buffer == 0) {
+									continue;
+								}
 							} else if (bytes_in_buffer == RPROXY_BUFFER_SIZE) {
 								result = -1;
 								keep_reading = false;
@@ -1620,79 +1749,60 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 							keep_reading = false;
 						}
 
-						/* Determine what to send
-						 */
-						if (chunked_transfer) {
-							/* Send chunk
-							 */
-							chunk_total = header_size;
-							while ((chunk_size = find_chunk_size(buffer + chunk_total)) != -1) {
-								if (chunk_total + chunk_size <= bytes_in_buffer) {
-									chunk_total += chunk_size;
-
-									if (chunk_size == 5) {
-										keep_reading = false;
-									}
-								} else {
-									break;
-								}
-							}
-							
-							if (bytes_in_buffer >= chunk_total) {
-								send_size = chunk_total;
-							} else {
-								send_size = 0;
-							}
-						} else {
-							/* Send complete buffer
-							 */
-							send_size = bytes_in_buffer;
-						}
-
 						/* Send buffer content
 						 */
-						if (send_size > 0) {
-							if (send_buffer(session, buffer, send_size) == -1) {
-								result = -1;
-								keep_reading = false;
-								keep_alive = false;
-								break;
-							}
+						if (send_in_chunks) {
+							send_result = send_chunk(session, buffer, bytes_in_buffer);
+						} else {
+							send_result = send_buffer(session, buffer, bytes_in_buffer);
+						}
+
+						if (send_result == -1) {
+							result = -1;
+							keep_reading = false;
+							keep_alive = false;
+							break;
+						}
 
 #ifdef ENABLE_CACHE
-							/* Add output to cache buffer
-							 */
-							if (cache_buffer != NULL) {
-								if ((off_t)(cache_size + send_size) > session->config->cache_max_filesize) {
-									clear_free(cache_buffer, cache_size);
-									cache_buffer = NULL;
-								} else {
-									memcpy(cache_buffer + cache_size, buffer, send_size);
-									cache_size += send_size;
-									*(cache_buffer + cache_size) = '\0';
-								}
+						/* Add output to cache buffer
+						 */
+						if (cache_buffer != NULL) {
+							if ((off_t)(cache_size + bytes_in_buffer) > session->config->cache_max_filesize) {
+								clear_free(cache_buffer, cache_size);
+								cache_buffer = NULL;
+							} else {
+								memcpy(cache_buffer + cache_size, buffer, bytes_in_buffer);
+								cache_size += bytes_in_buffer;
+								*(cache_buffer + cache_size) = '\0';
 							}
+						}
 #endif
 
-							if (chunked_transfer) {
-								bytes_in_buffer -= chunk_total;
-								memmove(buffer, buffer + chunk_total, bytes_in_buffer);
-								*(buffer + bytes_in_buffer) = '\0';
-
-								header_size = 0;
-							} else {
-								bytes_in_buffer = 0;
+						if (chunked_transfer) {
+							if (find_chunk_size(buffer, bytes_in_buffer, &chunk_size, &chunk_left) == -1) {
+								keep_reading = false;
+								keep_alive = false;
+							} else if (chunk_size == 0) {
+								keep_reading = false;
 							}
 						}
 
+						bytes_in_buffer = 0;
 						session->data_sent = true;
 				}
 		}
 	} while (keep_reading);
 
+	if (send_in_chunks && (result == 200)) {
+		send_chunk(session, NULL, 0);
+	}
+
+	session->time = time(NULL);
+
 #ifdef ENABLE_CACHE
 	if (cache_buffer != NULL) {
-		add_rproxy_output_to_cache(session, cache_buffer, cache_size, cache_time, keep_alive);
+		add_rproxy_output_to_cache(session, cache_buffer, cache_size, cache_time);
 		clear_free(cache_buffer, cache_size);
 	}
 #endif
@@ -1706,9 +1816,6 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 		}
 #endif
 		close(webserver.socket);
-
-		session->keep_alive = false;
-		session->rproxy_kept_alive = false;
 	} else if (session->rproxy_kept_alive == false) {
 		/* Keep connection alive
 		 */
@@ -1721,8 +1828,9 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 			memcpy(&(session->rproxy_ssl), &(webserver.ssl), sizeof(ssl_context));
 		}
 #endif
-		session->rproxy_kept_alive = true;
 	}
+
+	session->rproxy_kept_alive = keep_alive;
 
 	return result;
 }

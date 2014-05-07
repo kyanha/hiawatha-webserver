@@ -153,3 +153,24 @@ const char *strcasestr(const char *haystack, const char *needle) {
 	return NULL;
 }
 #endif
+
+#ifndef HAVE_STRNCASESTR
+const char *strncasestr(const char *haystack, const char *needle, int len) {
+	int i, steps, needle_len;
+
+	if ((haystack == NULL) || (needle == NULL)) {
+		return NULL;
+	}
+
+	needle_len = strlen(needle);
+	steps = len - needle_len + 1;
+
+	for (i = 0; i < steps; i++) {
+		if (strncasecmp(haystack + i, needle, needle_len) == 0) {
+			return haystack + i;
+		}
+	}
+
+	return NULL;
+}
+#endif

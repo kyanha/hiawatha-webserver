@@ -141,7 +141,7 @@ void log_system(t_session *session, char *mesg, ...) {
 
 	va_start(args, mesg);
 
-	ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+	ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
 	strcat(str, "|");
 	print_timestamp(str + strlen(str));
 	fprintf(fp, "%s", str);
@@ -175,9 +175,9 @@ void log_file_error(t_session *session, char *file, char *mesg, ...) {
 	va_start(args, mesg);
 
 	if (session->config->anonymize_ip) {
-		anonymized_ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+		anonymized_ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
 	} else {
-		ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+		ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
 	}
 
 	strcat(str, "|");
@@ -238,9 +238,9 @@ void log_request(t_session *session) {
 		/* Hiawatha log format
 		 */
 		if (session->config->anonymize_ip) {
-			anonymized_ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+			anonymized_ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
 		} else {
-			ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+			ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
 		}
 
 		strcat(str, "|");
@@ -285,9 +285,9 @@ void log_request(t_session *session) {
 		/* Common Log Format
 		 */
 		if (session->config->anonymize_ip) {
-			anonymized_ip_to_str(ip_address, &(session->ip_address), IP_ADDRESS_SIZE);
+			anonymized_ip_to_str(&(session->ip_address), ip_address, IP_ADDRESS_SIZE);
 		} else {
-			ip_to_str(ip_address, &(session->ip_address), IP_ADDRESS_SIZE);
+			ip_to_str(&(session->ip_address), ip_address, IP_ADDRESS_SIZE);
 		}
 
 		if (user == NULL) {
@@ -372,7 +372,7 @@ void log_garbage(t_session *session) {
 		return;
 	}
 
-	ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+	ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
 	strcat(str, "|");
 	print_timestamp(str + strlen(str));
 	fprintf(fp, "%s%s"EOL, str, session->request);
@@ -394,7 +394,7 @@ void log_exploit_attempt(t_session *session, char *type, char *data) {
 	host = (session->host->hostname.size > 0) ? session->host->hostname.item[0] : unknown;
 	uri = (session->uri != NULL) ? session->uri : unknown;
 
-	ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+	ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
 	strcat(str, "|");
 	print_timestamp(str + strlen(str));
 	if (data == NULL) {
@@ -417,7 +417,7 @@ void log_unban(char *logfile, t_ip_addr *ip_address, unsigned long connect_attem
 		return;
 	}
 
-	ip_to_str(str, ip_address, IP_ADDRESS_SIZE);
+	ip_to_str(ip_address, str, IP_ADDRESS_SIZE);
 	strcat(str, "|");
 	print_timestamp(str + strlen(str));
 	fprintf(fp, "%sUnbanned (%ld connect attempts during ban)"EOL, str, connect_attempts);
@@ -452,9 +452,9 @@ void log_cgi_error(t_session *session, char *mesg) {
 	if (len > 0) {
 		if ((fp = fopen(session->host->error_logfile, "a")) != NULL) {
 			if (session->config->anonymize_ip) {
-				anonymized_ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+				anonymized_ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
 			} else {
-				ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+				ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
 			}
 
 			strcat(str, "|");
@@ -512,7 +512,7 @@ void log_debug(t_session *session, char *mesg, ...) {
 
 	va_start(args, mesg);
 
-	ip_to_str(str, &(session->ip_address), IP_ADDRESS_SIZE);
+	ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
 	strcat(str, "|");
 	print_timestamp(str + strlen(str));
 	fprintf(fp, "%s%05d|", str, session->thread_id);

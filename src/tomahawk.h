@@ -18,6 +18,8 @@
 #ifdef ENABLE_TOMAHAWK
 
 #include "serverconfig.h"
+#include "ip.h"
+#include "liblist.h"
 
 #define cc_OKE            0
 #define cc_DISCONNECT     1
@@ -41,22 +43,22 @@ typedef struct type_admin {
 	FILE *fp;
 	bool authenticated;
 	int timer;
-	char *repeat_command;
+	bool show_requests;
 
 	struct type_admin *next;
 } t_admin;
 
 void increment_counter(int counter);
 void increment_transfer(int counter, long bytes);
+void show_request_to_admins(char *method, char *uri, char *http_version, t_ip_addr *ip_addr,
+                            t_http_header *header, int response_code, off_t bytes_sent);
 
 int  init_tomahawk_module(void);
 int  add_admin(int sock);
-void remove_admin(int sock);
-void check_admin_list(void);
-t_admin *first_admin(void);
-t_admin *next_admin(void);
-int handle_admin(t_admin *admin, t_config *config);
 void disconnect_admins(void);
+void check_admin_list(void);
+int prepare_admins_for_poll(struct pollfd *current_poll);
+void handle_admins(t_config *config);
 
 #endif
 

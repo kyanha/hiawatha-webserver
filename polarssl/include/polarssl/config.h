@@ -94,17 +94,6 @@
 //#define POLARSSL_HAVE_SSE2
 
 /**
- * \def POLARSSL_HAVE_READDIR_R
- *
- * (Non Windows) System has readdir_r().
- *
- * Required for x509_crt_parse_path() in non-Windows systems.
- *
- * Comment if your system does not have support.
- */
-#define POLARSSL_HAVE_READDIR_R
-
-/**
  * \def POLARSSL_HAVE_TIME
  *
  * System has time.h and time() / localtime()  / gettimeofday().
@@ -112,6 +101,18 @@
  * Comment if your system does not support time functions
  */
 #define POLARSSL_HAVE_TIME
+
+/**
+ * \def POLARSSL_HAVE_IPV6
+ *
+ * System supports the basic socket interface for IPv6 (RFC 3493),
+ * specifically getaddrinfo(), freeaddrinfo() and struct sockaddr_storage.
+ *
+ * Note: on Windows/MingW, XP or higher is required.
+ *
+ * Comment if your system does not support the IPv6 socket interface
+ */
+#define POLARSSL_HAVE_IPV6
 /* \} name SECTION: System support */
 
 /**
@@ -147,6 +148,7 @@
 //#define POLARSSL_MD2_ALT
 //#define POLARSSL_MD4_ALT
 //#define POLARSSL_MD5_ALT
+//#define POLARSSL_RIPEMD160_ALT
 //#define POLARSSL_SHA1_ALT
 //#define POLARSSL_SHA256_ALT
 //#define POLARSSL_SHA512_ALT
@@ -191,6 +193,8 @@
  *
  * Requires POLARSSL_ENABLE_WEAK_CIPHERSUITES as well to enable
  * the following ciphersuites:
+ *      TLS_ECDH_ECDSA_WITH_NULL_SHA
+ *      TLS_ECDH_RSA_WITH_NULL_SHA
  *      TLS_ECDHE_ECDSA_WITH_NULL_SHA
  *      TLS_ECDHE_RSA_WITH_NULL_SHA
  *      TLS_ECDHE_PSK_WITH_NULL_SHA384
@@ -256,9 +260,16 @@
 #define POLARSSL_ECP_DP_SECP256R1_ENABLED
 #define POLARSSL_ECP_DP_SECP384R1_ENABLED
 #define POLARSSL_ECP_DP_SECP521R1_ENABLED
+#define POLARSSL_ECP_DP_SECP192K1_ENABLED
+#define POLARSSL_ECP_DP_SECP224K1_ENABLED
+#define POLARSSL_ECP_DP_SECP256K1_ENABLED
 #define POLARSSL_ECP_DP_BP256R1_ENABLED
 #define POLARSSL_ECP_DP_BP384R1_ENABLED
 #define POLARSSL_ECP_DP_BP512R1_ENABLED
+//#define POLARSSL_ECP_DP_M221_ENABLED  // Not implemented yet!
+#define POLARSSL_ECP_DP_M255_ENABLED
+//#define POLARSSL_ECP_DP_M383_ENABLED  // Not implemented yet!
+//#define POLARSSL_ECP_DP_M511_ENABLED  // Not implemented yet!
 
 /**
  * \def POLARSSL_ECP_NIST_OPTIM
@@ -270,6 +281,20 @@
  * Comment this macro to disable NIST curves optimisation.
  */
 #define POLARSSL_ECP_NIST_OPTIM
+
+/**
+ * \def POLARSSL_ECDSA_DETERMINISTIC
+ *
+ * Enable deterministic ECDSA (RFC 6979).
+ * Standard ECDSA is "fragile" in the sense that lack of entropy when signing
+ * may result in a compromise of the long-term signing key. This is avoided by
+ * the deterministic variant.
+ *
+ * Requires: POLARSSL_MD_C
+ *
+ * Comment this macro to disable deterministic ECDSA.
+ */
+#define POLARSSL_ECDSA_DETERMINISTIC
 
 /**
  * \def POLARSSL_KEY_EXCHANGE_PSK_ENABLED
@@ -466,6 +491,54 @@
 #define POLARSSL_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
 
 /**
+ * \def POLARSSL_KEY_EXCHANGE_ECDH_ECDSA_ENABLED
+ *
+ * Enable the ECDH-ECDSA based ciphersuite modes in SSL / TLS.
+ *
+ * Requires: POLARSSL_ECDH_C, POLARSSL_X509_CRT_PARSE_C
+ *
+ * This enables the following ciphersuites (if other requisites are
+ * enabled as well):
+ *      TLS_ECDH_ECDSA_WITH_RC4_128_SHA
+ *      TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA
+ *      TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA
+ *      TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA
+ *      TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256
+ *      TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384
+ *      TLS_ECDH_ECDSA_WITH_AES_128_GCM_SHA256
+ *      TLS_ECDH_ECDSA_WITH_AES_256_GCM_SHA384
+ *      TLS_ECDH_ECDSA_WITH_CAMELLIA_128_CBC_SHA256
+ *      TLS_ECDH_ECDSA_WITH_CAMELLIA_256_CBC_SHA384
+ *      TLS_ECDH_ECDSA_WITH_CAMELLIA_128_GCM_SHA256
+ *      TLS_ECDH_ECDSA_WITH_CAMELLIA_256_GCM_SHA384
+ */
+#define POLARSSL_KEY_EXCHANGE_ECDH_ECDSA_ENABLED
+
+/**
+ * \def POLARSSL_KEY_EXCHANGE_ECDH_RSA_ENABLED
+ *
+ * Enable the ECDH-RSA based ciphersuite modes in SSL / TLS.
+ *
+ * Requires: POLARSSL_ECDH_C, POLARSSL_X509_CRT_PARSE_C
+ *
+ * This enables the following ciphersuites (if other requisites are
+ * enabled as well):
+ *      TLS_ECDH_RSA_WITH_RC4_128_SHA
+ *      TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA
+ *      TLS_ECDH_RSA_WITH_AES_128_CBC_SHA
+ *      TLS_ECDH_RSA_WITH_AES_256_CBC_SHA
+ *      TLS_ECDH_RSA_WITH_AES_128_CBC_SHA256
+ *      TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384
+ *      TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256
+ *      TLS_ECDH_RSA_WITH_AES_256_GCM_SHA384
+ *      TLS_ECDH_RSA_WITH_CAMELLIA_128_CBC_SHA256
+ *      TLS_ECDH_RSA_WITH_CAMELLIA_256_CBC_SHA384
+ *      TLS_ECDH_RSA_WITH_CAMELLIA_128_GCM_SHA256
+ *      TLS_ECDH_RSA_WITH_CAMELLIA_256_GCM_SHA384
+ */
+#define POLARSSL_KEY_EXCHANGE_ECDH_RSA_ENABLED
+
+/**
  * \def POLARSSL_ERROR_STRERROR_BC
  *
  * Make available the backward compatible error_strerror() next to the
@@ -643,6 +716,16 @@
 #define POLARSSL_SSL_SRV_SUPPORT_SSLV2_CLIENT_HELLO
 
 /**
+ * \def POLARSSL_SSL_SRV_RESPECT_CLIENT_PREFERENCE
+ *
+ * Pick the ciphersuite according to the client's preferences rather than ours
+ * in the SSL Server module (POLARSSL_SSL_SRV_C).
+ *
+ * Uncomment this macro to respect client's ciphersuite order
+ */
+//#define POLARSSL_SSL_SRV_RESPECT_CLIENT_PREFERENCE
+
+/**
  * \def POLARSSL_SSL_MAX_FRAGMENT_LENGTH
  *
  * Enable support for RFC 6066 max_fragment_length extension in SSL.
@@ -742,19 +825,6 @@
 //#define POLARSSL_THREADING_ALT
 
 /**
- * \def POLARSSL_THREADING_DUMMY
- *
- * Provide a dummy threading implementation.
- * Warning: If you use this, all claims of thread-safety in the documentation
- *          are void!
- *
- * Requires: POLARSSL_THREADING_C
- *
- * Uncomment this to enable code to compile like with threading enabled
- */
-//#define POLARSSL_THREADING_DUMMY
-
-/**
  * \def POLARSSL_THREADING_PTHREAD
  *
  * Enable the pthread wrapper layer for the threading layer.
@@ -810,6 +880,20 @@
  */
 
 /**
+ * \def POLARSSL_AESNI_C
+ *
+ * Enable AES-NI support on x86-64.
+ *
+ * Module:  library/aesni.c
+ * Caller:  library/aes.c
+ *
+ * Requires: POLARSSL_HAVE_ASM
+ *
+ * This modules adds support for the AES-NI instructions on x86-64
+ */
+#define POLARSSL_AESNI_C
+
+/**
  * \def POLARSSL_AES_C
  *
  * Enable the AES block cipher.
@@ -821,6 +905,18 @@
  *
  * This module enables the following ciphersuites (if other requisites are
  * enabled as well):
+ *      TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA
+ *      TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA
+ *      TLS_ECDH_RSA_WITH_AES_128_CBC_SHA
+ *      TLS_ECDH_RSA_WITH_AES_256_CBC_SHA
+ *      TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256
+ *      TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384
+ *      TLS_ECDH_RSA_WITH_AES_128_CBC_SHA256
+ *      TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384
+ *      TLS_ECDH_ECDSA_WITH_AES_128_GCM_SHA256
+ *      TLS_ECDH_ECDSA_WITH_AES_256_GCM_SHA384
+ *      TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256
+ *      TLS_ECDH_RSA_WITH_AES_256_GCM_SHA384
  *      TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
  *      TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
  *      TLS_DHE_RSA_WITH_AES_256_GCM_SHA384
@@ -882,6 +978,8 @@
  *
  * This module enables the following ciphersuites (if other requisites are
  * enabled as well):
+ *      TLS_ECDH_ECDSA_WITH_RC4_128_SHA
+ *      TLS_ECDH_RSA_WITH_RC4_128_SHA
  *      TLS_ECDHE_ECDSA_WITH_RC4_128_SHA
  *      TLS_ECDHE_RSA_WITH_RC4_128_SHA
  *      TLS_ECDHE_PSK_WITH_RC4_128_SHA
@@ -967,6 +1065,14 @@
  *
  * This module enables the following ciphersuites (if other requisites are
  * enabled as well):
+ *      TLS_ECDH_ECDSA_WITH_CAMELLIA_128_CBC_SHA256
+ *      TLS_ECDH_ECDSA_WITH_CAMELLIA_256_CBC_SHA384
+ *      TLS_ECDH_RSA_WITH_CAMELLIA_128_CBC_SHA256
+ *      TLS_ECDH_RSA_WITH_CAMELLIA_256_CBC_SHA384
+ *      TLS_ECDH_ECDSA_WITH_CAMELLIA_128_GCM_SHA256
+ *      TLS_ECDH_ECDSA_WITH_CAMELLIA_256_GCM_SHA384
+ *      TLS_ECDH_RSA_WITH_CAMELLIA_128_GCM_SHA256
+ *      TLS_ECDH_RSA_WITH_CAMELLIA_256_GCM_SHA384
  *      TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_GCM_SHA384
  *      TLS_ECDHE_RSA_WITH_CAMELLIA_256_GCM_SHA384
  *      TLS_DHE_RSA_WITH_CAMELLIA_256_GCM_SHA384
@@ -1069,6 +1175,8 @@
  *
  * This module enables the following ciphersuites (if other requisites are
  * enabled as well):
+ *      TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA
+ *      TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA
  *      TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA
  *      TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA
  *      TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA
@@ -1325,6 +1433,8 @@
  * Module:  library/padlock.c
  * Caller:  library/aes.c
  *
+ * Requires: POLARSSL_HAVE_ASM
+ *
  * This modules adds support for the VIA PadLock on x86.
  */
 #define POLARSSL_PADLOCK_C
@@ -1467,6 +1577,17 @@
 #define POLARSSL_PKCS12_C
 
 /**
+ * \def POLARSSL_RIPEMD160_C
+ *
+ * Enable the RIPEMD-160 hash algorithm.
+ *
+ * Module:  library/ripemd160.c
+ * Caller:  library/md.c
+ *
+ */
+#define POLARSSL_RIPEMD160_C
+
+/**
  * \def POLARSSL_RSA_C
  *
  * Enable the RSA public-key cryptosystem.
@@ -1604,8 +1725,8 @@
  * This allows different threading implementations (self-implemented or
  * provided).
  *
- * You will have to enable either POLARSSL_THREADING_ALT,
- * POLARSSL_THREADING_PTHREAD or POLARSSL_THREADING_DUMMY.
+ * You will have to enable either POLARSSL_THREADING_ALT or
+ * POLARSSL_THREADING_PTHREAD.
  *
  * Enable this layer to allow use of mutexes within PolarSSL
  */
@@ -1781,6 +1902,12 @@
 #define CTR_DRBG_MAX_REQUEST             1024 /**< Maximum number of requested bytes per call */
 #define CTR_DRBG_MAX_SEED_INPUT           384 /**< Maximum size of (re)seed buffer */
 
+// ECP options
+//
+#define POLARSSL_ECP_MAX_BITS             521 /**< Maximum bit size of groups */
+#define POLARSSL_ECP_WINDOW_SIZE            6 /**< Maximum window size used */
+#define POLARSSL_ECP_FIXED_POINT_OPTIM      1 /**< Enable fixed-point speed-up */
+
 // Entropy options
 //
 #define ENTROPY_MAX_SOURCES                20 /**< Maximum number of sources supported */
@@ -1808,6 +1935,10 @@
 /*
  * Sanity checks on defines and dependencies
  */
+#if defined(POLARSSL_AESNI_C) && !defined(POLARSSL_HAVE_ASM)
+#error "POLARSSL_AESNI_C defined, but not all prerequisites"
+#endif
+
 #if defined(POLARSSL_CERTS_C) && !defined(POLARSSL_PEM_PARSE_C)
 #error "POLARSSL_CERTS_C defined, but not all prerequisites"
 #endif
@@ -1829,6 +1960,10 @@
       !defined(POLARSSL_ASN1_PARSE_C) ||    \
       !defined(POLARSSL_ASN1_WRITE_C) )
 #error "POLARSSL_ECDSA_C defined, but not all prerequisites"
+#endif
+
+#if defined(POLARSSL_ECDSA_DETERMINISTIC) && !defined(POLARSSL_MD_C)
+#error "POLARSSL_ECDSA_DETERMINISTIC defined, but not all prerequisites"
 #endif
 
 #if defined(POLARSSL_ECP_C) && ( !defined(POLARSSL_BIGNUM_C) || (   \
@@ -1863,6 +1998,16 @@
 
 #if defined(POLARSSL_HAVEGE_C) && !defined(POLARSSL_TIMING_C)
 #error "POLARSSL_HAVEGE_C defined, but not all prerequisites"
+#endif
+
+#if defined(POLARSSL_KEY_EXCHANGE_ECDH_ECDSA_ENABLED) &&                 \
+    ( !defined(POLARSSL_ECDH_C) || !defined(POLARSSL_X509_CRT_PARSE_C) )
+#error "POLARSSL_KEY_EXCHANGE_ECDH_ECDSA_ENABLED defined, but not all prerequisites"
+#endif
+
+#if defined(POLARSSL_KEY_EXCHANGE_ECDH_RSA_ENABLED) &&                 \
+    ( !defined(POLARSSL_ECDH_C) || !defined(POLARSSL_X509_CRT_PARSE_C) )
+#error "POLARSSL_KEY_EXCHANGE_ECDH_RSA_ENABLED defined, but not all prerequisites"
 #endif
 
 #if defined(POLARSSL_KEY_EXCHANGE_DHE_PSK_ENABLED) && !defined(POLARSSL_DHM_C)
@@ -1906,6 +2051,10 @@
 
 #if defined(POLARSSL_MEMORY_BUFFER_ALLOC_C) && !defined(POLARSSL_MEMORY_C)
 #error "POLARSSL_MEMORY_BUFFER_ALLOC_C defined, but not all prerequisites"
+#endif
+
+#if defined(POLARSSL_PADLOCK_C) && !defined(POLARSSL_HAVE_ASM)
+#error "POLARSSL_PADLOCK_C defined, but not all prerequisites"
 #endif
 
 #if defined(POLARSSL_PBKDF2_C) && !defined(POLARSSL_MD_C)
@@ -1996,13 +2145,6 @@
     ( !defined(POLARSSL_AES_C) || !defined(POLARSSL_SHA256_C) ||            \
       !defined(POLARSSL_CIPHER_MODE_CBC) )
 #error "POLARSSL_SSL_SESSION_TICKETS_C defined, but not all prerequisites"
-#endif
-
-#if defined(POLARSSL_THREADING_DUMMY)
-#if !defined(POLARSSL_THREADING_C) || defined(POLARSSL_THREADING_IMPL)
-#error "POLARSSL_THREADING_DUMMY defined, but not all prerequisites"
-#endif
-#define POLARSSL_THREADING_IMPL
 #endif
 
 #if defined(POLARSSL_THREADING_PTHREAD)

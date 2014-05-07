@@ -23,7 +23,7 @@ int handle_trace_request(t_session *session);
 int handle_put_request(t_session *session);
 int handle_delete_request(t_session *session);
 #ifdef ENABLE_XSLT
-int handle_xml_file(t_session *session);
+int handle_xml_file(t_session *session, char *xslt_file);
 #endif
 #ifdef ENABLE_RPROXY
 int proxy_request(t_session *session, t_rproxy *proxy);

@@ -122,7 +122,7 @@ Default = -:0, Example: BanOnWrongPassword = 3:120
 .B CacheRProxyExtensions = <extension>[, <extension>, ...]
 Enable the internal cache for reverse proxy requests for these extensions.
 .br
-Example: CacheRProxyExtensions = css, gif, html, jpg, js, png
+Example: CacheRProxyExtensions = css, gif, html, jpg, js, png, txt
 .br
 
 (requires that Hiawatha was not compiled with -DENABLE_CACHE=off or -DENABLE_RPROXY=off)
@@ -231,7 +231,7 @@ Default = mimetype.conf, example: MimetypeConfig = /etc/mime.types
 .B MinSSLversion = SSL3.0|TLS1.0|TLS1.1|TLS1.2
 Specify the minimum SSL version Hiawatha accepts for HTTPS connections.
 .br
-Default = SSL3.0, Example: MinSSLversion = TLS1.1
+Default = TLS1.1, Example: MinSSLversion = TLS1.2
 .br
 
 (requires that Hiawatha was compiled with -DENABLE_SSL=on)
@@ -473,6 +473,14 @@ Logfile for the messages that have been written to stdout by CGI processes.
 .br
 Default = @LOG_DIR@/error.log, example: ErrorLogfile = /var/log/hiawatha.err
 .TP
+.B ErrorXSLTfile = <XSLT file with full path>
+In case of an error, use the specified XSLT file to generate the error message. Upon any error, Hiawatha will fall back to the hardcoded error message. An example of the generated XML that will be used can be found in extra/error.xml inside the source package.
+.br
+Example: ErrorXSLTfile = /etc/hiawatha/error.xslt
+.br
+
+(requires that Hiawatha was not compiled with -DENABLE_XSLT=off)
+.TP
 .B ExecuteCGI = yes|no
 Allow execution of CGI programs.
 .br
@@ -492,6 +500,11 @@ Default = no, example: FollowSymlinks = yes
 Name(s) of the host that Hiawatha will be serving. May start with a wildcard, except the first hostname (a valid name is required in case of a 301 error). Hostname is a required field.
 .br
 Example: Hostname = www.my-domain.com, *.my-domain.com, www.some-alias.com
+.TP
+.B IgnoreDotHiawatha = yes|no
+Specify if Hiawatha should ignore .hiawatha files or not.
+.br
+Default = no, example: IgnoreDotHiawatha = yes
 .TP
 .B LoginMessage = <text>
 Message that will be displayed in the login window in case of HTTP authentication (see PasswordFile for more information). When using Digest HTTP authentication, the LoginMessage should not contain a ':' sign.
@@ -537,6 +550,11 @@ By default, a virtual host can be visited via all bindings. Via this opion, you 
 .br
 Example: RequiredBinding = LAN
 .TP
+.B RandomHeader = <length>
+Adds an X-Random HTTP header to the response for HTTPS connections. The header contains a random string. The length of that string is a random value between 1 and <length>. This header helps to prevent attackers from guessing what file was requested based on the response length. <length> must be between 10 and 1000.
+.br
+Example: RandomHeader = 250
+.TP
 .B RequiredCA = ...
 Use this option inside a virtualhost block if you want to make use of the SNI capabilities of Hiawatha. See the RequiredCA option in the BINDING CONFIGURATION chapter for more information.
 .TP
@@ -553,8 +571,8 @@ Default = no, example: RequireSSL = yes
 
 (requires that Hiawatha was not compiled with -DENABLE_SSL=off)
 .TP
-.B ReverseProxy <pattern> http[s]://<hostname>[:<port>][/<path>] [<timeout>]
-Forward the request with URLs that match the regular expression <pattern> to another webserver, where <path> is placed before the original URL. Note that the reverse proxy selection comes before the URL toolkit handling. When <hostname> is an IP address, the value of the Host HTTP header is unchanged. Otherwise, it is replaced with the value of <hostname>. The connection is closed after <timeout> seconds, which is set to 5 seconds by default.
+.B ReverseProxy <pattern> http[s]://<hostname>[:<port>][/<path>] [<timeout>] [keep-alive]
+Forward the request with URLs that match the regular expression <pattern> to another webserver, where <path> is placed before the original URL. Note that the reverse proxy selection comes before the URL toolkit handling. When <hostname> is an IP address, the value of the Host HTTP header is unchanged. Otherwise, it is replaced with the value of <hostname>. The connection is closed after <timeout> seconds, which is set to 5 seconds by default. By default, Hiawatha doesn't use keep-alive connections to the final webserver. You can enable this by adding 'keep-alive' to the configuration line.
 .br
 Example: ReverseProxy ^/icons http://resources.lan/images
 .TP
@@ -569,7 +587,7 @@ Define environment settings for CGI programs.
 Example: Setenv PHPRC = /var/www/conf
 .TP
 .B ShowIndex = yes|no|<XSLT file with full path>|xml
-Return a directory listing in HTML format for a directory request when the startfile does not exist. If you want to change the index layout completely, specify the path of a XSLT file. If the XSLT file is not found or 'xml' is used, Hiawatha will output the XML of the directory index. The content of a .hiawatha_index in that directory will be included in the XML.
+Return a directory listing in HTML format for a directory request when the startfile does not exist. If you want to change the index layout completely, specify the path of a XSLT file. If the XSLT file is not found or 'xml' is used, Hiawatha will output the XML of the directory index. An example of the XML output can be found in extra/index.xml inside the source package.
 .br
 Default = no, example: ShowIndex = /etc/hiawatha/index.xslt
 .br
@@ -798,9 +816,9 @@ Deny access to the requested file (results in a 403 error) and terminate toolkit
 .br
 Terminate toolkit processing.
 .TP
-.B Expire <time> seconds|minutes|hours|days|weeks|months [Exit|Return]
+.B Expire <time> seconds|minutes|hours|days|weeks|months [public|private] [Exit|Return]
 .br
-Adds an Expires HTTP header with current timestamp + <time>. The default behaviour is to continue after an Expire action.
+Adds an Expires HTTP header with current timestamp + <time>. The public/private (default is private) option defines the value of the Cache-Control header. The default behaviour for Hiawatha is to continue after an Expire action.
 .TP
 .B Goto <toolkit_id>
 .br
@@ -895,7 +913,7 @@ Example: X-Hiawatha-Cache-Remove: /about
 
 .\" ===========================================================================
 .SH USER SETTINGS PER DIRECTORY
-A user can override the settings listed below for a certain directory. This can be done by placing one or more of those settings in a .hiawatha file in that directory.
+A user can override the settings listed below for a certain directory. This can be done by placing one or more of those settings in a .hiawatha file in that directory. Hiawatha will not look for a .hiawatha file in the root directory of the disk.
 .PP
 .B AccessList
 ,

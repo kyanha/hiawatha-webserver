@@ -30,10 +30,13 @@ int strcasecmp(const char *str1, const char *str2);
 int strncasecmp(const char *str1, const char *str2, int len);
 #endif
 #ifndef HAVE_STRNSTR
-const char *strnstr(const char *haystack, const char *needle, int len);
+char *strnstr(const char *haystack, const char *needle, int len);
 #endif
 #ifndef HAVE_STRCASESTR
-const char *strcasestr(const char *haystack, const char *needle);
+char *strcasestr(const char *haystack, const char *needle);
+#endif
+#ifndef HAVE_STRNCASESTR
+char *strncasestr(const char *haystack, const char *needle, int len);
 #endif
 
 #endif

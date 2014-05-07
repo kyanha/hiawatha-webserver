@@ -399,6 +399,8 @@ int parse_request(t_session *session, int total_bytes) {
 		session->kept_alive++;
 	}
 
+	session->parsing_oke = true;
+
 	return retval;
 }
 

@@ -37,6 +37,7 @@ typedef struct type_rproxy {
 	char      *path;
 	size_t    path_len;
 	int       timeout;
+	bool      keep_alive;
 
 	struct type_rproxy *next;
 } t_rproxy;
@@ -44,13 +45,18 @@ typedef struct type_rproxy {
 typedef struct {
 	int           client_socket;
 	t_ip_addr     *client_ip;
+	int           port;
 	char          *method;
 	char          *uri;
 	char          *vars;
+	char          *hostname;
 	t_http_header *http_headers;
 	char          *body;
-	int           body_length;
+	int           content_length;
 	char          *remote_user;
+#ifdef ENABLE_SSL
+	bool          use_ssl;
+#endif
 #ifdef ENABLE_CACHE
 	t_charlist    *cache_extensions;
 #endif
@@ -72,13 +78,10 @@ int init_rproxy_module(void);
 t_rproxy *rproxy_setting(char *line);
 bool rproxy_match(t_rproxy *rproxy, char *uri);
 bool rproxy_loop_detected(t_http_header *http_headers);
-void init_rproxy_options(t_rproxy_options *options, int socket, t_ip_addr *client_ip,
-                         char *method, char *uri, t_http_header *http_headers,
-                         char *body, int body_length, char *remote_user);
 void init_rproxy_result(t_rproxy_result *result);
 int  connect_to_server(t_ip_addr *ip_addr, int port);
 int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *options,
-                              t_rproxy *rproxy, t_rproxy_result *result);
+                              t_rproxy *rproxy, t_rproxy_result *result, bool session_keep_alive);
 int tunnel_ssh_connection(int client_sock);
 
 #endif

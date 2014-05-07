@@ -34,6 +34,7 @@
 #include "http.h"
 #include "log.h"
 #include "send.h"
+#include "serverconfig.h"
 #ifdef ENABLE_TOMAHAWK
 #include "tomahawk.h"
 #endif
@@ -49,7 +50,11 @@ char *hs_conn    = "Connection: ";               /* 12 */
 char *hs_concl   = "close\r\n";                  /*  7 */
 char *hs_conka   = "keep-alive\r\n";             /* 12 */
 char *hs_contyp  = "Content-Type: ";             /* 14 */
+char *hs_conlen  = "Content-Length: ";           /* 16 */
 char *hs_lctn    = "Location: ";                 /* 10 */
+char *hs_caco    = "Cache-Control: ";            /* 15 */
+char *hs_public  = "public\r\n";                 /*  8 */
+char *hs_private = "private\r\n";                /*  9 */
 char *hs_expires = "Expires: ";                  /*  9 */
 char *hs_https   = "https://";                   /*  8 */
 char *hs_hsts    = "Strict-Transport-Security: max-age=31536000\r\n"; /* 45 */
@@ -57,7 +62,7 @@ char *hs_range   = "Accept-Ranges: bytes\r\n";   /* 22 */
 char *hs_gzip    = "Content-Encoding: gzip\r\n"; /* 24 */
 char *hs_eol     = "\r\n";                       /*  2 */
 
-static char *unknown_code = "Unknown Error";
+char *unknown_http_code = "Unknown Error";
 
 static char *ec_doctype = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\">\n";
 static char *ec_head    = "<html>\n<head>\n<title>";
@@ -199,6 +204,12 @@ int send_buffer(t_session *session, const char *buffer, int size) {
 /* Send a HTTP header to the client. Header is not closed by this function.
  */
 int send_header(t_session *session) {
+#ifdef ENABLE_SSL
+	char random_header[MAX_RANDOM_HEADER_LENGTH + 13];
+	char *rand_set = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789PR";
+	unsigned long length, i;
+	int random;
+#endif
 	char ecode[5], timestr[TIMESTR_SIZE];
 	const char *emesg;
 	time_t t;
@@ -210,7 +221,7 @@ int send_header(t_session *session) {
 	ecode[4] = '\0';
 	snprintf(ecode, 4, "%d", session->return_code);
 	if ((emesg = http_error(session->return_code)) == NULL) {
-		emesg = unknown_code;
+		emesg = unknown_http_code;
 	}
 
 	session->data_sent = true;
@@ -321,7 +332,21 @@ int send_header(t_session *session) {
 
 		if (gmtime_r(&t, &s) == NULL) {
 			return -1;
-		} else if (send_buffer(session, hs_expires, 9) == -1) {
+		} else if (send_buffer(session, hs_caco, 15) == -1) {
+			return -1;
+		}
+
+		if (session->caco_private) {
+			if (send_buffer(session, hs_private, 9) == -1) {
+				return -1;
+			}
+		} else {
+			if (send_buffer(session, hs_public, 8) == -1) {
+				return -1;
+			}
+		}
+
+		if (send_buffer(session, hs_expires, 9) == -1) {
 			return -1;
 		} else if (strftime(timestr, TIMESTR_SIZE, "%a, %d %b %Y %X GMT\r\n", &s) == 0) {
 			return -1;
@@ -347,9 +372,29 @@ int send_header(t_session *session) {
 		header = header->next;
 	}
 
+#ifdef ENABLE_SSL
+	/* Random header
+	 */
+	if ((session->host->random_header_length > -1) && session->binding->use_ssl) {
+		sprintf(random_header, "X-Random: ");
+		length = (session->host->random_header_length * ((unsigned int)rand() & MAX_RANDOM_HEADER_LENGTH_MASK)) / MAX_RANDOM_HEADER_LENGTH_MASK;
+		if (length == 0) {
+			length = 1;
+		}
+		sprintf(random_header + 10 + length, "\r\n");
+
+		random = rand() & 63;
+		for (i = 0; i < length; i++) {
+			random_header[10 + i] = rand_set[random];
+		}
+
+		if (send_buffer(session, random_header, 12 + length) == -1) {
+			return -1;
+		}
+	}
+
 	/* HTTP Strict Transport Security
 	 */
-#ifdef ENABLE_SSL
 	if (session->host->require_ssl && session->binding->use_ssl) {
 		if (send_buffer(session, hs_hsts, 45) == -1) {
 			return -1;
@@ -360,7 +405,7 @@ int send_header(t_session *session) {
 	return 0;
 }
 
-/* Send a datachunk to the client, used by run_script() in target.c
+/* Send a datachunk to the client without buffering
  */
 static int send_chunk_to_client(t_session *session, const char *chunk, int size) {
 	char hex[10];
@@ -425,19 +470,13 @@ int send_chunk(t_session *session, const char *chunk, int size) {
 	return 0;
 }
 
-/* Send a HTTP code to the client. Used in case of an error.
+/* Send header of HTTP error message.
  */
-int send_code(t_session *session) {
-	char ecode[5], len[10];
-	const char *emesg;
-	size_t ecode_len, emesg_len;
-
+int send_http_code_header(t_session *session) {
 	if (session->return_code == -1) {
 		session->return_code = 500;
 	}
 
-	/* Send simple HTTP error message.
-	 */
 	session->mimetype = NULL;
 	if (send_header(session) == -1) {
 		return -1;
@@ -499,25 +538,39 @@ int send_code(t_session *session) {
 			break;
 		case 401:
 			if (session->host->auth_method == basic) {
-				send_basic_auth(session);
+				if (send_basic_auth(session) == -1) {
+					return -1;
+				}
 			} else {
-				send_digest_auth(session);
+				if (send_digest_auth(session) == -1) {
+					return -1;
+				}
 			}
 			break;
 	}
+
+	return 0;
+}
+
+/* Send body of HTTP error message
+ */
+int send_http_code_body(t_session *session) {
+	char ecode[5], len[10];
+	const char *emesg;
+	size_t ecode_len, emesg_len;
 
 	ecode[4] = '\0';
 	snprintf(ecode, 4, "%d", session->return_code);
 	ecode_len = strlen(ecode);
 
 	if ((emesg = http_error(session->return_code)) == NULL) {
-		emesg = unknown_code;
+		emesg = unknown_http_code;
 	}
 	emesg_len = strlen(emesg);
 	len[9] = '\0';
 	snprintf(len, 9, "%d", (int)((2 * emesg_len) + (2 * ecode_len) + 3 + ec_doctype_len + ec_head_len + ec_body1_len + ec_body2_len + ec_tail_len));
 
-	if (send_buffer(session, "Content-Length: ", 16) == -1) {
+	if (send_buffer(session, hs_conlen, 16) == -1) {
 		return -1;
 	} else if (send_buffer(session, len, strlen(len)) == -1) {
 		return -1;
@@ -646,24 +699,25 @@ int send_fcgi_buffer(t_fcgi_buffer *fcgi_buffer, const char *buffer, int size) {
 
 /* Send a Basic Authentication message to the client.
  */
-void send_basic_auth(t_session *session) {
+int send_basic_auth(t_session *session) {
 	if (send_buffer(session, "WWW-Authenticate: Basic", 23) == -1) {
-		return;
+		return -1;
 	} else if (session->host->login_message != NULL) {
 		if (send_buffer(session, " realm=\"", 8) == -1) {
-			return;
+			return -1;
 		} else if (send_buffer(session, session->host->login_message, strlen(session->host->login_message)) == -1) {
-			return;
+			return -1;
 		} else if (send_buffer(session, "\"", 1) == -1) {
-			return;
+			return -1;
 		}
 	}
-	send_buffer(session, "\r\n", 2);
+
+	return send_buffer(session, "\r\n", 2);
 }
 
 /* Send a Digest Authentication message to the client.
  */
-void send_digest_auth(t_session *session) {
+int send_digest_auth(t_session *session) {
 	char nonce[2 * NONCE_DIGITS + 1];
 	int i;
 
@@ -672,20 +726,22 @@ void send_digest_auth(t_session *session) {
 	}
 
 	if (send_buffer(session, "WWW-Authenticate: Digest", 24) == -1) {
-		return;
+		return -1;
 	} else if (session->host->login_message != NULL) {
 		if (send_buffer(session, " realm=\"", 8) == -1) {
-			return;
+			return -1;
 		} else if (send_buffer(session, session->host->login_message, strlen(session->host->login_message)) == -1) {
-			return;
+			return -1;
 		} else if (send_buffer(session, "\"", 1) == -1) {
-			return;
+			return -1;
 		}
 	}
+
 	if (send_buffer(session, ", nonce=\"", 9) == -1) {
-		return;
+		return -1;
 	} else if (send_buffer(session, nonce, 2 * NONCE_DIGITS) == -1) {
-		return;
+		return -1;
 	}
-	send_buffer(session, "\", algorithm=MD5\r\n", 18);
+
+	return send_buffer(session, "\", algorithm=MD5\r\n", 18);
 }

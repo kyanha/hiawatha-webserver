@@ -717,15 +717,21 @@ void check_url_toolkit(char *config_dir, char **toolkit_id) {
 				url = "(403 Forbidden)";
 				break;
 			}
+			if (options.ban > 0) {
+				url = "(Client banned. BanlistMask not applied!)";
+				break;
+			}
+			if (options.expire > -1) {
+				printf("Expire time: %d (%s)\n", options.expire, options.caco_private ? "private" : "public");
+				break;
+			}
 			if (options.fastcgi_server != NULL) {
+				printf("Using FastCGI server: %s\n", options.fastcgi_server);
 				break;
 			}
 			id++;
 		}
 
-		if (options.fastcgi_server != NULL) {
-			printf("Using FastCGI server: %s\n", options.fastcgi_server);
-		}
 		if (options.new_url != NULL) {
 			if (result == UT_REDIRECT) {
 				printf("Request is redirected.\n");

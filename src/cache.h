@@ -30,8 +30,10 @@ typedef enum {cot_file, cot_cgi, cot_rproxy} t_cot_type;
 
 typedef struct type_cached_object {
 	char          *file;
-	char          *data;
-	off_t         size;
+	char          *header;
+	char          *content;
+	off_t         header_length;
+	off_t         content_length;
 	time_t        deadline;
 	time_t        last_changed;
 	volatile int  in_use;
@@ -61,18 +63,18 @@ t_cached_object *search_cache_for_file(t_session *session, char *file);
 
 /* CGI functions
  */
-int cgi_cache_time(char *buffer);
+int cgi_cache_time(char *buffer, int size);
 t_cached_object *add_cgi_output_to_cache(t_session *session, char *output, int size, int time);
 t_cached_object *search_cache_for_cgi_output(t_session *session);
-void handle_remove_header_for_cgi_cache(t_session *session, char *buffer);
+void handle_remove_header_for_cgi_cache(t_session *session, char *buffer, int size);
 
 /* Reverse Proxy functions
  */
 #ifdef ENABLE_RPROXY
-int rproxy_cache_time(t_session *session, char *buffer);
-t_cached_object *add_rproxy_output_to_cache(t_session *session, char *output, int size, int time, bool keep_alive);
+int rproxy_cache_time(t_session *session, char *buffer, int size);
+t_cached_object *add_rproxy_output_to_cache(t_session *session, char *output, int size, int time);
 t_cached_object *search_cache_for_rproxy_output(t_session *session);
-void handle_remove_header_for_rproxy_cache(t_session *session, char *buffer);
+void handle_remove_header_for_rproxy_cache(t_session *session, char *buffer, int size);
 #endif
 
 #endif

@@ -34,7 +34,7 @@
 #define ec_INVALID_URL          -8
 
 typedef enum { no_cgi, binary, script, fastcgi} t_cgi_type;
-typedef enum { unknown, GET, POST, HEAD, TRACE, PUT, DELETE, CONNECT, unsupported } t_req_method;
+typedef enum { unknown, GET, POST, HEAD, TRACE, PUT, DELETE, CONNECT, WHEN, unsupported } t_req_method;
 typedef enum { missing_slash, require_ssl, location } t_cause_of_301;
 
 typedef struct type_session {
@@ -46,6 +46,7 @@ typedef struct type_session {
 	int             client_socket;
 	t_binding       *binding;
 	bool            socket_open;
+	bool            parsing_oke;
 	bool            keep_alive;
 	int             kept_alive;
 	t_cgi_type      cgi_type;
@@ -86,6 +87,7 @@ typedef struct type_session {
 	long            uploaded_size;
 	char            *location;
 	int             expires;
+	bool            caco_private;
 	t_cause_of_301  cause_of_301;
 #ifdef ENABLE_TOOLKIT
 	char            *toolkit_fastcgi;
@@ -149,11 +151,7 @@ bool is_volatile_object(t_session *session);
 int  load_user_config(t_session *session);
 int  copy_directory_settings(t_session *session);
 bool client_is_rejected_bot(t_session *session);
-#ifdef ENABLE_IPV6
-int  remove_port_from_hostname(char *hostname, t_binding *binding);
-#else
-int  remove_port_from_hostname(char *hostname);
-#endif
+int  remove_port_from_hostname(t_session *session);
 int  prevent_xss(t_session *session);
 int  init_sqli_detection(void);
 int  prevent_sqli(t_session *session);

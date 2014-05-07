@@ -35,7 +35,6 @@
 #define TIMESTAMP_SIZE  50
 
 static t_admin *adminlist;
-static int current_admin;
 static char *prompt = "\033[01;34mtomahawk>\033[00m ";
 
 static pthread_mutex_t tomahawk_mutex;
@@ -65,6 +64,42 @@ static void clear_counters(void) {
 	}
 }
 
+void show_request_to_admins(char *method, char *uri, char *http_version, t_ip_addr *ip_addr,
+                            t_http_header *headers, int response_code, off_t bytes_sent) {
+	bool generated = false;
+	char message[1024], *format, ip_str[MAX_IP_STR_LEN + 1], *hostname, *user_agent;
+	t_admin *admin;
+
+	admin = adminlist;
+	while (admin != NULL) {
+		if (admin->show_requests) {
+			if (generated == false) {
+				if ((hostname = get_http_header("Host:", headers)) == NULL) {
+					hostname = "-";
+				}
+				if ((user_agent = get_http_header("User-Agent:", headers)) == NULL) {
+					user_agent = "-";
+				}
+				ip_to_str(ip_addr, ip_str, MAX_IP_STR_LEN);
+
+				format = "  %s %s %s\n"
+				         "  Host: %s\n"
+				         "  Client IP: %s\n"
+						 "  User agent: %s\n"
+				         "  Result: %d, %ld bytes sent\n\n";
+				if (snprintf(message, 1023, format, method, uri, http_version, hostname, ip_str, user_agent, response_code, (long)bytes_sent) > 1023) {
+					sprintf(message, "(error generating request information message)\n");
+				}
+				generated = true;
+			}
+
+			fprintf(admin->fp, "%s", message);
+			fflush(admin->fp);
+		}
+		admin = admin->next;
+	}
+}
+
 /* Initialize Tomahawk
  */
 int init_tomahawk_module(void) {
@@ -72,7 +107,6 @@ int init_tomahawk_module(void) {
 	struct tm s;
 
     adminlist = NULL;
-	current_admin = 0;
 	if (pthread_mutex_init(&tomahawk_mutex, NULL) != 0) {
 		return -1;
 	}
@@ -108,41 +142,10 @@ int add_admin(int sock) {
 	new->poll_data = NULL;
 	new->authenticated = false;
 	new->timer = MAX_IDLE_TIME;
+	new->show_requests = false;
 	adminlist = new;
 
 	return 0;
-}
-
-/* An administrator has left Tomahawk
- */
-void remove_admin(int sock) {
-	t_admin *deadone = NULL, *check;
-
-	pthread_mutex_lock(&tomahawk_mutex);
-
-	if (adminlist != NULL) {
-		if (adminlist->socket == sock) {
-			deadone = adminlist;
-			adminlist = adminlist->next;
-		} else {
-			check = adminlist;
-			while (check->next != NULL) {
-				if (check->next->socket == sock) {
-					deadone = check->next;
-					check->next = deadone->next;
-					break;
-				}
-				check = check->next;
-			}
-		}
-	}
-
-	pthread_mutex_unlock(&tomahawk_mutex);
-
-	if (deadone != NULL) {
-		fclose(deadone->fp);
-		free(deadone);
-	}
 }
 
 /* Disconnect al the administrators.
@@ -161,38 +164,6 @@ void disconnect_admins(void) {
 	}
 
 	pthread_mutex_unlock(&tomahawk_mutex);
-}
-
-/* Return the first admin record.
- */
-t_admin *first_admin(void) {
-	current_admin = 0;
-
-	return adminlist;
-}
-
-/* Return the next admin record.
- */
-t_admin *next_admin(void) {
-	t_admin *admin;
-	int next;
-
-	pthread_mutex_lock(&tomahawk_mutex);
-
-	admin = adminlist;
-	next = current_admin;
-	while ((next >= 0) && (admin != NULL)) {
-		admin = admin->next;
-		next--;
-	}
-
-	pthread_mutex_unlock(&tomahawk_mutex);
-
-	if (admin != NULL) {
-		current_admin++;
-	}
-
-	return admin;
 }
 
 /* Check administratos (only auto-logout timers for now).
@@ -216,7 +187,9 @@ void check_admin_list(void) {
 			}
 			free(admin);
 		} else {
-			admin->timer--;
+			if (admin->show_requests == false) {
+				admin->timer--;
+			}
 			prev_admin = admin;
 		}
 		admin = next_admin;
@@ -283,10 +256,13 @@ static void show_thread_pool(FILE *fp) {
 }
 #endif
 
-static int run_tomahawk(char *line, FILE *fp, t_config *config) {
+static int run_tomahawk(char *line, t_admin *admin, t_config *config) {
 	char *cmd, *param, *param2;
 	t_ip_addr ip;
 	int retval = 0, time, id, count;
+	FILE *fp;
+
+	fp = admin->fp;
 
 	split_string(line, &cmd, &param, ' ');
 
@@ -374,6 +350,8 @@ static int run_tomahawk(char *line, FILE *fp, t_config *config) {
 #endif
 		} else if (strcmp(param, "clients") == 0) {
 			print_client_list(fp);
+		} else if (strcmp(param, "requests") == 0) {
+			admin->show_requests = true;
 		} else if (strcmp(param, "status") == 0) {
 			show_status(fp);
 #ifdef ENABLE_THREAD_POOL
@@ -418,7 +396,7 @@ static int run_tomahawk(char *line, FILE *fp, t_config *config) {
 
 /* Handle a administrator tomahawk.
  */
-int handle_admin(t_admin *admin, t_config *config) {
+static int handle_admin(t_admin *admin, t_config *config) {
 	int retval = cc_OKE;
 	char line[MAX_CMD_SIZE + 1], *pwd, encrypted[33];
 	unsigned char digest[16];
@@ -437,8 +415,10 @@ int handle_admin(t_admin *admin, t_config *config) {
 				retval = cc_DISCONNECT;
 			}
 			fprintf(admin->fp, "  don't do that!\n");
+		} else if (admin->show_requests) {
+			admin->show_requests = false;
 		} else if (admin->authenticated) {
-			retval = run_tomahawk(remove_spaces(line), admin->fp, config);
+			retval = run_tomahawk(remove_spaces(line), admin, config);
 		} else {
 			fprintf(admin->fp, "\033[A\033[K\033[m\n"); /* Move cursor up, clear line and reset color */
 
@@ -460,12 +440,65 @@ int handle_admin(t_admin *admin, t_config *config) {
 		retval = cc_DISCONNECT;
 	}
 
-	if (retval == 0) {
+	if ((retval == 0) && (admin->show_requests == false)) {
 		fprintf(admin->fp, "%s", prompt);
 		fflush(admin->fp);
 	}
 
 	return retval;
+}
+
+int prepare_admins_for_poll(struct pollfd *current_poll) {
+	t_admin *admin;
+	int number_of_admins = 0;
+
+	pthread_mutex_lock(&tomahawk_mutex);
+
+	admin = adminlist;
+	while (admin != NULL) {
+		current_poll->fd = admin->socket;
+		current_poll->events = POLL_EVENT_BITS;
+		admin->poll_data = current_poll;
+
+		number_of_admins++;
+		current_poll++;
+
+		admin = admin->next;
+	}
+
+	pthread_mutex_unlock(&tomahawk_mutex);
+
+	return number_of_admins;
+}
+
+void handle_admins(t_config *config) {
+	t_admin *admin, *prev = NULL, *next;
+
+	pthread_mutex_lock(&tomahawk_mutex);
+
+	admin = adminlist;
+	while (admin != NULL) {
+		next = admin->next;
+
+		if (admin->poll_data->revents != 0) {
+			if (handle_admin(admin, config) == cc_DISCONNECT) {
+				if (prev == NULL) {
+					adminlist = next;
+				} else {
+					prev->next = next;
+				}
+
+				fclose(admin->fp);
+				free(admin);
+				admin = prev;
+			}
+		}
+
+		prev = admin;
+		admin = next;
+	}
+
+	pthread_mutex_unlock(&tomahawk_mutex);
 }
 
 #endif

@@ -72,6 +72,7 @@ for file in ${files}; do
 done
 
 cp ../config/index.xslt ${dir}/Hiawatha/config
+cp ../config/error.xslt ${dir}/Hiawatha/config
 cp ../config/mimetype.conf ${dir}/Hiawatha/config
 cp ../extra/windows/*.lnk ${dir}/Hiawatha
 cp ../extra/windows/*.bat ${dir}/Hiawatha/bin

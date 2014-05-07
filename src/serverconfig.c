@@ -54,77 +54,80 @@ static t_host *new_host(void) {
 		exit(EXIT_FAILURE);
 	}
 
-	host->website_root       = NULL;
-	host->website_root_len   = 0;
-	host->start_file         = "index.html";
-	host->error_handlers     = NULL;
-	host->access_logfile     = LOG_DIR"/access.log";
-	host->access_fileptr     = NULL;
-	host->access_fp          = &(host->access_fileptr);
-	host->access_time        = 0;
-	host->error_logfile      = LOG_DIR"/error.log";
+	host->website_root        = NULL;
+	host->website_root_len    = 0;
+	host->start_file          = "index.html";
+	host->error_handlers      = NULL;
+	host->access_logfile      = LOG_DIR"/access.log";
+	host->access_fileptr      = NULL;
+	host->access_fp           = &(host->access_fileptr);
+	host->access_time         = 0;
+	host->error_logfile       = LOG_DIR"/error.log";
 	init_charlist(&(host->hostname));
-	host->user_websites      = false;
-	host->execute_cgi        = false;
-	host->time_for_cgi       = 5;
-	host->no_extension_as    = NULL;
+	host->user_websites       = false;
+	host->execute_cgi         = false;
+	host->time_for_cgi        = 5;
+	host->no_extension_as     = NULL;
 #ifdef ENABLE_XSLT
-	host->show_index         = NULL;
-	host->use_xslt           = false;
+	host->show_index          = NULL;
+	host->use_xslt            = false;
+	host->error_xslt_file     = NULL;
 #endif
-	host->allow_dot_files    = false;
-	host->use_gz_file        = false;
-	host->access_list        = NULL;
-	host->alter_list         = NULL;
-	host->alter_fmode        = S_IRUSR | S_IWUSR | S_IRGRP;
-	host->run_on_alter       = NULL;
-	host->login_message      = "Private page";
-	host->passwordfile       = NULL;
-	host->groupfile          = NULL;
+	host->allow_dot_files     = false;
+	host->use_gz_file         = false;
+	host->access_list         = NULL;
+	host->alter_list          = NULL;
+	host->alter_fmode         = S_IRUSR | S_IWUSR | S_IRGRP;
+	host->run_on_alter        = NULL;
+	host->login_message       = "Private page";
+	host->passwordfile        = NULL;
+	host->groupfile           = NULL;
 	init_charlist(&(host->required_binding));
 	init_charlist(&(host->required_group));
 	init_charlist(&(host->alter_group));
-	host->custom_headers     = NULL;
+	host->custom_headers      = NULL;
 #ifdef ENABLE_TOOLKIT
 	init_charlist(&(host->toolkit_rules));
 #endif
-	host->wrap_cgi           = NULL;
+	host->wrap_cgi            = NULL;
 	init_groups(&(host->groups));
 	init_charlist(&(host->volatile_object));
-	host->imgref_replacement = NULL;
-	host->envir_str          = NULL;
-	host->alias              = NULL;
+	host->imgref_replacement  = NULL;
+	host->envir_str           = NULL;
+	host->alias               = NULL;
 #ifdef ENABLE_SSL
-	host->require_ssl        = false;
-	host->key_cert_file      = NULL;
-	host->ca_cert_file       = NULL;
-	host->ca_crl_file        = NULL;
-	host->private_key        = NULL;
-	host->certificate        = NULL;
-	host->ca_certificate     = NULL;
-	host->ca_crl             = NULL;
+	host->require_ssl         = false;
+	host->key_cert_file       = NULL;
+	host->ca_cert_file        = NULL;
+	host->ca_crl_file         = NULL;
+	host->private_key         = NULL;
+	host->certificate         = NULL;
+	host->ca_certificate      = NULL;
+	host->ca_crl              = NULL;
+	host->random_header_length = -1;
 #endif
 #ifdef ENABLE_RPROXY
-	host->rproxy             = NULL;
+	host->rproxy              = NULL;
 #endif
-	host->prevent_sqli       = false;
-	host->prevent_xss        = false;
-	host->prevent_csrf       = false;
-	host->follow_symlinks    = false;
-	host->enable_path_info   = false;
+	host->prevent_sqli        = false;
+	host->prevent_xss         = false;
+	host->prevent_csrf        = false;
+	host->follow_symlinks     = false;
+	host->enable_path_info    = false;
 	host->trigger_on_cgi_status = false;
 	init_charlist(&(host->fast_cgi));
-	host->secure_url         = true;
-	host->deny_body          = NULL;
-	host->webdav_app         = false;
+	host->secure_url          = true;
+	host->ignore_dot_hiawatha = false;
+	host->deny_body           = NULL;
+	host->webdav_app          = false;
 #ifdef ENABLE_MONITOR
-	host->monitor_stats      = NULL;
-	host->monitor_requests   = false;
-	host->monitor_host       = false;
+	host->monitor_stats       = NULL;
+	host->monitor_requests    = false;
+	host->monitor_host        = false;
 #endif
-	host->file_hashes        = NULL;
+	host->file_hashes         = NULL;
 
-	host->next               = NULL;
+	host->next                = NULL;
 
 	return host;
 }
@@ -350,7 +353,7 @@ t_config *default_config(void) {
 #endif
 
 #ifdef ENABLE_SSL
-	config->min_ssl_version    = SSL_MINOR_VERSION_0;
+	config->min_ssl_version    = SSL_MINOR_VERSION_1;
 	config->dh_size            = 0;
 #endif
 	return config;
@@ -635,18 +638,19 @@ int check_configuration(t_config *config) {
 					if (in_charlist(fcgi_server->fcgi_id, &(host->fast_cgi))) {
 						/* FastCGIid match
 						 */
-						do {
-							if (strncmp(fcgi_server->chroot, host->website_root, fcgi_server->chroot_len) == 0) {
-								c = host->website_root[fcgi_server->chroot_len];
-								if ((c == '/') || (c == '\0')) {
-									break;
-								}
+						if (strncmp(fcgi_server->chroot, host->website_root, fcgi_server->chroot_len) == 0) {
+							c = host->website_root[fcgi_server->chroot_len];
+							if ((c == '/') || (c == '\0')) {
+								goto next_host;
 							}
-							fprintf(stderr, "The ServerRoot of FastCGI server '%s' is not located with the DocumentRoot of virtual host '%s'.\n", fcgi_server->fcgi_id, *(host->hostname.item));
-							return -1;
-						} while (false);
+						}
+
+						fprintf(stderr, "The ServerRoot of FastCGI server '%s' is not located with the DocumentRoot of virtual host '%s'.\n", fcgi_server->fcgi_id, *(host->hostname.item));
+						return -1;
 					}
 				}
+
+next_host:
 				host = host->next;
 			}
 		}
@@ -1263,6 +1267,14 @@ static bool host_setting(char *key, char *value, t_host *host) {
 				return true;
 			}
 		}
+#ifdef ENABLE_XSLT
+	} else if (strcmp(key, "errorxsltfile") == 0) {
+		if (*value == '/') {
+			if ((host->error_xslt_file = strdup(value)) != NULL) {
+				return true;
+			}
+		}
+#endif
 	} else if (strcmp(key, "executecgi") == 0) {
 		if (parse_yesno(value, &(host->execute_cgi)) == 0) {
 			return true;
@@ -1283,6 +1295,10 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		}
 #endif
 		if (parse_charlist(value, &(host->hostname)) == 0) {
+			return true;
+		}
+	} else if (strcmp(key, "ignoredothiawatha") == 0) {
+		if (parse_yesno(value, &(host->ignore_dot_hiawatha)) == 0) {
 			return true;
 		}
 #ifdef ENABLE_MONITOR
@@ -1312,6 +1328,12 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			return true;
 		}
 #ifdef ENABLE_SSL
+	} else if (strcmp(key, "randomheader") == 0) {
+		if ((host->random_header_length = str2int(value)) >= 10) {
+			if (host->random_header_length <= MAX_RANDOM_HEADER_LENGTH) {
+				return true;
+			}
+		}
 	} else if (strcmp(key, "requiredca") == 0) {
 		split_string(value, &value, &rest, ',');
 		if ((host->ca_cert_file = strdup(value)) != NULL) {
@@ -1901,39 +1923,39 @@ int read_main_configfile(char *configfile, t_config *config, bool config_check) 
 #endif
 					{
 						variables_replaced = replace_variables(&value);
-						do {
-							if (section == none) {
-								if (system_setting(key, value, config)) {
-									break;
-								}
+
+						if (section == none) {
+							if (system_setting(key, value, config)) {
+								goto next_setting;
 							}
-							if ((section == none) || (section == virtual_host)) {
-								if (host_setting(key, value, current_host)) {
-									break;
-								} else if (user_setting(key, value, current_host, NULL)) {
-									break;
-								}
-							} else if (section == directory) {
-								if (directory_setting(key, value, current_directory)) {
-									break;
-								}
-							} else if (section == binding) {
-								if (binding_setting(key, value, current_binding)) {
-									break;
-								}
-							} else if (section == fcgi_server) {
-								if (fcgi_server_setting(key, value, current_fcgi_server)) {
-									break;
-								}
+						}
+						if ((section == none) || (section == virtual_host)) {
+							if (host_setting(key, value, current_host)) {
+								goto next_setting;
+							} else if (user_setting(key, value, current_host, NULL)) {
+								goto next_setting;
+							}
+						} else if (section == directory) {
+							if (directory_setting(key, value, current_directory)) {
+								goto next_setting;
+							}
+						} else if (section == binding) {
+							if (binding_setting(key, value, current_binding)) {
+								goto next_setting;
+							}
+						} else if (section == fcgi_server) {
+							if (fcgi_server_setting(key, value, current_fcgi_server)) {
+								goto next_setting;
+							}
 #ifdef ENABLE_TOOLKIT
-							} else if (section == url_toolkit) {
-								if (toolkit_setting(key, value, current_toolkit)) {
-									break;
-								}
-#endif
+						} else if (section == url_toolkit) {
+							if (toolkit_setting(key, value, current_toolkit)) {
+								goto next_setting;
 							}
-							retval = counter;
-						} while (false);
+#endif
+						}
+
+						retval = counter;
 					}
 				} else {
 					retval = counter;
@@ -1942,10 +1964,12 @@ int read_main_configfile(char *configfile, t_config *config, bool config_check) 
 				retval = counter;
 			}
 
+next_setting:
 			if (variables_replaced) {
 				free(value);
 			}
 		}
+
 		if (retval != 0) {
 			break;
 		}

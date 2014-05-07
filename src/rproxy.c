@@ -42,9 +42,9 @@ static size_t rproxy_header_len;
 static char   *rproxy_id_key = "X-Hiawatha-RProxy-ID:";
 static char   rproxy_id[33];
 
-static pthread_mutex_t resolv_mutex;
-
 extern char *hs_forwarded;
+extern char *hs_conn;
+extern char *hs_concl;
 
 typedef struct type_send_buffer {
 	char buffer[MAX_SEND_BUFFER];
@@ -75,10 +75,6 @@ int init_rproxy_module(void) {
 	sprintf(rproxy_header, format, rproxy_id_key, rproxy_id);
 	rproxy_header_len = strlen(rproxy_header);
 
-	if (pthread_mutex_init(&resolv_mutex, NULL) != 0) {
-		return -1;
-	}
-
 	return 0;
 }
 
@@ -87,8 +83,7 @@ int init_rproxy_module(void) {
 t_rproxy *rproxy_setting(char *line) {
 	t_rproxy *rproxy;
 	size_t len;
-	char *path, *port, *timeout;
-	int resolved;
+	char *path, *port, *timeout, *keep_alive;
 
 	if (split_string(line, &path, &line, ' ') != 0) {
 		return NULL;
@@ -97,9 +92,15 @@ t_rproxy *rproxy_setting(char *line) {
 	}
 
 	split_string(line, &line, &timeout, ' ');
+	if (timeout != NULL) {
+		split_string(timeout, &timeout, &keep_alive, ' ');
+	} else {
+		keep_alive = NULL;
+	}
 
 	rproxy->next = NULL;
 	rproxy->timeout = 5;
+	rproxy->keep_alive = false;
 
 	/* Pattern
 	 */
@@ -193,11 +194,7 @@ t_rproxy *rproxy_setting(char *line) {
 		}
 		rproxy->hostname_len = strlen(rproxy->hostname);
 
-		pthread_mutex_lock(&resolv_mutex);
-		resolved = hostname_to_ip(line, &(rproxy->ip_addr));
-		pthread_mutex_unlock(&resolv_mutex);
-
-		if (resolved == -1) {
+		if (hostname_to_ip(line, &(rproxy->ip_addr)) == -1) {
 			fprintf(stderr, "Can't resolve hostname '%s'\n", line);
 			check_free(rproxy->path);
 			check_free(rproxy->hostname);
@@ -213,11 +210,28 @@ t_rproxy *rproxy_setting(char *line) {
 	 */
 	if (timeout != NULL) {
 		if ((rproxy->timeout = str2int(timeout)) <= 0) {
+			if (keep_alive != NULL) {
+				check_free(rproxy->path);
+				check_free(rproxy->hostname);
+				free(rproxy);
+				return NULL;
+			}
+
+			keep_alive = timeout;
+		}
+	}
+
+	/* Keep-alive
+	 */
+	if (keep_alive != NULL) {
+		if (strcasecmp(keep_alive, "keep-alive") != 0) {
 			check_free(rproxy->path);
 			check_free(rproxy->hostname);
 			free(rproxy);
 			return NULL;
 		}
+
+		rproxy->keep_alive = true;
 	}
 
 	return rproxy;
@@ -247,21 +261,6 @@ bool rproxy_loop_detected(t_http_header *http_headers) {
 	}
 
 	return true;
-}
-
-/* Init reverse proxy options record
- */
-void init_rproxy_options(t_rproxy_options *options, int socket, t_ip_addr *client_ip,
-	                     char *method, char *uri, t_http_header *http_headers,
-	                     char *body, int body_length, char *remote_user) {
-	options->client_socket = socket;
-	options->client_ip = client_ip;
-	options->method = method;
-	options->uri = uri;
-	options->http_headers = http_headers;
-	options->body = body;
-	options->body_length = body_length;
-	options->remote_user = remote_user;
 }
 
 /* Init reverse proxy result record
@@ -363,9 +362,9 @@ static int send_to_webserver(t_rproxy_webserver *webserver, t_rproxy_result *res
 
 /* Send the request to the webserver
  */
-int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *options, t_rproxy *rproxy, t_rproxy_result *result) {
+int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *options, t_rproxy *rproxy, t_rproxy_result *result, bool session_keep_alive) {
 	t_http_header *http_header;
-	char forwarded_for[20 + MAX_IP_STR_LEN], ip_addr[MAX_IP_STR_LEN];
+	char forwarded_for[20 + MAX_IP_STR_LEN], ip_addr[MAX_IP_STR_LEN], forwarded_port[32];
 	bool forwarded_found = false;
 	t_send_buffer send_buffer;
 #ifdef ENABLE_CACHE
@@ -374,7 +373,7 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 
 	send_buffer.bytes_in_buffer = 0;
 
-	if (ip_to_str(ip_addr, options->client_ip, MAX_IP_STR_LEN) == -1) {
+	if (ip_to_str(options->client_ip, ip_addr, MAX_IP_STR_LEN) == -1) {
 		return -1;
 	}
 
@@ -398,6 +397,16 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 		return -1;
 	}
 
+	if ((rproxy->keep_alive == false) || (session_keep_alive == false)) {
+		/* Send Connection: close
+		 */
+		if (send_to_webserver(webserver, result, &send_buffer, hs_conn, 12) == -1) {
+			return -1;
+		} else if (send_to_webserver(webserver, result, &send_buffer, hs_concl, 7) == -1) {
+			return -1;
+		}
+	}
+
 	/* Send HTTP headers
 	 */
 	if (rproxy->hostname != NULL) {
@@ -417,6 +426,12 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 	for (http_header = options->http_headers; http_header != NULL; http_header = http_header->next) {
 		if (rproxy->hostname != NULL) {
 			if (strncasecmp(http_header->data, "Host:", 5) == 0) {
+				continue;
+			}
+		}
+
+		if ((rproxy->keep_alive == false) || (session_keep_alive == false)) {
+			if (strncasecmp(http_header->data, "Connection:", 11) == 0) {
 				continue;
 			}
 		}
@@ -465,6 +480,42 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 		}
 	}
 
+	/* Send X-Forwared-Proto
+	 */
+	if (send_to_webserver(webserver, result, &send_buffer, "X-Forwarded-Proto: ", 19) == -1) {
+		return -1;
+	}
+#ifdef ENABLE_SSL
+	if (options->use_ssl) {
+		if (send_to_webserver(webserver, result, &send_buffer, "https\r\n", 7) == -1) {
+			return -1;
+		}
+	} else
+#endif
+		if (send_to_webserver(webserver, result, &send_buffer, "http\r\n", 6) == -1) {
+			return -1;
+		}
+
+	/* Send X-Forwarded-Host
+	 */
+	if (options->hostname != NULL) {
+		if (send_to_webserver(webserver, result, &send_buffer, "X-Forwarded-Host: ", 18) == -1) {
+			return -1;
+		} else if (send_to_webserver(webserver, result, &send_buffer, options->hostname, strlen(options->hostname)) == -1) {
+			return -1;
+		} else if (send_to_webserver(webserver, result, &send_buffer, "\r\n", 2) == -1) {
+			return -1;
+		}
+	}
+
+	/* Send X-Forwarded-Port
+	 */
+	snprintf(forwarded_port, 31, "X-Forwarded-Port: %d\r\n", options->port);
+	forwarded_port[31] = '\0';
+	if (send_to_webserver(webserver, result, &send_buffer, forwarded_port, strlen(forwarded_port)) == -1) {
+		return -1;
+	}
+
 	/* Send X-Forwarded-User
 	 */
 	if (options->remote_user != NULL) {
@@ -486,7 +537,7 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 	/* Send body
 	 */
 	if (options->body != NULL) {
-		if (send_to_webserver(webserver, result, &send_buffer, options->body, options->body_length) == -1) {
+		if (send_to_webserver(webserver, result, &send_buffer, options->body, options->content_length) == -1) {
 			return -1;
 		}
 	}
