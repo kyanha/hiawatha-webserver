@@ -1,5 +1,40 @@
 PolarSSL ChangeLog (Sorted per branch, date)
 
+= PolarSSL 1.3.7 released on 2014-05-02
+Features
+   * debug_set_log_mode() added to determine raw or full logging
+   * debug_set_threshold() added to ignore messages over threshold level
+   * version_check_feature() added to check for compile-time options at
+     run-time
+
+Changes
+   * POLARSSL_CONFIG_OPTIONS has been removed. All values are individually
+     checked and filled in the relevant module headers
+   * Debug module only outputs full lines instead of parts
+   * Better support for the different Attribute Types from IETF PKIX (RFC 5280)
+   * AES-NI now compiles with "old" assemblers too
+   * Ciphersuites based on RC4 now have the lowest priority by default
+
+Bugfix
+   * Only iterate over actual certificates in ssl_write_certificate_request()
+     (found by Matthew Page)
+   * Typos in platform.c and pkcs11.c (found by Daniel Phillips and Steffan
+     Karger)
+   * cert_write app should use subject of issuer certificate as issuer of cert
+   * Fix false reject in padding check in ssl_decrypt_buf() for CBC
+     ciphersuites, for full SSL frames of data.
+   * Improve interoperability by not writing extension length in ClientHello /
+     ServerHello when no extensions are present (found by Matthew Page)
+   * rsa_check_pubkey() now allows an E up to N
+   * On OpenBSD, use arc4random_buf() instead of rand() to prevent warnings
+   * mpi_fill_random() was creating numbers larger than requested on
+     big-endian platform when size was not an integer number of limbs
+   * Fix dependencies issues in X.509 test suite.
+   * Some parts of ssl_tls.c were compiled even when the module was disabled.
+   * Fix detection of DragonflyBSD in net.c (found by Markus Pfeiffer)
+   * Fix detection of Clang on some Apple platforms with CMake
+     (found by Barry K. Nathan)
+
 = PolarSSL 1.3.6 released on 2014-04-11
 
 Features

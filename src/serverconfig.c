@@ -61,6 +61,7 @@ static t_host *new_host(void) {
 	host->access_logfile      = LOG_DIR"/access.log";
 	host->access_fileptr      = NULL;
 	host->access_fp           = &(host->access_fileptr);
+	host->rotate_access_log   = never;
 	host->access_time         = 0;
 	host->error_logfile       = LOG_DIR"/error.log";
 	init_charlist(&(host->hostname));
@@ -68,8 +69,10 @@ static t_host *new_host(void) {
 	host->execute_cgi         = false;
 	host->time_for_cgi        = 5;
 	host->no_extension_as     = NULL;
-#ifdef ENABLE_XSLT
+#if defined(ENABLE_XSLT) || defined(ENABLE_MONITOR)
 	host->show_index          = NULL;
+#endif
+#ifdef ENABLE_XSLT
 	host->use_xslt            = false;
 	host->error_xslt_file     = NULL;
 #endif
@@ -99,6 +102,7 @@ static t_host *new_host(void) {
 	host->script_alias        = NULL;
 #ifdef ENABLE_SSL
 	host->require_ssl         = false;
+	host->hsts_time           = "31536000"; /* A year in seconds */
 	host->key_cert_file       = NULL;
 	host->ca_cert_file        = NULL;
 	host->ca_crl_file         = NULL;
@@ -113,8 +117,8 @@ static t_host *new_host(void) {
 #endif
 	host->prevent_sqli        = false;
 	host->prevent_xss         = false;
-	host->prevent_csrf        = false;
-	host->follow_symlinks     = false;
+	host->prevent_csrf        = p_no;
+	host->follow_symlinks     = p_no;
 	host->enable_path_info    = false;
 	host->trigger_on_cgi_status = false;
 	init_charlist(&(host->fast_cgi));
@@ -290,6 +294,7 @@ t_config *default_config(void) {
 	config->cgi_wrapper        = SBIN_DIR"/cgi-wrapper";
 	config->wrap_user_cgi      = false;
 	config->log_format         = hiawatha;
+	config->rotate_access_logs = false;
 	config->anonymize_ip       = false;
 	config->user_directory     = "public_html";
 	config->user_directory_set = false;
@@ -375,6 +380,7 @@ static int fgets_multi(char *line, int size, FILE *fp) {
 		} else if ((lines = fgets_multi(pos, size - (pos - line), fp)) == -1) {
 			return -1;
 		}
+
 		return 1 + lines;
 	} else {
 		return 0;
@@ -429,10 +435,24 @@ static int parse_mode(char *line, mode_t *mode) {
 }
 
 static int parse_yesno(char *yesno, bool *result) {
-	if ((strcmp(yesno, "yes") == 0) || (strcmp(yesno, "true") == 0)) {
-		*result = true;
-	} else if ((strcmp(yesno, "no") == 0) || (strcmp(yesno, "false") == 0)) {
+	if ((strcmp(yesno, "no") == 0) || (strcmp(yesno, "false") == 0)) {
 		*result = false;
+	} else if ((strcmp(yesno, "yes") == 0) || (strcmp(yesno, "true") == 0)) {
+		*result = true;
+	} else {
+		return -1;
+	}
+
+	return 0;
+}
+
+static int parse_prevent(char *prevent, t_prevent *result) {
+	if ((strcmp(prevent, "no") == 0) || (strcmp(prevent, "false") == 0)) {
+		*result = p_no;
+	} else if ((strcmp(prevent, "yes") == 0) || (strcmp(prevent, "true") == 0)) {
+		*result = p_yes;
+	} else if (strcmp(prevent, "block") == 0) {
+		*result = p_block;
 	} else {
 		return -1;
 	}
@@ -610,6 +630,10 @@ int check_configuration(t_config *config) {
 			}
 		}
 
+		if (host->rotate_access_log != never) {
+			config->rotate_access_logs = true;
+		}
+
 		host = host->next;
 	}
 
@@ -708,50 +732,50 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			return true;
 		}
 	} else if (strcmp(key, "banondeniedbody") == 0) {
-		if ((config->ban_on_denied_body = str2int(value)) != -1) {
+		if ((config->ban_on_denied_body = str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "banonflooding") == 0) {
 		if (split_string(value, &value, &rest, '/') == -1) {
-		} else if ((config->flooding_count = str2int(value)) <= 0) {
+		} else if ((config->flooding_count = str_to_int(value)) <= 0) {
 		} else if (split_string(rest, &value, &rest, ':') != 0) {
-		} else if ((config->flooding_time = str2int(value)) <= 0) {
-		} else if ((config->ban_on_flooding = str2int(rest)) > 0) {
+		} else if ((config->flooding_time = str_to_int(value)) <= 0) {
+		} else if ((config->ban_on_flooding = str_to_int(rest)) > 0) {
 			return true;
 		}
 	} else if (strcmp(key, "banongarbage") == 0) {
-		if ((config->ban_on_garbage = str2int(value)) != -1) {
+		if ((config->ban_on_garbage = str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "banoninvalidurl") == 0) {
-		if ((config->ban_on_invalid_url = str2int(value)) != -1) {
+		if ((config->ban_on_invalid_url = str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "banonmaxperip") == 0) {
-		if ((config->ban_on_max_per_ip = str2int(value)) != -1) {
+		if ((config->ban_on_max_per_ip = str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "banonmaxreqsize") == 0) {
-		if ((config->ban_on_max_request_size = str2int(value)) != -1) {
+		if ((config->ban_on_max_request_size = str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "banonsqli") == 0) {
-		if ((config->ban_on_sqli = str2int(value)) != -1) {
+		if ((config->ban_on_sqli = str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "banontimeout") == 0) {
-		if ((config->ban_on_timeout = str2int(value)) != -1) {
+		if ((config->ban_on_timeout = str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "banonwrongpassword") == 0) {
 		if (split_string(value, &value, &rest, ':') == -1) {
-		} else if ((config->max_wrong_passwords = str2int(value)) <= 0) {
-		} else if ((config->ban_on_wrong_password = str2int(rest)) > 0) {
+		} else if ((config->max_wrong_passwords = str_to_int(value)) <= 0) {
+		} else if ((config->ban_on_wrong_password = str_to_int(rest)) > 0) {
 			return true;
 		}
 #ifdef ENABLE_CACHE
 	} else if (strcmp(key, "cachemaxfilesize") == 0) {
-		if ((config->cache_max_filesize = str2int(value)) != -1) {
+		if ((config->cache_max_filesize = str_to_int(value)) != -1) {
 			config->cache_max_filesize <<= 10 /* convert to kB */;
 			return true;
 		}
@@ -762,7 +786,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		}
 #endif
 	} else if (strcmp(key, "cachesize") == 0) {
-		if ((config->cache_size = str2int(value)) != -1) {
+		if ((config->cache_size = str_to_int(value)) != -1) {
 			if (config->cache_size <= MAX_CACHE_SIZE) {
 				config->cache_size <<= 20 /* convert to MB */;
 				return true;
@@ -799,11 +823,11 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			return true;
 		}
 	} else if (strcmp(key, "connectionsperip") == 0) {
-		if ((config->connections_per_ip = str2int(value)) != -1) {
+		if ((config->connections_per_ip = str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "connectionstotal") == 0) {
-		if ((config->total_connections = str2int(value)) != -1) {
+		if ((config->total_connections = str_to_int(value)) != -1) {
 			return true;
 		}
 
@@ -869,7 +893,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		if (strcmp(value, "none") == 0) {
 			config->max_url_length = 0;
 			return true;
-		} else if ((config->max_url_length = str2int(value)) >= 0) {
+		} else if ((config->max_url_length = str_to_int(value)) >= 0) {
 			return true;
 		}
 	} else if (strcmp(key, "mimetypeconfig") == 0) {
@@ -922,7 +946,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		}
 		free(alist);
 
-#ifdef ENABLE_XSLT
+#if defined(ENABLE_XSLT) || defined(ENABLE_MONITOR)
 		if ((monitor_host->show_index = strdup("xml")) == NULL) {
 			return false;
 		}
@@ -954,7 +978,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			return true;
 		}
 	} else if (strcmp(key, "reconnectdelay") == 0) {
-		if ((config->reconnect_delay = str2int(value)) > 0) {
+		if ((config->reconnect_delay = str_to_int(value)) > 0) {
 			return true;
 		}
 	} else if (strcmp(key, "requestlimitmask") == 0) {
@@ -984,7 +1008,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			}
 		}
 	} else if (strcmp(key, "socketsendtimeout") == 0) {
-		if ((config->socket_send_timeout = str2int(value)) >= 0) {
+		if ((config->socket_send_timeout = str_to_int(value)) >= 0) {
 			return true;
 		}
 	} else if (strcmp(key, "systemlogfile") == 0) {
@@ -995,13 +1019,13 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		}
 #ifdef ENABLE_THREAD_POOL	
 	} else if (strcmp(key, "threadpoolsize") == 0) {
-		if ((config->thread_pool_size = str2int(value)) >= 1) {
+		if ((config->thread_pool_size = str_to_int(value)) >= 1) {
 			return true;
 		}
 #endif
 	} else if (strcmp(key, "throttle") == 0) {
 		if (split_string(value, &rest, &value, ':') != -1) {
-			if (((*rest == '.') || (strchr(rest, '/') != NULL)) && (speed = str2int(value)) > 0) {
+			if (((*rest == '.') || (strchr(rest, '/') != NULL)) && (speed = str_to_int(value)) > 0) {
 				if (config->throttle == NULL) {
 					if ((config->throttle = (t_throttle*)malloc(sizeof(t_throttle))) == NULL) {
 						return false;
@@ -1034,7 +1058,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			binding->next = config->tomahawk_port;
 			config->tomahawk_port = binding;
 
-			if ((config->tomahawk_port->port = str2int(port)) > 0) {
+			if ((config->tomahawk_port->port = str_to_int(port)) > 0) {
 				if ((config->tomahawk_port->binding_id = strdup(password)) != NULL) {
 					return true;
 				}
@@ -1081,6 +1105,10 @@ static bool user_setting(char *key, char *value, t_host *host, t_tempdata **temp
 	char *pwd = NULL, *grp = NULL;
 	t_error_handler *handler;
 	t_keyvalue *kv;
+#ifdef ENABLE_SSL
+	char *rest;
+	int time;
+#endif
 
 	if (strcmp(key, "accesslist") == 0) {
 		if ((host->access_list = parse_accesslist(value, true, host->access_list)) != NULL) {
@@ -1149,9 +1177,21 @@ static bool user_setting(char *key, char *value, t_host *host, t_tempdata **temp
 		}
 #ifdef ENABLE_SSL
 	} else if (strcmp(key, "requiressl") == 0) {
-		if (parse_yesno(value, &(host->require_ssl)) == 0) {
-			return true;
+		split_string(value, &value, &rest, ',');
+		if (parse_yesno(value, &(host->require_ssl)) != 0) {
+			return false;
 		}
+		if (rest != NULL) {
+			if ((time = str_to_int(rest)) < 0) {
+				return false;
+			}
+			if (time == 0) {
+				host->hsts_time = NULL;
+			} else if ((host->hsts_time = strdup(rest)) == NULL) {
+				return false;
+			}
+		}
+		return true;
 #endif
 	} else if (strcmp(key, "runonalter") == 0) {
 		if ((host->run_on_alter = strdup(value)) != NULL) {
@@ -1205,16 +1245,26 @@ static bool user_setting(char *key, char *value, t_host *host, t_tempdata **temp
 
 static bool host_setting(char *key, char *value, t_host *host) {
 	t_deny_body *deny_body;
-#ifdef ENABLE_SSL
 	char *rest;
-#endif
 #ifdef ENABLE_RPROXY
 	t_rproxy *rproxy, *list;
 #endif
 
 	if (strcmp(key, "accesslogfile") == 0) {
+		split_string(value, &value, &rest, ',');
 		if (*value == '/') {
 			if ((host->access_logfile = strdup(value)) != NULL) {
+				if (rest != NULL) {
+					if (strcasecmp(rest, "daily") == 0) {
+						host->rotate_access_log = daily;
+					} else if (strcasecmp(rest, "weekly") == 0) {
+						host->rotate_access_log = weekly;
+					} else if (strcasecmp(rest, "monthly") == 0) {
+						host->rotate_access_log = monthly;
+					} else {
+						return false;
+					}
+				}
 				return true;
 			}
 		}
@@ -1303,7 +1353,7 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			return true;
 		}
 	} else if ((strcmp(key, "preventcsrf") == 0) || (strcmp(key, "preventxsrf") == 0)) {
-		if (parse_yesno(value, &(host->prevent_csrf)) == 0) {
+		if (parse_prevent(value, &(host->prevent_csrf)) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "preventsqli") == 0) {
@@ -1311,7 +1361,7 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			return true;
 		}
 	} else if (strcmp(key, "preventxss") == 0) {
-		if (parse_yesno(value, &(host->prevent_xss)) == 0) {
+		if (parse_prevent(value, &(host->prevent_xss)) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "requiredbinding") == 0) {
@@ -1320,7 +1370,7 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		}
 #ifdef ENABLE_SSL
 	} else if (strcmp(key, "randomheader") == 0) {
-		if ((host->random_header_length = str2int(value)) >= 10) {
+		if ((host->random_header_length = str_to_int(value)) >= 10) {
 			if (host->random_header_length <= MAX_RANDOM_HEADER_LENGTH) {
 				return true;
 			}
@@ -1369,7 +1419,7 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		}
 #endif
 	} else if (strcmp(key, "timeforcgi") == 0) {
-		if ((host->time_for_cgi = str2int(value)) > TIMER_OFF) {
+		if ((host->time_for_cgi = str_to_int(value)) > TIMER_OFF) {
 			return true;
 		}
 	} else if (strcmp(key, "triggeroncgistatus") == 0) {
@@ -1527,14 +1577,14 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 			}
 		}
 	} else if (strcmp(key, "timeforcgi") == 0) {
-		if ((directory->time_for_cgi = str2int(value)) > TIMER_OFF) {
+		if ((directory->time_for_cgi = str_to_int(value)) > TIMER_OFF) {
 			return true;
 		}
 	} else if (strcmp(key, "uploadspeed") == 0) {
 		if (split_string(value, &value, &maxclients, ',') == 0) {
-			if ((directory->upload_speed = str2int(value)) > 0) {
+			if ((directory->upload_speed = str_to_int(value)) > 0) {
 				directory->upload_speed <<= 10 /* convert to kB/s */;
-				if ((directory->max_clients = str2int(maxclients)) > 0) {
+				if ((directory->max_clients = str_to_int(maxclients)) > 0) {
 					return true;
 				}
 			}
@@ -1572,16 +1622,16 @@ static bool binding_setting(char *key, char *value, t_binding *binding) {
 			return true;
 		}
 	} else if (strcmp(key, "maxkeepalive") == 0) {
-		if ((binding->max_keepalive = str2int(value)) != -1) {
+		if ((binding->max_keepalive = str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "maxrequestsize") == 0) {
-		if ((binding->max_request_size = str2int(value)) > 0) {
+		if ((binding->max_request_size = str_to_int(value)) > 0) {
 			binding->max_request_size <<= 10 /* convert to kB */;
 			return true;
 		}
 	} else if (strcmp(key, "maxuploadsize") == 0) {
-		if ((binding->max_upload_size = str2int(value)) > 0) {
+		if ((binding->max_upload_size = str_to_int(value)) > 0) {
 			if (binding->max_upload_size <= MAX_UPLOAD_SIZE) {
 				binding->max_upload_size <<= 20 /* convert to MB */;
 				return true;
@@ -1594,7 +1644,7 @@ static bool binding_setting(char *key, char *value, t_binding *binding) {
 			}
 		}
 	} else if (strcmp(key, "port") == 0) {
-		if ((binding->port = str2int(value)) > 0) {
+		if ((binding->port = str_to_int(value)) > 0) {
 			if (binding->port < 65536) {
 				return true;
 			}
@@ -1618,12 +1668,12 @@ static bool binding_setting(char *key, char *value, t_binding *binding) {
 #endif
 	} else if (strcmp(key, "timeforrequest") == 0) {
 		if (split_string(value, &value, &rest, ',') == 0) {
-			if ((binding->time_for_1st_request = str2int(value)) >= 1) {
-				if ((binding->time_for_request = str2int(rest)) >= 1) {
+			if ((binding->time_for_1st_request = str_to_int(value)) >= 1) {
+				if ((binding->time_for_request = str_to_int(rest)) >= 1) {
 					return true;
 				}
 			}
-		} else if ((binding->time_for_request = str2int(value)) >= 1) {
+		} else if ((binding->time_for_request = str_to_int(value)) >= 1) {
 			binding->time_for_1st_request = binding->time_for_request;
 			return true;
 		}
@@ -1681,7 +1731,7 @@ static bool fcgi_server_setting(char *key, char *value, t_fcgi_server *fcgi_serv
 			return true;
 		}
 	} else if (strcmp(key, "sessiontimeout") == 0) {
-		if ((fcgi_server->session_timeout = MINUTE * str2int(value)) >= 0) {
+		if ((fcgi_server->session_timeout = MINUTE * str_to_int(value)) >= 0) {
 			return true;
 		}
 	}

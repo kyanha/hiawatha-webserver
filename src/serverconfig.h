@@ -41,13 +41,16 @@
 typedef enum { root, part } t_pathmatch;
 typedef enum { no_auth, basic, digest } t_auth_method;
 typedef enum { hiawatha, common, extended } t_log_format;
+typedef enum { never, daily, weekly, monthly } t_log_rotate;
+typedef enum { p_no, p_yes, p_block } t_prevent;
 #ifdef CYGWIN
 typedef enum { windows, cygwin } t_platform;
 #endif
 
 #ifdef ENABLE_MONITOR
 typedef struct type_monitor_srv_stats {
-	int simultaneous_connections;
+	int connections;
+	int result_bad_request;
 } t_monitor_srv_stats;
 
 typedef struct type_monitor_host_stats {
@@ -65,6 +68,7 @@ typedef struct type_monitor_host_stats {
 	int time_3_10;
 	int time_10_x;
 	int timed_out;
+	int cgi_errors;
 } t_monitor_host_stats;
 #endif
 
@@ -198,6 +202,7 @@ typedef struct type_host {
 	char            *access_logfile;
 	FILE            *access_fileptr;
 	FILE            **access_fp;
+	t_log_rotate    rotate_access_log;
 	time_t          access_time;
 	char            *error_logfile;
 	t_charlist      hostname;
@@ -205,8 +210,10 @@ typedef struct type_host {
 	bool            execute_cgi;
 	int             time_for_cgi;
 	char            *no_extension_as;
-#ifdef ENABLE_XSLT
+#if defined(ENABLE_XSLT) || defined(ENABLE_MONITOR)
 	char            *show_index;
+#endif
+#ifdef ENABLE_XSLT
 	bool            use_xslt;
 	char            *error_xslt_file;
 #endif
@@ -237,6 +244,7 @@ typedef struct type_host {
 #endif
 #ifdef ENABLE_SSL
     bool            require_ssl;
+	char            *hsts_time;
 	char            *key_cert_file;
 	char            *ca_cert_file;
 	char            *ca_crl_file;
@@ -250,8 +258,8 @@ typedef struct type_host {
 	t_rproxy        *rproxy;
 #endif
 	bool            prevent_sqli;
-	bool            prevent_xss;
-	bool            prevent_csrf;
+	t_prevent       prevent_xss;
+	t_prevent       prevent_csrf;
 	bool            follow_symlinks;
 	bool            enable_path_info;
 	bool            trigger_on_cgi_status;
@@ -289,6 +297,7 @@ typedef struct type_config {
 	int           connections_per_ip;
 	int           socket_send_timeout;
 	bool          kill_timedout_cgi;
+	bool          rotate_access_logs;
 	char          *system_logfile;
 	char          *garbage_logfile;
 	char          *exploit_logfile;

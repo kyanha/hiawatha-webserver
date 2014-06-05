@@ -259,7 +259,7 @@ t_accesslist *parse_accesslist(char *line, bool pwd_allowed, t_accesslist *list)
 			} else {
 				new->all_ip = false;
 				if (split_string(ip, &ip, &mask, '/') == 0) {
-					if ((new->netmask = str2int(mask)) == -1) {
+					if ((new->netmask = str_to_int(mask)) == -1) {
 						error = true;
 						break;
 					}
@@ -430,7 +430,7 @@ int parse_error_handler(char *line, t_error_handler **handlers) {
 		return -1;
 	}
 
-	switch (code = str2int(param)) {
+	switch (code = str_to_int(param)) {
 		case 401:
 		case 403:
 		case 404:

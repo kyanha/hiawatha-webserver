@@ -32,7 +32,7 @@ int parse_userid(char *userid, uid_t *uid) {
 		return -1;
 	}
 
-	if ((id = str2int(userid)) == -1) {
+	if ((id = str_to_int(userid)) == -1) {
 		if ((pwd = getpwnam(userid)) == NULL) {
 			return -1;
 		}
@@ -52,7 +52,7 @@ static gid_t parse_groupid(char *groupid, gid_t *gid) {
 		return -1;
 	}
 
-	if ((id = str2int(groupid)) == -1) {
+	if ((id = str_to_int(groupid)) == -1) {
 		if ((pwd = getpwnam(groupid)) == NULL) {
 			return -1;
 		}

@@ -197,7 +197,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		} else if (strcasecmp(value, "skip") == 0) {
 			/* Header Skip
 			 */
-			if ((new_rule->value = str2int(rest)) < 1) {
+			if ((new_rule->value = str_to_int(rest)) < 1) {
 				return false;
 			}
 		} else if (strcasecmp(value, "use") == 0) {
@@ -240,7 +240,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			 */
 			new_rule->operation = to_ban;
 
-			if ((new_rule->value = str2int(rest)) == false) {
+			if ((new_rule->value = str_to_int(rest)) == false) {
 				return false;
 			}
 		} else if (strcasecmp(value, "call") == 0) {
@@ -270,7 +270,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			if (split_string(rest, &value, &rest, ' ') == -1) {
 				return false;
 			}
-			if ((new_rule->value = str2int(value)) == -1) {
+			if ((new_rule->value = str_to_int(value)) == -1) {
 				return false;
 			}
 
@@ -364,7 +364,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 
 			if (rest != NULL) {
 				split_string(rest, &value, &rest, ' ');
-				if ((loop = str2int(value)) > 0) {
+				if ((loop = str_to_int(value)) > 0) {
 					if (loop > MAX_MATCH_LOOP) {
 						return false;
 					}
@@ -389,7 +389,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			 */
 			new_rule->operation = to_skip;
 
-			if ((new_rule->value = str2int(rest)) < 1) {
+			if ((new_rule->value = str_to_int(rest)) < 1) {
 				return false;
 			}
 		} else if (strcasecmp(value, "usefastcgi") == 0) {
@@ -437,7 +437,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		 */
 		new_rule->operation = to_skip;
 
-		if ((new_rule->value = str2int(value)) < 1) {
+		if ((new_rule->value = str_to_int(value)) < 1) {
 			return false;
 		}
 #ifdef ENABLE_SSL
@@ -478,7 +478,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			/* UseSSL Skip
 			 */
 			new_rule->operation = to_skip;
-			if ((new_rule->value = str2int(rest)) < 1) {
+			if ((new_rule->value = str_to_int(rest)) < 1) {
 				return false;
 			}
 		} else {
@@ -573,6 +573,7 @@ static int do_rewrite(char *url, regex_t *regexp, regmatch_t *pmatch, char *rep,
 
 					if (replace(repl, n, 2, sub, &tmp) == -1) {
 						free(repl);
+						free(sub);
 						return -1;
 					}
 
@@ -622,7 +623,7 @@ void init_toolkit_options(t_toolkit_options *options, char *website_root, t_url_
 int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 	t_url_toolkit *toolkit;
 	t_toolkit_rule *rule;
-	bool condition_met, replaced = false;
+	bool condition_met, url_replaced = false;
 	int result, skip = 0;
 	char *file, *qmark, *header;
 	regmatch_t pmatch[REGEXEC_NMATCH];
@@ -756,12 +757,12 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 					return UT_ERROR;
 				}
 				if (options->new_url != NULL) {
-					if (replaced) {
+					if (url_replaced) {
 						free(url);
 					}
 					url = options->new_url;
-					replaced = true;
-				} else if (replaced) {
+					url_replaced = true;
+				} else if (url_replaced) {
 					options->new_url = url;
 				}
 				break;
@@ -782,12 +783,12 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 				options->sub_depth--;
 
 				if (options->new_url != NULL) {
-					if (replaced) {
+					if (url_replaced) {
 						free(url);
 					}
 					url = options->new_url;
-					replaced = true;
-				} else if (replaced) {
+					url_replaced = true;
+				} else if (url_replaced) {
 					options->new_url = url;
 				}
 
@@ -825,11 +826,11 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 					return UT_ERROR;
 				}
 				if (options->new_url != NULL) {
-					if (replaced) {
+					if (url_replaced) {
 						free(url);
 					}
 					return UT_REDIRECT;
-				} else if (replaced) {
+				} else if (url_replaced) {
 					options->new_url = url;
 				}
 				break;
@@ -846,7 +847,7 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 			case to_replace:
 				/* Replace URL
 				 */
-				if (replaced) {
+				if (url_replaced) {
 					free(url);
 				}
 				if ((options->new_url = strdup(rule->parameter)) == NULL) {

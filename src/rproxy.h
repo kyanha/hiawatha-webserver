@@ -26,6 +26,7 @@
 
 typedef struct type_rproxy {
 	regex_t   pattern;
+	bool      neg_match;
 
 #ifdef ENABLE_SSL
 	bool      use_ssl;
@@ -54,6 +55,7 @@ typedef struct {
 	char          *body;
 	int           content_length;
 	char          *remote_user;
+	char          *uploaded_file;
 #ifdef ENABLE_SSL
 	bool          use_ssl;
 #endif

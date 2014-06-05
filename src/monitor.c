@@ -36,17 +36,17 @@
 static char *monitor_buffer = NULL;
 static int monitor_buffer_size;
 static pthread_mutex_t monitor_buffer_mutex;
-
 static int stats_delay;
-
 static char *filename;
 static int filename_offset;
+static t_config *server_config;
 
 /* Reset server record
  */
 static void reset_server_stats(t_monitor_srv_stats *stats) {
 	if (stats != NULL) {
-		stats->simultaneous_connections = 0;
+		stats->connections = 0;
+		stats->result_bad_request = 0;
 	}
 }
 
@@ -72,6 +72,7 @@ static void reset_cgi_stats(t_monitor_host_stats *stats) {
 		stats->time_3_10 = 0;
 		stats->time_10_x = 0;
 		stats->timed_out = 0;
+		stats->cgi_errors = 0;
 	}
 }
 
@@ -137,6 +138,8 @@ static bool enough_space_for_entry(size_t event_size) {
 int init_monitor_module(t_config *config) {
 	t_host *host;
 
+	server_config = config;
+
 	if ((monitor_buffer = (char*)malloc(MAX_MONITOR_BUFFER_SIZE)) == NULL) {
 		return -1;
 	}
@@ -174,13 +177,13 @@ int init_monitor_module(t_config *config) {
 
 /* Stop monitor module
  */
-void shutdown_monitor_module(t_config *config) {
+void shutdown_monitor_module() {
 	time_t now;
 
 	now = time(NULL);
 
 	stats_delay = 0;
-	monitor_stats_to_buffer(config, now);
+	monitor_stats_to_buffer(server_config, now);
 	flush_monitor_buffer();
 }
 
@@ -225,6 +228,18 @@ int monitor_event(char *event, ...) {
 	}
 
 	if ((size += snprintf(str + size, 1023 - size, "\t%ld\n", (long)time(NULL))) >= 1023) {
+		return -1;
+	}
+
+	return add_string_to_buffer(str);
+}
+
+/* Monitor version
+ */
+int monitor_version(char *version) {
+	char str[256];
+
+	if (snprintf(str, 256, "version\t%s\n", version) >= 255) {
 		return -1;
 	}
 
@@ -276,12 +291,13 @@ int monitor_stats_to_buffer(t_config *config, time_t now) {
 
 		if (host->monitor_host_stats->time_0_1 + host->monitor_host_stats->time_1_3 +
 		    host->monitor_host_stats->time_3_10 + host->monitor_host_stats->time_10_x + 
-			host->monitor_host_stats->timed_out > 0) {
+			host->monitor_host_stats->timed_out + host->monitor_host_stats->cgi_errors > 0) {
 
-			len = snprintf(str, 255, "cgi\t%ld\t%ld\t%s\t%d\t%d\t%d\t%d\n", 
+			len = snprintf(str, 255, "cgi\t%ld\t%ld\t%s\t%d\t%d\t%d\t%d\t%d\n", 
 				(long)timestamp_begin, (long)timestamp_end, host->hostname.item[0],
 				host->monitor_host_stats->time_0_1, host->monitor_host_stats->time_1_3,
-				host->monitor_host_stats->time_3_10, host->monitor_host_stats->time_10_x);
+				host->monitor_host_stats->time_3_10, host->monitor_host_stats->time_10_x,
+				host->monitor_host_stats->cgi_errors);
 
 			if (len < 255) {
 				add_string_to_buffer(str);
@@ -299,15 +315,17 @@ int monitor_stats_to_buffer(t_config *config, time_t now) {
 
 	/* Monitor server stats
 	 */
-	len = snprintf(str, 255, "server\t%ld\t%ld\t%d\n",
-		(long)timestamp_begin, (long)timestamp_end,
-		config->monitor_srv_stats.simultaneous_connections);
+	if (config->monitor_srv_stats.connections + config->monitor_srv_stats.result_bad_request > 0) {
+		len = snprintf(str, 255, "server\t%ld\t%ld\t%d\t%d\n",
+			(long)timestamp_begin, (long)timestamp_end,
+			config->monitor_srv_stats.connections, config->monitor_srv_stats.result_bad_request);
 
-	if (len < 255) {
-		add_string_to_buffer(str);
+		if (len < 255) {
+			add_string_to_buffer(str);
+		}
+
+		reset_server_stats(&(config->monitor_srv_stats));
 	}
-
-	reset_server_stats(&(config->monitor_srv_stats));
 
 	flush_monitor_buffer();
 
@@ -316,6 +334,14 @@ int monitor_stats_to_buffer(t_config *config, time_t now) {
 
 /* Stats monitor functions
  */
+void monitor_count_connection(t_session *session) {
+	session->config->monitor_srv_stats.connections++;
+}
+
+void monitor_count_bad_request(t_session *session) {
+	session->config->monitor_srv_stats.result_bad_request++;
+}
+
 void monitor_count_host(t_session *session) {
 	if (session->host->monitor_host_stats == NULL) {
 		return;
@@ -353,7 +379,7 @@ void monitor_count_exploit(t_session *session) {
 	session->host->monitor_host_stats->exploit_attempts++;
 }
 
-void monitor_count_cgi(t_session *session, int runtime, bool timed_out) {
+void monitor_count_cgi(t_session *session, int runtime, bool timed_out, bool error) {
 	if ((runtime >= 0) && (runtime < 1)) {
 		session->host->monitor_host_stats->time_0_1++;
 	} else if ((runtime >= 1) && (runtime < 3)) {
@@ -366,6 +392,10 @@ void monitor_count_cgi(t_session *session, int runtime, bool timed_out) {
 
 	if (timed_out) {
 		session->host->monitor_host_stats->timed_out++;
+	}
+
+	if (error) {
+		session->host->monitor_host_stats->cgi_errors++;
 	}
 }
 

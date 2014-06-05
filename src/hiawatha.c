@@ -67,7 +67,6 @@
 #define rs_UNLOCK_LOGFILES       3
 #define rs_CLEAR_CACHE           4
 
-#define LOG_PERM (S_IRUSR|S_IWUSR|S_IRGRP)
 #define MAX_ADMIN_CONNECTIONS 3
 
 typedef struct {
@@ -192,6 +191,10 @@ void task_runner(t_config *config) {
 			}
 #endif
 
+			if (config->rotate_access_logs) {
+				rotate_access_logfiles(config, now);
+			}
+
 			delay = 0;
 		} else {
 			delay++;
@@ -274,6 +277,10 @@ void task_runner(t_config *config) {
  */
 void SEGV_handler() {
 	syslog(LOG_DAEMON | LOG_ALERT, "segmentation fault!");
+#ifdef ENABLE_MONITOR
+	monitor_event("Server crash!");
+	shutdown_monitor_module();
+#endif
 	exit(EXIT_FAILURE);
 }
 
@@ -895,6 +902,7 @@ int run_server(t_settings *settings) {
 			return -1;
 		}
 		monitor_event("Server start");
+		monitor_version(version_string);
 	}
 #endif
 
@@ -934,21 +942,21 @@ int run_server(t_settings *settings) {
 		}
 	}
 
-	log_string(config->system_logfile, "Hiawatha v"VERSION" started");
+	log_string(config->system_logfile, "Hiawatha v"VERSION" started.");
 
 	/* Start task_runner
 	 */
 	if (pthread_attr_init(&task_runner_attr) != 0) {
-		log_string(config->system_logfile, "Task-runner pthread init error");
+		log_string(config->system_logfile, "Task-runner pthread init error.");
 		return -1;
 	} else if (pthread_attr_setdetachstate(&task_runner_attr, PTHREAD_CREATE_DETACHED) != 0) {
-		log_string(config->system_logfile, "Task-runner pthread set detach state error");
+		log_string(config->system_logfile, "Task-runner pthread set detach state error.");
 		return -1;
 	} else if (pthread_attr_setstacksize(&task_runner_attr, PTHREAD_STACK_SIZE) != 0) {
-		log_string(config->system_logfile, "Task-runner pthread set stack size error");
+		log_string(config->system_logfile, "Task-runner pthread set stack size error.");
 		return -1;
 	} else if (pthread_create(&task_runner_thread, &task_runner_attr, (void*)task_runner, (void*)config) != 0) {
-		log_string(config->system_logfile, "Task-runner pthread create error");
+		log_string(config->system_logfile, "Task-runner pthread create error.");
 		return -1;
 	}
 	pthread_attr_destroy(&task_runner_attr);
@@ -1014,7 +1022,7 @@ int run_server(t_settings *settings) {
 #endif
 			case -1:
 				if (errno != EINTR) {
-					log_string(config->system_logfile, "Fatal error selecting connection");
+					log_string(config->system_logfile, "Fatal error selecting connection.");
 					usleep(1000);
 				}
 				break;
@@ -1048,7 +1056,7 @@ int run_server(t_settings *settings) {
 						memset((void*)&caddr, 0, (size_t)size);
 						if ((admin_socket = accept(binding->socket, (struct sockaddr*)&caddr, &size)) == -1) {
 							if (errno != EINTR) {
-								log_string(config->system_logfile, "Fatal error accepting Tomahawk connection");
+								log_string(config->system_logfile, "Fatal error accepting Tomahawk connection.");
 								usleep(1000);
 								break;
 							}
@@ -1087,12 +1095,14 @@ int run_server(t_settings *settings) {
 #ifdef ENABLE_MONITOR
 	if (config->monitor_enabled) {
 		monitor_event("Server stop");
-		shutdown_monitor_module(config);
+		shutdown_monitor_module();
 	}
 #endif
 
-	log_string(config->system_logfile, "Hiawatha v"VERSION" stopped");
+	log_string(config->system_logfile, "Hiawatha v"VERSION" stopped.");
 	close_logfiles(config->first_host, 0);
+
+	free(poll_data);
 
 	return 0;
 }

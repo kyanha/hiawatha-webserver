@@ -29,50 +29,66 @@ fi
 
 function start_hiawatha {
 	if [ -f ${PIDFILE} ]; then
-		echo -e "${YELLOW}Hiawatha is already running${NORMAL}"
-	else
-		${WIGWAM} -q
-		result=$?
-
-		if [ "${result}" = "0" ]; then
-			echo -n "Starting webserver: "
-			${HIAWATHA}
-			result=$?
-			if [ "${result}" = "0" ]; then
-				echo -e "${GREEN}Hiawatha${NORMAL}"
-			else
-				echo -e "${RED}error!${NORMAL}"
-			fi
-		else
-			echo -e "${RED}Hiawatha has NOT been started!${NORMAL}"
+		PID=`cat ${PIDFILE}`
+		if [ -d /proc/${PID} ]; then
+			echo -e "${YELLOW}Hiawatha is already running${NORMAL}"
+			return
 		fi
+
+		rm -f ${PIDFILE}
+	fi
+
+	${WIGWAM} -q
+	result=$?
+
+	if [ "${result}" != "0" ]; then
+		echo -e "${RED}Hiawatha has NOT been started!${NORMAL}"
+		exit 7
+	fi
+
+	echo -n "Starting webserver: "
+	${HIAWATHA}
+	result=$?
+	if [ "${result}" = "0" ]; then
+		echo -e "${GREEN}Hiawatha${NORMAL}"
+	else
+		echo -e "${RED}error!${NORMAL}"
+		exit 7
 	fi
 }
 
 function stop_hiawatha {
-	if [ -f ${PIDFILE} ]; then
-		echo -en "Stopping webserver: ${GREEN}"
-		PID=`cat ${PIDFILE}`
-		kill -15 ${PID}
-
-		WAIT="10"
-		while [ -d /proc/${PID} ]; do
-			if [ "${WAIT}" != "0" ]; then
-				sleep 1
-				let WAIT=${WAIT}-1
-			else
-				kill -9 ${PID}
-				echo -en "${RED}warning, possible incorrect shutdown of "
-				break
-			fi
-		done
-
-		rm -f ${PIDFILE}
+	if [ ! -f ${PIDFILE} ]; then
 		echo -e "Hiawatha${NORMAL}"
-	else
+		echo -e "${YELLOW}Hiawatha PID file not found${NORMAL}"
+		exit 7
+	fi
+
+	PID=`cat ${PIDFILE}`
+	rm -f ${PIDFILE}
+
+	if [ ! -d /proc/${PID} ]; then
+		echo -e "Hiawatha${NORMAL}"
 		echo -e "${YELLOW}Hiawatha is not running${NORMAL}"
 		exit 7
 	fi
+
+	echo -en "Stopping webserver: ${GREEN}"
+	kill -15 ${PID}
+
+	WAIT="5"
+	while [ -d /proc/${PID} ]; do
+		if [ "${WAIT}" != "0" ]; then
+			sleep 1
+			let WAIT=${WAIT}-1
+		else
+			kill -9 ${PID}
+			echo -en "${RED}warning, possible incorrect shutdown of "
+			break
+		fi
+	done
+
+	echo -e "Hiawatha${NORMAL}"
 }
 
 function config_check {
@@ -85,14 +101,18 @@ function config_check {
 
 function show_status {
 	if [ ! -f $PIDFILE ]; then
-		echo -e "${RED}Hiawatha is not running${NORMAL}"
+		echo -e "${YELLOW}Hiawatha PID file not found, so Hiawatha is probably not running${NORMAL}"
 		exit 3
-	elif ps `cat $PIDFILE` >/dev/null 2>&1; then
-		echo -e "${GREEN}Hiawatha is running${NORMAL}"
-	else
-		echo -e "${RED}Hiawatha is not running but PID file exists${NORMAL}"
-		return 1
 	fi
+	
+	PID=`cat ${PIDFILE}`
+
+	if [ ! -d /proc/${PID} ]; then
+		echo -e "${RED}Hiawatha is not running but PID file exists${NORMAL}"
+		exit 1
+	fi
+
+	echo -e "${GREEN}Hiawatha is running${NORMAL}"
 }
 
 case "$1" in

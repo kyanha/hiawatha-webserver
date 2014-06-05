@@ -658,7 +658,7 @@ int cgi_cache_time(char *buffer, int size) {
 	}
 
 	*end = '\0';
-	cache_time = str2int(begin);
+	cache_time = str_to_int(begin);
 	*end = '\r';
 
 	if (cache_time < MIN_CGI_CACHE_TIMER) {

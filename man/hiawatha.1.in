@@ -413,10 +413,10 @@ Define which IPs have access to the website. If an IP does not match an entry in
 .br
 Example: AccessList = deny 10.0.0.13, allow 10.0.0.0/24, deny all
 .TP
-.B AccessLogfile = <filename with full path>
-Logfile for the HTTP requests.
+.B AccessLogfile = <filename with full path>[,daily|monthly|weekly]
+Logfile for the HTTP requests. Hiawatha can rotate them on a daily, weekly or monthly basis.
 .br
-Default = @LOG_DIR@/access.log, example: AccessLogfile = /var/log/hiawatha.acc
+Default = @LOG_DIR@/access.log, example: AccessLogfile = /var/log/hiawatha.acc, weekly
 .TP
 .B Alias = <softlink>:<directory>
 An alias is a virtual softlink to a directory. Every request to <websiteroot>/<softlink> will be rerouted to <directory>.
@@ -522,7 +522,7 @@ If the requested file has no extension, treat it as if the extension was equal t
 Example: NoExtensionAs = cgi
 .TP
 .B PasswordFile = ((Basic|Digest):<passwordfile>)|none[,<groupfile>]
-When this option is set, HTTP authentication is enabled. Use the full path to the password file when that password file should also be used for sub-directories. Entries for the password file can be created via the wigwam(1) tool. The realm fo Digest HTTP authentication must be equal to the text set via LoginMessage.
+When this option is set, HTTP authentication is enabled. Use the full path to the password file when that password file should also be used for sub-directories. Entries for the password file can be created via the wigwam(1) tool. The realm for Digest HTTP authentication must be equal to the text set via LoginMessage.
 .br
 The <groupfile> contains the groupnames followed by the names of the users that are a member of that group. The format of the lines in the groupfile is:
 .br
@@ -563,15 +563,15 @@ The <groupname> is the name of the group a user must be a member of to have acce
 .br
 Example: RequiredGroup = webadmins,staff
 .TP
-.B RequireSSL = yes|no
-Specify that a domain must be visited with a SSL connection. If it is visited via HTTP, Hiawatha will send a redirect (301) with a HTTPS URL.
+.B RequireSSL = yes|no[,HSTS time]
+Specify that a domain must be visited with a SSL connection. If it is visited via HTTP, Hiawatha will send a redirect (301) with a HTTPS URL. The HSTS time is the max-age value of the Strict-Transport-Security HTTP header.
 .br
-Default = no, example: RequireSSL = yes
+Default = no,31536000, example: RequireSSL = yes,2678400
 .br
 
 (requires that Hiawatha was not compiled with -DENABLE_SSL=off)
 .TP
-.B ReverseProxy <pattern> http[s]://<hostname>[:<port>][/<path>] [<timeout>] [keep-alive]
+.B ReverseProxy [!]<pattern> http[s]://<hostname>[:<port>][/<path>] [<timeout>] [keep-alive]
 Forward the request with URLs that match the regular expression <pattern> to another webserver, where <path> is placed before the original URL. Note that the reverse proxy selection comes before the URL toolkit handling. When <hostname> is an IP address, the value of the Host HTTP header is unchanged. Otherwise, it is replaced with the value of <hostname>. The connection is closed after <timeout> seconds, which is set to 5 seconds by default. By default, Hiawatha doesn't use keep-alive connections to the final webserver. You can enable this by adding 'keep-alive' to the configuration line.
 .br
 Example: ReverseProxy ^/icons http://resources.lan/images

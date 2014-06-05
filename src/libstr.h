@@ -23,11 +23,12 @@ void check_free(void *ptr);
 void clear_free(void *ptr, int size);
 void check_clear_free(void *ptr, int size);
 
-int  str2int(char *str);
+int  str_to_int(char *str);
+short hex_char_to_int(char c);
+int  hex_to_int(char *str);
 char *remove_spaces(char *str);
 char *uncomment(char *str);
 char *strlower(char *str);
-short hex_to_int(char c);
 int  split_string(const char *str, char **key, char **value, char c);
 int  split_configline(const char *str, char **key, char **value);
 bool valid_uri(char *uri, bool allow_dot_files);

@@ -751,8 +751,7 @@ void check_url_toolkit(char *config_dir, char **toolkit_id) {
 
 void read_password(char *buffer, int size) {
 	struct termios tty;
-	int pos = 0;
-	char c;
+	int pos = 0, c;
 
 	printf("Enter password: ");
 
@@ -767,7 +766,7 @@ void read_password(char *buffer, int size) {
 	}
 
 	while (((c = getc(stdin)) != '\n') && (pos < size - 1)) {
-		buffer[pos++] = c;
+		buffer[pos++] = (char)c;
 	}
 	buffer[pos] = '\0';
 

@@ -31,9 +31,11 @@
 #define ec_CLIENT_DISCONNECTED  -5
 #define ec_FORCE_QUIT           -6
 #define ec_SQL_INJECTION        -7
-#define ec_INVALID_URL          -8
+#define ec_XSS                  -8
+#define ec_CSRF                 -9
+#define ec_INVALID_URL          -10
 
-typedef enum { no_cgi, binary, script, fastcgi} t_cgi_type;
+typedef enum { no_cgi, binary, script, fastcgi } t_cgi_type;
 typedef enum { unknown, GET, POST, HEAD, TRACE, PUT, DELETE, CONNECT, WHEN, unsupported } t_req_method;
 typedef enum { missing_slash, require_ssl, location, enforce_first_hostname } t_cause_of_301;
 

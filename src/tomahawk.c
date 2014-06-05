@@ -273,7 +273,7 @@ static int run_tomahawk(char *line, t_admin *admin, t_config *config) {
 			fprintf(fp, "  ban what?\n");
 		} else {
 			if (split_string(param, &param, &param2, ' ') == 0) {
-				time = str2int(param2);
+				time = str_to_int(param2);
 			} else {
 				time = TIMER_OFF;
 			}
@@ -322,7 +322,7 @@ static int run_tomahawk(char *line, t_admin *admin, t_config *config) {
 			fprintf(fp, "  kick what?\n");
 		} else if (strcmp(param, "all") == 0) {
 			fprintf(fp, "   %d clients have been kicked.\n", disconnect_clients(config));
-		} else if ((id = str2int(param)) != -1) {
+		} else if ((id = str_to_int(param)) != -1) {
 			if (kick_client(id) == 1) {
 				fprintf(fp, "  client has been kicked.\n");
 			} else {

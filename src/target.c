@@ -65,8 +65,8 @@
 
 #define NEW_FILE -1
 
-char *hs_chunked = "Transfer-Encoding: chunked\r\n";  /* 28 */
-char *fb_alterlist   = "access denied via alterlist";
+char *hs_chunked   = "Transfer-Encoding: chunked\r\n";  /* 28 */
+char *fb_alterlist = "access denied via alterlist";
 
 extern char *fb_filesystem;
 extern char *fb_symlink;
@@ -137,6 +137,7 @@ int send_file(t_session *session) {
 				monitor_event("Invalid file hash for %s", session->file_on_disk);
 			}
 #endif
+			close(handle);
 			return 403;
 		}
 	}
@@ -224,11 +225,10 @@ int send_file(t_session *session) {
 				}
 
 				if (split_string(range, &range_begin, &range_end, '-') == 0) {
-
 					if (*range_begin != '\0') {
-						if ((send_begin = str2int(range_begin)) >= 0) {
+						if ((send_begin = str_to_int(range_begin)) >= 0) {
 							if (*range_end != '\0') {
-								if ((send_end = str2int(range_end)) >= 0) {
+								if ((send_end = str_to_int(range_end)) >= 0) {
 									/* bytes=XX-XX */
 									session->return_code = 206;
 								}
@@ -238,7 +238,7 @@ int send_file(t_session *session) {
 							}
 						}
 					} else {
-						if ((send_begin = str2int(range_end)) >= 0) {
+						if ((send_begin = str_to_int(range_end)) >= 0) {
 							/* bytes=-XX */
 							send_begin = file_size - send_begin - 1;
 							session->return_code = 206;
@@ -282,6 +282,12 @@ int send_file(t_session *session) {
 				}
 				free(range);
 			}
+		}
+	}
+
+	if (session->extension != NULL) {
+		if (strcmp(session->extension, "svgz") == 0) {
+			session->encode_gzip = true;
 		}
 	}
 
@@ -453,7 +459,7 @@ static int extract_http_code(char *data) {
 		if ((*data == '\r') || (*data == ' ')) {
 			c = *data;
 			*data = '\0';
-			result = str2int(code);
+			result = str_to_int(code);
 			*data = c;
 			break;
 		}
@@ -483,6 +489,7 @@ int execute_cgi(t_session *session) {
 #endif
 #ifdef ENABLE_MONITOR
 	bool timed_out = false, measure_runtime = false;
+	bool error_printed = false;
 	struct timeval tv_begin, tv_end;
 	struct timezone tz_begin, tz_end;
 	int runtime, diff;
@@ -589,18 +596,6 @@ int execute_cgi(t_session *session) {
 		}
 	}
 
-	/* Prevent Cross-site Scripting
-	 */
-	if (session->host->prevent_xss) {
-		prevent_xss(session);
-	}
-
-	/* Prevent Cross-site Request Forgery
-	 */
-	if (session->host->prevent_csrf) {
-		prevent_csrf(session);
-	}
-
 	/* Prevent SQL injection
 	 */
 	if (session->host->prevent_sqli) {
@@ -610,6 +605,28 @@ int execute_cgi(t_session *session) {
 		}
 		if (result != 0) {
 			return -1;
+		}
+	}
+
+	/* Prevent Cross-site Scripting
+	 */
+	if (session->host->prevent_xss != p_no) {
+		if (prevent_xss(session) > 0) {
+			if (session->host->prevent_xss == p_block) {
+				session->error_cause = ec_XSS;
+				return -1;
+			}
+		}
+	}
+
+	/* Prevent Cross-site Request Forgery
+	 */
+	if (session->host->prevent_csrf != p_no) {
+		if (prevent_csrf(session) > 0) {
+			if (session->host->prevent_csrf == p_block) {
+				session->error_cause = ec_CSRF;
+				return -1;
+			}
 		}
 	}
 
@@ -744,6 +761,9 @@ int execute_cgi(t_session *session) {
 					*(cgi_info.error_buffer + cgi_info.error_len) = '\0';
 					log_cgi_error(session, cgi_info.error_buffer);
 					cgi_info.error_len = 0;
+#ifdef ENABLE_MONITOR
+					error_printed = true;
+#endif
 				}
 
 				if (cgi_info.input_len > 0) {
@@ -990,7 +1010,7 @@ int execute_cgi(t_session *session) {
 			if (tv_end.tv_usec < tv_begin.tv_usec) {
 				runtime--;
 			}
-			monitor_count_cgi(session, runtime, timed_out);
+			monitor_count_cgi(session, runtime, timed_out, error_printed);
 		}
 	}
 #endif
@@ -1237,13 +1257,13 @@ int handle_put_request(t_session *session) {
 				result = 416;
 			} else if (strlen(value) > 9) {
 				result = 416;
-			} else if ((write_begin = str2int(value)) == -1) {
+			} else if ((write_begin = str_to_int(value)) == -1) {
 				result = 416;
 			} else if (split_string(rest, &value, &rest, '/') == -1) {
 				result = 416;
-			} else if ((write_end = str2int(value)) == -1) {
+			} else if ((write_end = str_to_int(value)) == -1) {
 				result = 416;
-			} else if ((total_size = str2int(rest)) == -1) {
+			} else if ((total_size = str_to_int(rest)) == -1) {
 				result = 416;
 			} else if (total_size != file_size) {
 				result = 416;
@@ -1459,16 +1479,11 @@ static int find_chunk_size(char *buffer, int size, int *chunk_size, int *chunk_l
 		return -1;
 	}
 
-	*chunk_size = 0;
-	extra = 4;
-	c = buffer;
-	while (*c != '\r') {
-		*chunk_size = (16 * (*chunk_size)) + (int)hex_to_int(*c);
-		extra++;
-		c++;
-	}
+	extra = 4 + c - buffer;
 
-	if (*chunk_size == 0) { 
+	if ((*chunk_size = hex_to_int(buffer)) == -1) {
+		return -1;
+	} else if (*chunk_size == 0) { 
 		return 0;
 	}
 
@@ -1545,12 +1560,14 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	options.client_ip = &(session->ip_address);
 	options.port = session->binding->port;
 	options.method = session->method;
-	options.uri = session->request_uri;
+	options.uri = session->uri;
+	options.vars = session->vars;
 	options.hostname = session->hostname;
 	options.http_headers = session->http_headers;
 	options.body = session->body;
 	options.content_length = session->content_length;
 	options.remote_user = session->remote_user;
+	options.uploaded_file = session->uploaded_file;
 #ifdef ENABLE_SSL
 	options.use_ssl = session->binding->use_ssl;
 #endif
@@ -1742,7 +1759,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 										str += 16;
 										if ((eol = strchr(str, '\r')) != NULL) {
 											*eol = '\0';
-											content_length = str2int(str);
+											content_length = str_to_int(str);
 											*eol = '\r';
 										}
 									}

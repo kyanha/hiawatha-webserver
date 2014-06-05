@@ -22,7 +22,8 @@
 #include "alternative.h"
 #include "libstr.h"
 
-#define MAX_VALUE (INT_MAX - 10) / 10
+#define MAX_DEC_VALUE (INT_MAX - 10) / 10
+#define MAX_HEX_VALUE (INT_MAX - 16) / 16
 
 /* Memory free functions
  */
@@ -49,25 +50,65 @@ void check_clear_free(void *ptr, int size) {
 
 /* Convert a string to an integer.
  */
-int str2int(char *str) {
-	int i = 0, value = 0;
+int str_to_int(char *str) {
+	int value = 0;
 
 	if (str == NULL) {
 		return -1;
 	} else if (*str == '\0') {
 		return -1;
-	} else while (*(str + i) != '\0') {
-		if ((*(str + i) >= '0') && (*(str + i) <= '9')) {
-			if (value >= MAX_VALUE) {
-				return -1;
-			}
-			value *= 10;
-			value += (*(str + i) - '0');
-			i++;
-		} else {
+	}
+
+	do {
+		if (value >= MAX_DEC_VALUE) {
 			return -1;
 		}
+		if ((*str < '0') || (*str > '9')) {
+			return -1;
+		}
+		value = (10 * value) + (*str - '0');
+		str++;
+	} while (*str != '\0');
+
+	return value;
+}
+
+/* Convert a hexadecimal char to decimal.
+ */
+short hex_char_to_int(char c) {
+	 if ((c >= '0') && (c <= '9')) {
+		 return c - '0';
+	 } else if ((c >= 'A') && (c <= 'F')) {
+		 return c - 'A' + 10;
+	 } else if ((c >= 'a') && (c <= 'f')) {
+		 return c - 'a' + 10;
+	 }
+
+	 return -1;
+}
+
+/* Convert a hexadecimal string to an integer.
+ */
+int hex_to_int(char *str) {
+	int value = 0;
+	short digit;
+
+	if (str == NULL) {
+		return -1;
+	} else if (*str == '\0') {
+		return -1;
 	}
+
+	do {
+		if (value >= MAX_HEX_VALUE) {
+			return -1;
+		}
+		if ((digit = hex_char_to_int(*str)) == -1) {
+			return -1;
+		}
+		value = (16 * value) + digit;
+		str++;
+	} while (*str != '\0');
 
 	return value;
 }
@@ -143,20 +184,6 @@ char *strlower(char *str) {
 	return str;
 }
 
-/* Convert a hexadecimal char to an integer.
- */
-short hex_to_int(char c) {
-	 if ((c >= '0') && (c <= '9')) {
-		 return c - '0';
-	 } else if ((c >= 'A') && (c <= 'F')) {
-		 return c - 'A' + 10;
-	 } else if ((c >= 'a') && (c <= 'f')) {
-		 return c - 'a' + 10;
-	 }
-
-	 return -1;
-}
-
 /* Split a string in 2 strings.
  */
 int split_string(const char *str, char **key, char **value, char c) {
@@ -165,15 +192,15 @@ int split_string(const char *str, char **key, char **value, char c) {
 	}
 
 	*key = (char*)str;
-	if ((*value = strchr(*key, c)) != NULL) {
-		*(*value)++ = '\0';
-		*key = remove_spaces(*key);
-		*value = remove_spaces(*value);
-
-		return 0;
+	if ((*value = strchr(*key, c)) == NULL) {
+		return -1;
 	}
 
-	return -1;
+	*(*value)++ = '\0';
+	*key = remove_spaces(*key);
+	*value = remove_spaces(*value);
+
+	return 0;
 }
 
 int split_configline(const char *str, char **key, char **value) {
@@ -330,8 +357,8 @@ void url_decode(char *str) {
 
 	while (*str != '\0') {
 		if (*str == '%') {
-			if ((high = hex_to_int(*(str + 1))) != -1) {
-				if ((low = hex_to_int(*(str + 2))) != -1) {
+			if ((high = hex_char_to_int(*(str + 1))) != -1) {
+				if ((low = hex_char_to_int(*(str + 2))) != -1) {
 					str += 2;
 					*str = (char)(high<<4) + low;
 				}
@@ -424,8 +451,8 @@ bool forbidden_chars_present(char *str) {
 		if ((*str > 0) && (*str < 32)) {
 			return true;
 		} else if (*str == '%') {
-			if ((high = hex_to_int(*(str + 1))) != -1) {
-				if ((low = hex_to_int(*(str + 2))) != -1) {
+			if ((high = hex_char_to_int(*(str + 1))) != -1) {
+				if ((low = hex_char_to_int(*(str + 2))) != -1) {
 					if (((high << 4) + low) < 32) {
 						return true;
 					}

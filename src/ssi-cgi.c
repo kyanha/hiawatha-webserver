@@ -28,11 +28,11 @@
 #include "libstr.h"
 #include "libfs.h"
 
-#define CGI_BUFFER_SIZE    4096
-#define MAX_LINE_SIZE      1024
-#define MAX_CWD             256
-#define MAX_INCLUDE_DEPTH    16
-#define SSI_EXTENSIONS     "shtml, stm, shtm"
+#define CGI_BUFFER_SIZE      4 * KILOBYTE
+#define MAX_LINE_SIZE        1 * KILOBYTE
+#define MAX_CWD            256
+#define MAX_INCLUDE_DEPTH   16
+#define SSI_EXTENSIONS    "shtml, stm, shtm"
 
 typedef struct type_parameter {
 	char *key, *value;
@@ -70,6 +70,7 @@ t_config *get_configuration(void) {
 		free(config);
 		return NULL;
 	}
+	free(extensions);
 
 	config->include_depth = 0;
 
@@ -240,8 +241,8 @@ int execute_command(char *command, t_exec_type type) {
 							if (header_read == false) {
 								bytes_in_buffer += bytes_read;
 
-								if ((pos = strstr(buffer, "\r\n\r\n")) == NULL) {
-									pos = strstr(buffer, "\n\n");
+								if ((pos = strnstr(buffer, "\r\n\r\n", bytes_in_buffer)) == NULL) {
+									pos = strnstr(buffer, "\n\n", bytes_in_buffer);
 									skip = 2;
 								} else {
 									skip = 4;
@@ -495,6 +496,7 @@ int process_ssi_file(t_config *config, char *file) {
 						 */
 						if ((new = (t_parameter*)malloc(sizeof(t_parameter))) == NULL) {
 							print_error(config, "error allocating memory for parameter");
+							fclose(fp);
 							return -1;
 						}
 						if (param == NULL) {

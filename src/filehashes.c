@@ -170,6 +170,7 @@ int print_file_hashes(char *directory) {
 				break;
 			case no:
 				if (sha256_file(fileinfo->d_name, bin_hash, 0) != 0) {
+					closedir(dp);
 					return -1;
 				}
 				sha2_bin2hex(bin_hash, hex_hash);
@@ -181,6 +182,8 @@ int print_file_hashes(char *directory) {
 		}
 
 	}
+
+	closedir(dp);
 
 	if (chdir("..") != 0) {
 		return -1;

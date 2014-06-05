@@ -14,10 +14,12 @@
 #ifdef ENABLE_RPROXY
 
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/un.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <string.h>
 #include <poll.h>
@@ -32,10 +34,11 @@
 #include "libfs.h"
 #include "polarssl/md5.h"
 
-#define RPROXY_ID_LEN   10 /* Must be smaller than 32 */
-#define MAX_SEND_BUFFER  2 * KILOBYTE
-#define EXTENSION_SIZE  10
-#define SSH_BUFFER       4 * KILOBYTE
+#define RPROXY_ID_LEN             10 /* Must be smaller than 32 */
+#define MAX_SEND_BUFFER            2 * KILOBYTE
+#define EXTENSION_SIZE            10
+#define SSH_BUFFER                 4 * KILOBYTE
+#define UPLOADED_FILE_BUFFER_SIZE  4 * KILOBYTE
 
 static char   *rproxy_header;
 static size_t rproxy_header_len;
@@ -62,8 +65,8 @@ int init_rproxy_module(void) {
 
 	time(&t);
 	localtime_r(&t, &s);
-	str[49] = '\0';
 	strftime(str, 49, "%a %d %b %Y %T", &s);
+	str[49] = '\0';
 
 	md5((unsigned char*)str, strlen(str), digest);
 	md5_bin2hex(digest, rproxy_id);
@@ -104,6 +107,13 @@ t_rproxy *rproxy_setting(char *line) {
 
 	/* Pattern
 	 */
+	if (*path == '!') {
+		rproxy->neg_match = true;
+		path++;
+	} else {
+		rproxy->neg_match = false;
+	}
+
 	if (regcomp(&(rproxy->pattern), path, REG_EXTENDED) != 0) {
 		free(rproxy);
 		return NULL;
@@ -166,7 +176,7 @@ t_rproxy *rproxy_setting(char *line) {
 
 	if (port != NULL) {
 		*(port++) = '\0';
-		if ((rproxy->port = str2int(port)) < 1) {
+		if ((rproxy->port = str_to_int(port)) < 1) {
 			check_free(rproxy->path);
 			free(rproxy);
 			return NULL;
@@ -209,7 +219,7 @@ t_rproxy *rproxy_setting(char *line) {
 	/* Timeout
 	 */
 	if (timeout != NULL) {
-		if ((rproxy->timeout = str2int(timeout)) <= 0) {
+		if ((rproxy->timeout = str_to_int(timeout)) <= 0) {
 			if (keep_alive != NULL) {
 				check_free(rproxy->path);
 				check_free(rproxy->hostname);
@@ -244,7 +254,7 @@ bool rproxy_match(t_rproxy *rproxy, char *uri) {
 		return false;
 	}
 
-	return regexec(&(rproxy->pattern), uri, 0, NULL, 0) != REG_NOMATCH;
+	return (regexec(&(rproxy->pattern), uri, 0, NULL, 0) != REG_NOMATCH) != rproxy->neg_match;
 }
 
 /* Detect reverse proxy loop
@@ -364,9 +374,10 @@ static int send_to_webserver(t_rproxy_webserver *webserver, t_rproxy_result *res
  */
 int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *options, t_rproxy *rproxy, t_rproxy_result *result, bool session_keep_alive) {
 	t_http_header *http_header;
-	char forwarded_for[20 + MAX_IP_STR_LEN], ip_addr[MAX_IP_STR_LEN], forwarded_port[32];
+	char forwarded_for[20 + MAX_IP_STR_LEN], ip_addr[MAX_IP_STR_LEN], forwarded_port[32], *buffer, *referer;
 	bool forwarded_found = false;
 	t_send_buffer send_buffer;
+	int handle, bytes_read;
 #ifdef ENABLE_CACHE
 	char extension[EXTENSION_SIZE];
 #endif
@@ -393,7 +404,17 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 
 	if (send_to_webserver(webserver, result, &send_buffer, options->uri, strlen(options->uri)) == -1) {
 		return -1;
-	} else if (send_to_webserver(webserver, result, &send_buffer, " HTTP/1.1\r\n", 11) == -1) {
+	}
+
+	if (options->vars != NULL) {
+		if (send_to_webserver(webserver, result, &send_buffer, "?", 1) == -1) {
+			return -1;
+		} else if (send_to_webserver(webserver, result, &send_buffer, options->vars, strlen(options->vars)) == -1) {
+			return -1;
+		}
+	}
+
+	if (send_to_webserver(webserver, result, &send_buffer, " HTTP/1.1\r\n", 11) == -1) {
 		return -1;
 	}
 
@@ -427,6 +448,20 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 		if (rproxy->hostname != NULL) {
 			if (strncasecmp(http_header->data, "Host:", 5) == 0) {
 				continue;
+			}
+
+			if ((strncasecmp(http_header->data, "Referer:", 8) == 0) && (options->hostname != NULL)) {
+				if (str_replace(http_header->data, options->hostname, rproxy->hostname, &referer) > 0) {
+					if (send_to_webserver(webserver, result, &send_buffer, referer, strlen(referer)) == -1) {
+						free(referer);
+						return -1;
+					}
+					free(referer);
+					if (send_to_webserver(webserver, result, &send_buffer, "\r\n", 2) == -1) {
+						return -1;
+					}
+					continue;
+				}
 			}
 		}
 
@@ -540,6 +575,18 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 		if (send_to_webserver(webserver, result, &send_buffer, options->body, options->content_length) == -1) {
 			return -1;
 		}
+	} else if (options->uploaded_file != NULL) {
+		if ((buffer = (char*)malloc(UPLOADED_FILE_BUFFER_SIZE)) != NULL) {
+			if ((handle = open(options->uploaded_file, O_RDONLY)) != -1) {
+				while ((bytes_read = read(handle, buffer, UPLOADED_FILE_BUFFER_SIZE)) > 0) {
+					if (send_to_webserver(webserver, result, &send_buffer, buffer, bytes_read) == -1) {
+						break;
+					}
+				}
+				close(handle);
+			}
+			free(buffer);
+		}
 	}
 
 	if (send_to_webserver(webserver, result, &send_buffer, NULL, 0) == -1) {
@@ -578,6 +625,7 @@ int tunnel_ssh_connection(int client_sock) {
 	}
 
 	if (send(client_sock, "HTTP/1.0 200 OK\r\n\r\n", 19, 0) == -1) {
+		close(server_sock);
 		return -1;
 	}
 

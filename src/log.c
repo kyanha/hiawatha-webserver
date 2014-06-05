@@ -8,25 +8,31 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  */
-
 #include "config.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <zlib.h>
+#include <errno.h>
 #include <string.h>
 #include <time.h>
 #include <pthread.h>
 #include "global.h"
 #include "liblist.h"
+#include "libfs.h"
+#include "libstr.h"
 #include "log.h"
 
 #define BUFFER_SIZE        2 * KILOBYTE
 #define TIMESTAMP_SIZE    40
-#define IP_ADDRESS_SIZE MAX_IP_STR_LEN + 1
 #define LOGFILE_OPEN_TIME 30
+#define GZIP_BUFFER_SIZE   8 * KILOBYTE
+#define IP_ADDRESS_SIZE MAX_IP_STR_LEN + 1
 
 #ifdef CYGWIN
 #define EOL "\r\n"
@@ -35,13 +41,21 @@
 #endif
 
 pthread_mutex_t accesslog_mutex;
+int day_of_year;
 
 /* Initialize log module
  */
 int init_log_module(void) {
+	time_t now;
+	struct tm s;
+
 	if (pthread_mutex_init(&accesslog_mutex, NULL) != 0) {
 		return -1;
 	}
+
+	now = time(NULL);
+	localtime_r(&now, &s);
+	day_of_year = s.tm_yday;
 
 	return 0;
 }
@@ -336,13 +350,16 @@ void log_request(t_session *session) {
 	}
 
 	pthread_mutex_lock(&accesslog_mutex);
+
 	if (*(session->host->access_fp) == NULL) {
 		*(session->host->access_fp) = fopen(session->host->access_logfile, "a");
 	}
+
 	if (*(session->host->access_fp) != NULL) {
 		fprintf(*(session->host->access_fp), "%s"EOL, str);
 		fflush(*(session->host->access_fp));
 	}
+
 	pthread_mutex_unlock(&accesslog_mutex);
 }
 
@@ -473,6 +490,7 @@ void log_cgi_error(t_session *session, char *mesg) {
  */
 void close_logfiles(t_host *host, time_t now) {
 	pthread_mutex_lock(&accesslog_mutex);
+
 	while (host != NULL) {
 		if ((now >= host->access_time + LOGFILE_OPEN_TIME) || (now == 0)) {
 			if (*(host->access_fp) != NULL) {
@@ -482,6 +500,7 @@ void close_logfiles(t_host *host, time_t now) {
 		}
 		host = host->next;
 	}
+
 	pthread_mutex_unlock(&accesslog_mutex);
 }
 
@@ -492,6 +511,169 @@ void close_logfiles_for_cgi_run(t_host *host) {
 		if (*(host->access_fp) != NULL) {
 			fclose(*(host->access_fp));
 		}
+		host = host->next;
+	}
+}
+
+/* Compress logfile
+ */
+static int gzip_logfile(char *file) {
+	char *gz_file = NULL, buffer[GZIP_BUFFER_SIZE];
+	int result = -1, fd_in = -1, fd_out = -1;
+	int bytes_read, bytes_written, total_written;
+	struct stat stat_in;
+	gzFile gzhandle = NULL;
+
+	/* Input file
+	 */
+	if ((fd_in = open(file, O_RDONLY)) == -1) {
+		goto gzip_fail;
+	}
+
+	if (fstat(fd_in, &stat_in) == -1) {
+		goto gzip_fail;
+	}
+
+	/* Output file
+	 */
+	if ((gz_file = (char*)malloc(strlen(file) + 4)) == NULL) {
+		goto gzip_fail;
+	}
+	sprintf(gz_file, "%s.gz", file);
+
+	if ((fd_out = open(gz_file, O_CREAT | O_WRONLY, stat_in.st_mode)) == -1) {
+		goto gzip_fail;
+	}
+
+	if ((gzhandle = gzdopen(fd_out, "w6")) == NULL) {
+		goto gzip_fail;
+	}
+
+	/* Compress file
+	 */
+	while ((bytes_read = read(fd_in, buffer, GZIP_BUFFER_SIZE)) != 0) {
+		if (bytes_read == -1) {
+			if (errno != EAGAIN) {
+				goto gzip_fail;
+			}
+			continue;
+		}
+
+		total_written = 0;
+		while (total_written < bytes_read) {
+			if ((bytes_written = gzwrite(gzhandle, buffer + total_written, bytes_read - total_written)) == -1) {
+				goto gzip_fail;
+			}
+			total_written += bytes_written;
+		}
+	}
+
+	result = 0;
+
+gzip_fail:
+	if (gzhandle != NULL) {
+		gzclose(gzhandle);
+	}
+
+	if (fd_out != -1) {
+		close(fd_out);
+		if (result == -1) {
+			unlink(gz_file);
+		}
+	}
+
+	if (fd_in != -1) {
+		close(fd_in);
+	}
+
+	if (result == 0) {
+		if (unlink(file) == -1) {
+			unlink(gz_file);
+		}
+	}
+
+	if (gz_file != NULL) {
+		free(gz_file);
+	}
+
+	return result;
+}
+
+/* Rotate logfile
+ */
+static int rotate_access_logfile(t_host *host, char *timestamp) {
+	int fd;
+	char *logfile, *dot;
+	size_t len;
+
+	if ((logfile = (char*)malloc(strlen(host->access_logfile) + strlen(timestamp) + 2)) == NULL) {
+		return -1;
+	}
+
+	if ((dot = strrchr(host->access_logfile, '.')) != NULL) {
+		len = dot - host->access_logfile;
+		memcpy(logfile, host->access_logfile, len);
+		logfile[len] = '\0';
+		strcat(logfile, "-");
+		strcat(logfile, timestamp);
+		strcat(logfile, dot);
+	} else {
+		strcpy(logfile, host->access_logfile);
+		strcat(logfile, "-");
+		strcat(logfile, timestamp);
+	}
+
+	if (rename(host->access_logfile, logfile) == -1) {
+		free(logfile);
+		return -1;
+	}
+
+	if ((fd = open(host->access_logfile, O_CREAT, LOG_PERM)) == -1) {
+		rename(logfile, host->access_logfile);
+		free(logfile);
+		return -1;
+	}
+	close(fd);
+
+	gzip_logfile(logfile);
+
+	free(logfile);
+
+	return 0;
+}
+
+/* Rotate logfiles
+ */
+void rotate_access_logfiles(t_config *config, time_t now) {
+	struct tm s;
+	char timestamp[16];
+	t_host *host;
+	int result;
+
+	localtime_r(&now, &s);
+	if (s.tm_yday == day_of_year) {
+		return;
+	}
+	day_of_year = s.tm_yday;
+
+	strftime(timestamp, 15, "%Y-%m-%d", &s);
+
+	host = config->first_host;
+	while (host != NULL) {
+		if (host->rotate_access_log == daily) {
+			result = rotate_access_logfile(host, timestamp);
+		} else if ((host->rotate_access_log == weekly) && (s.tm_wday == 1)) {
+			result = rotate_access_logfile(host, timestamp);
+		} else if ((host->rotate_access_log == monthly) && (s.tm_mday == 1)) {
+			result = rotate_access_logfile(host, timestamp);
+		} else {
+			result = 0;
+		}
+
+		if (result == -1) {
+			log_string(config->system_logfile, "Error rotating %s", host->access_logfile);
+		}
+
 		host = host->next;
 	}
 }

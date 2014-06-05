@@ -11,6 +11,7 @@
 
 #include "config.h"
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
@@ -19,7 +20,6 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <sys/stat.h>
 #include "libfs.h"
 #include "libstr.h"
 
@@ -293,13 +293,13 @@ static int parse_datestr(char *org_datestr, struct tm *date) {
 	}
 
 	if (memcmp(datestr + 3, ", ", 2) != 0) {
-		goto fail;
+		goto parse_fail;
 	} else if ((*(datestr + 7) != ' ') || (*(datestr + 11) != ' ') || (*(datestr + 16) != ' ')) {
-		goto fail;
+		goto parse_fail;
 	} else if ((*(datestr + 19) != ':') || (*(datestr + 22) != ':')) {
-		goto fail;
+		goto parse_fail;
 	} else if (memcmp(datestr + 25, " GMT", 4) != 0) {
-		goto fail;
+		goto parse_fail;
 	}
 
 	*(datestr + 7) = *(datestr + 11) = *(datestr + 16) = *(datestr + 19) = *(datestr + 22) = *(datestr + 25) = '\0';
@@ -307,28 +307,28 @@ static int parse_datestr(char *org_datestr, struct tm *date) {
 		*(datestr + 5) = '0';
 	}
 
-	if ((date->tm_mday = str2int(datestr + 5)) <= 0) {
-		goto fail;
+	if ((date->tm_mday = str_to_int(datestr + 5)) <= 0) {
+		goto parse_fail;
 	} else if ((date->tm_mon = month2int(datestr + 8)) == -1) {
-		goto fail;
-	} else if ((date->tm_year = str2int(datestr + 12)) < 1900) {
-		goto fail;
-	} else if ((date->tm_hour = str2int(datestr + 17)) == -1) {
-		goto fail;
-	} else if ((date->tm_min = str2int(datestr + 20)) == -1) {
-		goto fail;
-	} else if ((date->tm_sec = str2int(datestr + 23)) == -1) {
-		goto fail;
+		goto parse_fail;
+	} else if ((date->tm_year = str_to_int(datestr + 12)) < 1900) {
+		goto parse_fail;
+	} else if ((date->tm_hour = str_to_int(datestr + 17)) == -1) {
+		goto parse_fail;
+	} else if ((date->tm_min = str_to_int(datestr + 20)) == -1) {
+		goto parse_fail;
+	} else if ((date->tm_sec = str_to_int(datestr + 23)) == -1) {
+		goto parse_fail;
 	}
 
 	if (date->tm_mday > 31) {
-		goto fail;
+		goto parse_fail;
 	} else if (date->tm_hour > 23) {
-		goto fail;
+		goto parse_fail;
 	} else if (date->tm_min > 59) {
-		goto fail;
+		goto parse_fail;
 	} else if (date->tm_sec > 59) {
-		goto fail;
+		goto parse_fail;
 	}
 
 	date->tm_year -= 1900;
@@ -336,7 +336,7 @@ static int parse_datestr(char *org_datestr, struct tm *date) {
 
 	result = 0;
 
-fail:
+parse_fail:
 	free(datestr);
 
 	return result;

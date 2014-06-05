@@ -58,7 +58,7 @@ char *hs_private = "private\r\n";                /*  9 */
 char *hs_expires = "Expires: ";                  /*  9 */
 char *hs_http    = "http://";                    /*  7 */
 char *hs_https   = "https://";                   /*  8 */
-char *hs_hsts    = "Strict-Transport-Security: max-age=31536000\r\n"; /* 45 */
+char *hs_hsts    = "Strict-Transport-Security: max-age="; /* 35 */
 char *hs_range   = "Accept-Ranges: bytes\r\n";   /* 22 */
 char *hs_gzip    = "Content-Encoding: gzip\r\n"; /* 24 */
 char *hs_eol     = "\r\n";                       /*  2 */
@@ -396,8 +396,14 @@ int send_header(t_session *session) {
 
 	/* HTTP Strict Transport Security
 	 */
-	if (session->host->require_ssl && session->binding->use_ssl) {
-		if (send_buffer(session, hs_hsts, 45) == -1) {
+	if ((session->host->hsts_time != NULL) && session->binding->use_ssl) {
+		if (send_buffer(session, hs_hsts, 35) == -1) {
+			return -1;
+		}
+		if (send_buffer(session, session->host->hsts_time, strlen(session->host->hsts_time)) == -1) {
+			return -1;
+		}
+		if (send_buffer(session, "\r\n", 2) == -1) {
 			return -1;
 		}
 	}

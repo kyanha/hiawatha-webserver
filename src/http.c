@@ -19,6 +19,7 @@
 #include <errno.h>
 #include <poll.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include "global.h"
 #include "session.h"
 #include "libstr.h"
@@ -33,17 +34,83 @@
 #define NO_REQUEST_LIMIT_SIZE   16 * MEGABYTE
 
 extern char *hs_conlen;
+extern char *hs_chunked;
+
+/* Detect chunked upload progress
+ */
+static int all_chunks_uploaded(char *buffer, int size, long *chunk_size_pos) {
+	int chunk_size;
+	char *end;
+
+	if ((end = strstr(buffer + *chunk_size_pos, "\r\n")) == NULL) {
+		return 0;
+	}
+	*end = '\0';
+	chunk_size = hex_to_int(buffer + *chunk_size_pos);
+	*end = '\r';
+
+	if (chunk_size == -1) {
+		return -1;
+	} else if (chunk_size == 0) {
+		return 1;
+	}
+
+	if (size >= (end - buffer) + chunk_size + 4) {
+		*chunk_size_pos = (end - buffer) + chunk_size + 4;
+		return all_chunks_uploaded(buffer, size, chunk_size_pos);
+	}
+
+	return 0;
+}
+
+/* Merge chunks to one single content block
+ */
+static long merge_chunks(char *buffer, int size, long *bytes_in_buffer) {
+	int chunk_size, ch_len;
+	long content_length = 0;
+	char *end, *destination;
+
+	destination = buffer;
+
+	do {
+		if ((end = strstr(buffer, "\r\n")) == NULL) {
+			return -1;
+		}
+		*end = '\0';
+		chunk_size = hex_to_int(buffer);
+		*end = '\r';
+
+		if (chunk_size == -1) {
+			return -1;
+		}
+
+		ch_len = end - buffer + 4;
+
+		if (chunk_size > 0) {
+			memmove(destination, end + 2, chunk_size + 1);
+			destination += chunk_size;
+			size -= ch_len + chunk_size;
+			buffer += ch_len + chunk_size;
+			content_length += chunk_size;
+			*bytes_in_buffer -= ch_len;
+		} else if (chunk_size == 0) {
+			memmove(destination, end + 4, size - ch_len + 1);
+			*bytes_in_buffer -= ch_len;
+		}
+	} while (chunk_size > 0);
+
+	return content_length;
+}
 
 /* Read the request from a client socket.
  */
 int fetch_request(t_session *session) {
 	char *new_reqbuf, *strstart, *strend;
-	long max_request_size, bytes_read, header_length = -1, content_length = -1;
-	int result = 200, write_bytes, poll_result;
+	long max_request_size, bytes_read, header_length = -1, content_length = -1, chunk_size_pos;
+	int result = 200, write_bytes, poll_result, upload_handle = -1, retval;
 	time_t deadline;
 	struct pollfd poll_data;
-	bool keep_reading = true, store_on_disk = false;
-	int upload_handle = -1;
+	bool keep_reading = true, store_on_disk = false, chunked_request = false;
 
 	if (session->request_limit == false) {
 		deadline = session->time + NO_REQUEST_LIMIT_TIME;
@@ -73,6 +140,8 @@ int fetch_request(t_session *session) {
 	 					if ((session->uploaded_file = (char*)malloc(session->config->upload_directory_len + 15)) != NULL) {
 							strcpy(session->uploaded_file, session->config->upload_directory);
 							strcpy(session->uploaded_file + session->config->upload_directory_len, "/upload_XXXXXX");
+
+							umask(S_IWGRP | S_IWOTH);
 							if ((upload_handle = mkstemp(session->uploaded_file)) == -1) {
 								free(session->uploaded_file);
 								session->uploaded_file = NULL;
@@ -94,13 +163,16 @@ int fetch_request(t_session *session) {
 
 				}
 			}
+
 			if (header_length != -1) {
-				if (content_length == -1) {
+				if ((content_length == -1) && (chunked_request == false)) {
 					if ((strstart = strcasestr(session->request, hs_conlen)) != NULL) {
+						/* Request has Content-Length
+						 */
 						strstart += 16;
 						if ((strend = strstr(strstart, "\r\n")) != NULL) {
 							*strend = '\0';
-							content_length = str2int(strstart);
+							content_length = str_to_int(strstart);
 							*strend = '\r';
 							if ((content_length < 0) || (INT_MAX - content_length - 2 <= header_length)) {
 								result = 500;
@@ -146,7 +218,19 @@ int fetch_request(t_session *session) {
 								}
 							}
 						}
+					} else if (strcasestr(session->request, hs_chunked) != NULL) {
+						/* Chunked transfer encoding
+						 */
+						if (store_on_disk) {
+							log_error(session, "Chunked transfer encoding for PUT requests not supported.");
+							result = -1;
+							break;
+						}
+						chunked_request = true;
+						chunk_size_pos = 0;
 					} else {
+						/* No content
+						 */
 						session->content_length = 0;
 						if (store_on_disk) {
 							result = 411;
@@ -166,6 +250,23 @@ int fetch_request(t_session *session) {
 							/* Received a complete request */
 							break;
 						}
+					}
+				} else if (chunked_request) {
+					/* All chunks uploaded
+					 */
+					retval = all_chunks_uploaded(session->request + session->header_length,
+					                             session->bytes_in_buffer - session->header_length,
+					                             &chunk_size_pos);
+					if (retval == -1) {
+						result = 400;
+						break;
+					} else if (retval == 1) {
+						if ((session->content_length = merge_chunks(session->request + session->header_length,
+						                                            session->bytes_in_buffer - session->header_length,
+							                                        &(session->bytes_in_buffer))) == -1) {
+							result = -1;
+						}
+						break;
 					}
 				}
 			}
@@ -229,7 +330,6 @@ int fetch_request(t_session *session) {
 #endif
 					bytes_read = recv(session->client_socket, session->request + session->bytes_in_buffer,
 									session->buffer_size - session->bytes_in_buffer, 0);
-
 				switch (bytes_read) {
 					case -1:
 						if (errno != EINTR) {
@@ -585,6 +685,7 @@ bool validate_url(t_session *session) {
 #ifdef ENABLE_MONITOR
 	if (session->config->monitor_enabled) {
 		monitor_count_exploit(session);
+		monitor_event("Invalid URL %s for %s", session->uri, session->host->hostname.item[0]);
 	}
 #endif
 
@@ -662,6 +763,8 @@ const char *http_error(int code) {
 		{431, "Request Header Fields Too Large"},
 		{440, "Client SSL Certificate Required"},
 		{441, "SQL Injection Detected"},
+		{442, "Cross-Site Scripting Detected"},
+		{443, "Cross-Site Request Forgery Detected"},
 
 		/* Server error
 		 */

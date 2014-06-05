@@ -21,15 +21,19 @@
 #include "session.h"
 
 int  init_monitor_module(t_config *config);
-void shutdown_monitor_module(t_config *config);
+void shutdown_monitor_module(void);
 
 int  monitor_event(char *event, ...);
+int  monitor_version(char *version);
 int  monitor_stats_to_buffer(t_config *config, time_t now);
+
+void monitor_count_connection(t_session *session);
+void monitor_count_bad_request(t_session *session);
 
 void monitor_count_host(t_session *session);
 void monitor_count_ban(t_session *session);
 void monitor_count_exploit(t_session *session);
-void monitor_count_cgi(t_session *session, int time, bool timed_out);
+void monitor_count_cgi(t_session *session, int time, bool timed_out, bool error);
 
 #endif
 

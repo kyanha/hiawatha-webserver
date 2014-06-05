@@ -1,7 +1,6 @@
-diff --git a/library/ssl_tls.c b/library/ssl_tls.c
-index 116bc5c..b6ce71c 100644
---- a/library/ssl_tls.c
-+++ b/library/ssl_tls.c
+diff old/library/ssl_tls.c new/library/ssl_tls.c
+--- old/library/ssl_tls.c
++++ new/library/ssl_tls.c
 @@ -1633,14 +1633,15 @@ static int ssl_decrypt_buf( ssl_context *ssl )
               * Padding is guaranteed to be incorrect if:
               *   1. padlen >= ssl->in_msglen

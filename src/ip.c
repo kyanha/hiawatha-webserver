@@ -211,7 +211,7 @@ int parse_ip_port(char *line, t_ip_addr *ip, int *port) {
 
 	if (parse_ip(s_ip, ip) == -1) {
 		return -1;
-	} else if ((*port = str2int(s_port)) <= 0) {
+	} else if ((*port = str_to_int(s_port)) <= 0) {
 		return -1;
 	}
 
@@ -327,7 +327,7 @@ int parse_iplist(char *line, t_iplist **list) {
 		}
 
 		if (mask != NULL) {
-			if ((new->netmask = str2int(mask)) == -1) {
+			if ((new->netmask = str_to_int(mask)) == -1) {
 				error = true;
 				break;
 			}

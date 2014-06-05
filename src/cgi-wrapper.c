@@ -288,7 +288,7 @@ int main(int argc, char *argv[]) {
 	}
 	buffer[i - 1] = '\0';
 
-	if ((i = str2int(buffer)) == -1) {
+	if ((i = str_to_int(buffer)) == -1) {
 		print_code(-1);
 	}
 	if (getsid(0) != getsid(i)) {
@@ -310,7 +310,7 @@ int main(int argc, char *argv[]) {
 
 	if ((var = getenv(cgiwrap_cgitime)) == NULL) {
 		time_for_cgi = 5;
-	} else if ((time_for_cgi = str2int(var)) == -1) {
+	} else if ((time_for_cgi = str_to_int(var)) == -1) {
 		print_code(500);
 	}
 

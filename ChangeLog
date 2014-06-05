@@ -1,3 +1,18 @@
+hiawatha (9.6) stable; urgency=medium
+
+  * Logfile rotation for access logfiles.
+  * HTTP Strict Transport Security header made optional for RequireSSL.
+  * Support for chunked transfer encoded requests (not for PUT).
+  * Support for improved server statistics in Hiawatha Monitor.
+  * The Hiawatha Monitor is now supported without the need for XSLT.
+  * PolarSSL updated to version 1.3.7.
+  * A few bugfixes as reported by Coverity.
+  * Bugfix: SQL injection detection was broken since 8.6.
+  * Bugfix: XSS detection didn't work for reverse proxy.
+  * Small bugfixes.
+
+ -- Hugo Leisink <hugo@leisink.net>  Sat, 31 May 2014 20:07:55 +0200
+
 hiawatha (9.5) stable; urgency=low
 
   * Added support for CGI statistics in Hiawatha Monitor.

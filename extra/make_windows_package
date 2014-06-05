@@ -44,7 +44,7 @@ cmake .. -DCMAKE_INSTALL_SBINDIR="/cygdrive/c/Program Files/Hiawatha/bin" \
          -DLOG_DIR="/cygdrive/c/Program Files/Hiawatha/log" \
          -DPID_DIR="/cygdrive/c/Program Files/Hiawatha/log" \
          -DWORK_DIR="/cygdrive/c/Program Files/Hiawatha/work" \
-         -DWEBROOT_DIR="C:\wwwroot"
+         -DWEBROOT_DIR="C:\wwwroot" -DCMAKE_LEGACY_CYGWIN_WIN32=0
 make
 
 # Make Windows package

@@ -37,7 +37,7 @@ static const struct {
 	const char *text;
 } sqli_detection[] = {
 	{"union\\s*select"},
-	{"[\\s'0-9a-z]\\s*--[ \\t]+.+"},
+	{"[\\s'0-9a-z]\\s*--\\s+.+"},
 	{"'\\s*(and|or|&&|\\|\\|)\\s*('|[0-9]|[a-z.]*\\s*=)"},
 	{NULL}
 };
@@ -147,7 +147,7 @@ void init_session(t_session *session) {
 /* Reset a session-record for reuse.
  */
 void reset_session(t_session *session) {
-	int size;
+	long size;
 
 	check_clear_free(session->file_on_disk, CHECK_USE_STRLEN);
 #ifdef CIFS
@@ -534,6 +534,7 @@ int remove_port_from_hostname(t_session *session) {
  */
 int prevent_xss(t_session *session) {
 	int result = 0;
+	bool logged = false;
 	short low, high;
 	char *str, value;
 
@@ -543,31 +544,32 @@ int prevent_xss(t_session *session) {
 
 	while (*str != '\0') {
 		if ((value = *str) == '%') {
-			if ((high = hex_to_int(*(str + 1))) != -1) {
-				if ((low = hex_to_int(*(str + 2))) != -1) {
+			if ((high = hex_char_to_int(*(str + 1))) != -1) {
+				if ((low = hex_char_to_int(*(str + 2))) != -1) {
 					value = (char)(high<<4) + low;
 				}
 			}
 		}
 
 		if ((value == '\"') || (value == '<') || (value == '>') || (value == '\'')) {
+			if (logged == false) {
+				log_exploit_attempt(session, "XSS", session->vars);
+#ifdef ENABLE_TOMAHAWK
+				increment_counter(COUNTER_EXPLOIT);
+#endif
+#ifdef ENABLE_MONITOR
+				if (session->config->monitor_enabled) {
+					monitor_count_exploit(session);
+					monitor_event("XSS attempt for %s", session->file_on_disk);
+				}
+#endif
+				logged = true;
+			}
+
 			*str = '_';
 			result = 1;
 		}
 		str++;
-	}
-
-	if (result > 0) {
-		log_exploit_attempt(session, "XSS", session->vars);
-#ifdef ENABLE_TOMAHAWK
-		increment_counter(COUNTER_EXPLOIT);
-#endif
-#ifdef ENABLE_MONITOR
-		if (session->config->monitor_enabled) {
-			monitor_count_exploit(session);
-			monitor_event("XSS attempt for %s", session->file_on_disk);
-		}
-#endif
 	}
 
 	return result;
@@ -598,7 +600,7 @@ int init_sqli_detection(void) {
 /* Prevent SQL injection
  */
 static int prevent_sqli_str(t_session *session, char *str, int length) {
-	char *data;
+	char *data, *c;
 	t_sqli_pattern *pattern;
 	int result = 0;
 
@@ -612,6 +614,14 @@ static int prevent_sqli_str(t_session *session, char *str, int length) {
 	memcpy(data, str, length);
 	data[length] = '\0';
 	url_decode(data);
+
+	c = data;
+	while (*c != '\0') {
+		if (*c == '+') {
+			*c = ' ';
+		}
+		c++;
+	}
 
 	pattern = sqli_patterns;
 	while (pattern != NULL) {
@@ -666,8 +676,11 @@ int prevent_sqli(t_session *session) {
 /* Prevent Cross-site Request Forgery
  */
 int prevent_csrf(t_session *session) {
-	char *referer, *slash;
+	char *referer, *slash, prev = '\0';
 	int i, n;
+#ifdef ENABLE_MONITOR
+	char *csrf_url;
+#endif
 
 	if (session->request_method != POST) {
 		return 0;
@@ -678,6 +691,10 @@ int prevent_csrf(t_session *session) {
 			return 0;
 		}
 	}
+
+#ifdef ENABLE_MONITOR
+	csrf_url = referer;
+#endif
 
 	if (strncmp(referer, "http://", 7) == 0) {
 		referer += 7;
@@ -708,12 +725,18 @@ int prevent_csrf(t_session *session) {
 	session->cookie = NULL;
 
 	if (session->body != NULL) {
-		log_exploit_attempt(session, "CSRF", session->body);
-		session->body = NULL;
-		session->content_length = 0;
-	} else {
-		log_error(session, "CSRF attempt detected with no request body");
+		prev = *(session->body + session->content_length);
+		*(session->body + session->content_length) = '\0';
 	}
+
+	log_exploit_attempt(session, "CSRF", session->body);
+
+	if (session->body != NULL) {
+		*(session->body + session->content_length) = prev;
+	}
+
+	session->body = NULL;
+	session->content_length = 0;
 
 #ifdef ENABLE_TOMAHAWK
 	increment_counter(COUNTER_EXPLOIT);
@@ -721,7 +744,7 @@ int prevent_csrf(t_session *session) {
 #ifdef ENABLE_MONITOR
 	if (session->config->monitor_enabled) {
 		monitor_count_exploit(session);
-		monitor_event("CSRF attempt for %s", session->file_on_disk);
+		monitor_event("CSRF attempt for %s via %s", session->file_on_disk, csrf_url);
 	}
 #endif
 

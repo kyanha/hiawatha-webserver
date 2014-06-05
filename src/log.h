@@ -16,6 +16,8 @@
 #include "ip.h"
 #include "session.h"
 
+#define LOG_PERM (S_IRUSR|S_IWUSR|S_IRGRP)
+
 int  init_log_module(void);
 void log_pid(t_config *config, pid_t pid, uid_t server_uid);
 void log_string(char *logfile, char *mesg, ...);
@@ -29,6 +31,7 @@ void log_unban(char *logfile, t_ip_addr *ip_address, unsigned long connect_attem
 void log_cgi_error(t_session *session, char *mesg);
 void close_logfiles(t_host *host, time_t now);
 void close_logfiles_for_cgi_run(t_host *host);
+void rotate_access_logfiles(t_config *config, time_t now);
 #ifdef ENABLE_DEBUG
 void log_debug(t_session *session, char *mesg, ...);
 #endif

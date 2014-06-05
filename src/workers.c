@@ -48,10 +48,6 @@
 #include "monitor.h"
 #endif
 
-#ifdef ENABLE_MONITOR
-static volatile int open_connections = 0;
-#endif
-
 extern char *hs_conlen;
 char *hs_forwarded  = "X-Forwarded-For:"; /* 16 */
 char *fb_filesystem = "access denied via filesystem";
@@ -494,6 +490,7 @@ static int serve_client(t_session *session) {
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
 					monitor_count_exploit(session);
+					monitor_event("Request body denied for %s", session->host->hostname.item[0]);
 				}
 #endif
 
@@ -563,14 +560,8 @@ static int serve_client(t_session *session) {
 					}
 			}
 
-			if (session->host->prevent_xss) {
-				prevent_xss(session);
-			}
-
-			if (session->host->prevent_csrf) {
-				prevent_csrf(session);
-			}
-
+			/* Prevent SQL injection
+			 */
 			if (session->host->prevent_sqli) {
 				result = prevent_sqli(session);
 				if (result == 1) {
@@ -578,6 +569,28 @@ static int serve_client(t_session *session) {
 				}
 				if (result != 0) {
 					return -1;
+				}
+			}
+
+			/* Prevent Cross-site Scripting
+			 */
+			if (session->host->prevent_xss != p_no) {
+				if (prevent_xss(session) > 0) {
+					if (session->host->prevent_xss == p_block) {
+						session->error_cause = ec_XSS;
+						return -1;
+					}
+				}
+			}
+
+			/* Prevent Cross-site Request Forgery
+			 */
+			if (session->host->prevent_csrf != p_no) {
+				if (prevent_csrf(session) > 0) {
+					if (session->host->prevent_csrf == p_block) {
+						session->error_cause = ec_CSRF;
+						return -1;
+					}
 				}
 			}
 
@@ -624,7 +637,7 @@ static int serve_client(t_session *session) {
 	                     session->host->allow_dot_files, session->http_headers);
 #endif
 
-	if ((session->request_method != PUT) && (session->request_method != DELETE)) {
+	if (((session->request_method != PUT) && (session->request_method != DELETE)) || session->host->webdav_app) {
 		for (i = 0; i < session->host->toolkit_rules.size; i++) {
 			if ((result = use_toolkit(session->uri, session->host->toolkit_rules.item[i], &toolkit_options)) == UT_ERROR) {
 				return 500;
@@ -923,6 +936,16 @@ static void handle_request_result(t_session *session, int result) {
 			send_code(session);
 			log_request(session);
 			break;
+		case ec_XSS:
+			session->return_code = 442;
+			send_code(session);
+			log_request(session);
+			break;
+		case ec_CSRF:
+			session->return_code = 443;
+			send_code(session);
+			log_request(session);
+			break;
 		case ec_INVALID_URL:
 			if ((session->config->ban_on_invalid_url > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
 				ban_ip(&(session->ip_address), session->config->ban_on_invalid_url, session->config->kick_on_ban);
@@ -939,7 +962,9 @@ static void handle_request_result(t_session *session, int result) {
 		default:
 			if (session->data_sent == false) {
 				session->return_code = 500;
-				send_code(session);
+				if (send_code(session) == -1) {
+					session->keep_alive = false;
+				}
 			}
 	} else switch (result) {
 		case 200:
@@ -950,8 +975,11 @@ static void handle_request_result(t_session *session, int result) {
 		case 412:
 			if (session->data_sent == false) {
 				session->return_code = result;
-				send_header(session);
-				send_buffer(session, "Content-Length: 0\r\n\r\n", 21);
+				if (send_header(session) == -1) {
+					session->keep_alive = false;
+				} else if (send_buffer(session, "Content-Length: 0\r\n\r\n", 21) == -1) {
+					session->keep_alive = false;
+				}
 			}
 			break;
 		case 411:
@@ -959,8 +987,11 @@ static void handle_request_result(t_session *session, int result) {
 			session->keep_alive = false;
 			if (session->data_sent == false) {
 				session->return_code = result;
-				send_header(session);
-				send_buffer(session, "Content-Length: 0\r\n\r\n", 21);
+				if (send_header(session) == -1) {
+					session->keep_alive = false;
+				} else if (send_buffer(session, "Content-Length: 0\r\n\r\n", 21) == -1) {
+					session->keep_alive = false;
+				}
 			}
 			break;
 		case 400:
@@ -980,6 +1011,11 @@ static void handle_request_result(t_session *session, int result) {
 				}
 #endif
 			}
+#ifdef ENABLE_MONITOR
+			if (session->config->monitor_enabled) {
+				monitor_count_bad_request(session);
+			}
+#endif
 			break;
 		case 401:
 		case 403:
@@ -1026,19 +1062,9 @@ static void connection_handler(t_session *session) {
 #ifdef ENABLE_SSL
 	t_ssl_accept_data sad;
 #endif
-#ifdef ENABLE_MONITOR
-	int connections;
 
 #ifdef ENABLE_DEBUG
 	session->current_task = "thread started";
-#endif
-
-	connections = ++open_connections;
-	if (session->config->monitor_enabled) {
-		if (connections > session->config->monitor_srv_stats.simultaneous_connections) {
-			session->config->monitor_srv_stats.simultaneous_connections = connections;
-		}
-	}
 #endif
 
 #ifdef ENABLE_SSL
@@ -1073,6 +1099,12 @@ static void connection_handler(t_session *session) {
 		session->socket_open = true;
 
 	if (session->socket_open) {
+#ifdef ENABLE_MONITOR
+		if (session->config->monitor_enabled) {
+			monitor_count_connection(session);
+		}
+#endif
+
 		do {
 			result = serve_client(session);
 			handle_request_result(session, result);
@@ -1088,7 +1120,11 @@ static void connection_handler(t_session *session) {
 #endif
 
 			if (session->socket_open) {
-				send_buffer(session, NULL, 0); /* Flush the output-buffer */
+				/* Flush the output-buffer
+				 */
+				if (send_buffer(session, NULL, 0) == -1) {
+					session->keep_alive = false;
+				}
 			}
 
 #ifdef ENABLE_MONITOR
@@ -1125,10 +1161,6 @@ static void connection_handler(t_session *session) {
 	} else {
 		close(session->client_socket);
 	}
-
-#ifdef ENABLE_MONITOR
-	open_connections--;
-#endif
 
 	if (session->config->reconnect_delay > 0) {
 		mark_client_for_removal(session, session->config->reconnect_delay);

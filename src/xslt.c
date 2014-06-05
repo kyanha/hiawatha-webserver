@@ -11,7 +11,7 @@
 
 #include "config.h"
 
-#ifdef ENABLE_XSLT
+#if defined(ENABLE_XSLT) || defined(ENABLE_MONITOR)
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -20,14 +20,16 @@
 #include <string.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <libxslt/transform.h>
-#include <libxslt/xsltutils.h>
 #include "libstr.h"
 #include "http.h"
 #include "send.h"
 #include "log.h"
 #ifdef ENABLE_TOMAHAWK
 #include "tomahawk.h"
+#endif
+#ifdef ENABLE_XSLT
+#include <libxslt/transform.h>
+#include <libxslt/xsltutils.h>
 #endif
 
 #define XSLT_INDEX "/index.xslt\0"
@@ -88,6 +90,8 @@ static int xml_special_chars(char *str, char **new) {
 
 	return 0;
 }
+
+#ifdef ENABLE_XSLT
 
 /* XSLT transform parameter functions
  */
@@ -450,6 +454,8 @@ int transform_xml(t_session *session, char *xslt_file) {
 	return result;
 }
 
+#endif
+
 /* Add XML tag to buffer
  */
 int add_tag(char **buffer, int *size, int extra_size, int *len, char *tag, char *str) {
@@ -488,7 +494,9 @@ int add_tag(char **buffer, int *size, int extra_size, int *len, char *tag, char 
 /* Apply XSLT to directory index
  */
 int show_index(t_session *session) {
+#ifdef ENABLE_XSLT
 	xmlDocPtr data_xml;
+#endif
 	char *text_xml, fsize_str[30], timestr[33], value[VALUE_SIZE + 1], *extension, *link, *slash, *ruri;
 	int text_size, text_max, result, handle;
 	off_t total_fsize = 0;
@@ -553,7 +561,9 @@ int show_index(t_session *session) {
 	}
 
 	if (session->request_method == HEAD) {
-		send_buffer(session, "\r\n", 2);
+		if (send_buffer(session, "\r\n", 2) == -1) {
+			return -1;
+		}
 		return 200;
 	}
 
@@ -842,6 +852,7 @@ int show_index(t_session *session) {
 
 	close(handle);
 
+#ifdef ENABLE_XSLT
 	data_xml = xmlReadMemory(text_xml, text_size, "index.xml", NULL, 0);
 	result = apply_xslt_sheet(session, data_xml, session->host->show_index);
 
@@ -849,7 +860,14 @@ int show_index(t_session *session) {
 	free(text_xml);
 
 	return result;
+#else
+	return -1;
+#endif
 }
+
+#endif
+
+#ifdef ENABLE_XSLT
 
 /* Show body of HTTP error message
  */
