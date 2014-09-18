@@ -25,10 +25,9 @@
 #include "tomahawk.h"
 #include "client.h"
 #include "workers.h"
-#ifdef ENABLE_CACHE
 #include "cache.h"
-#endif
 #include "polarssl/md5.h"
+#include "memdbg.h"
 
 #define MAX_IDLE_TIME   60
 #define MAX_CMD_SIZE   100

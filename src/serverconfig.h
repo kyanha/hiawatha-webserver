@@ -46,6 +46,7 @@ typedef enum { p_no, p_yes, p_block } t_prevent;
 #ifdef CYGWIN
 typedef enum { windows, cygwin } t_platform;
 #endif
+typedef enum { only_root_config, ignore_root_config, non_root_config } t_user_config_mode;
 
 #ifdef ENABLE_MONITOR
 typedef struct type_monitor_srv_stats {
@@ -292,6 +293,10 @@ typedef struct type_config {
 	t_charlist    cgi_extension;
 #ifdef ENABLE_THREAD_POOL
 	int           thread_pool_size;
+	int           thread_kill_rate;
+#endif
+#ifndef CYGWIN
+	bool          set_rlimits;
 #endif
 	int           total_connections;
 	int           connections_per_ip;
@@ -376,7 +381,7 @@ typedef struct type_config {
 t_config *default_config(void);
 int check_configuration(t_config *config);
 int read_main_configfile(char *configfile, t_config *config, bool config_check);
-int read_user_configfile(char *configfile, t_host *host, t_tempdata **tempdata);
+int read_user_configfile(char *configfile, t_host *host, t_tempdata **tempdata, t_user_config_mode read_mode);
 t_host *get_hostrecord(t_host *host, char *hostname, t_binding *binding);
 unsigned short get_throttlespeed(char *type, t_throttle *throttle);
 void close_bindings(t_binding *binding);

@@ -82,6 +82,8 @@ cp ../extra/windows/Installation.txt ${dir}
 cp ../extra/index.html ${dir}/wwwroot
 cp ../ChangeLog ${dir}/ChangeLog.txt
 unix2dos ${dir}/ChangeLog.txt
+cp ../LICENSE ${dir}/License.txt
+unix2dos ${dir}/License.txt
 
 touch ${dir}/Hiawatha/log/access.log
 touch ${dir}/Hiawatha/log/error.log

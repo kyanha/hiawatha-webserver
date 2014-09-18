@@ -151,6 +151,7 @@ int  get_target_extension(t_session *session);
 int  get_homedir(t_session *session, char *username);
 bool duplicate_host(t_session *session);
 bool is_volatile_object(t_session *session);
+int  load_user_root_config(t_session *session);
 int  load_user_config(t_session *session);
 int  copy_directory_settings(t_session *session);
 bool client_is_rejected_bot(t_session *session);

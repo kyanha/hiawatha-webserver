@@ -27,6 +27,7 @@
 #include "libfs.h"
 #include "libstr.h"
 #include "log.h"
+#include "memdbg.h"
 
 #define BUFFER_SIZE        2 * KILOBYTE
 #define TIMESTAMP_SIZE    40
@@ -40,8 +41,8 @@
 #define EOL "\n"
 #endif
 
-pthread_mutex_t accesslog_mutex;
-int day_of_year;
+static pthread_mutex_t accesslog_mutex;
+static int day_of_year;
 
 /* Initialize log module
  */

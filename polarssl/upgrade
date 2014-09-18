@@ -22,10 +22,10 @@ rm -rf library
 
 echo "Installing new PolarSSL library."
 tar -xzf polarssl.tgz
-dir=`tar -tzf polarssl.tgz | head -n1`
-mv ${dir}ChangeLog .
-mv ${dir}include .
-mv ${dir}library .
+dir=`tar -tzf polarssl.tgz | head -n1 | sed 's/\/$//'`
+mv ${dir}/ChangeLog .
+mv ${dir}/include .
+mv ${dir}/library .
 
 if [ -f patches/${1}.diff ]; then
 	echo "Applying patch."

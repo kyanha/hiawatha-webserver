@@ -20,17 +20,16 @@
 #include <string.h>
 #include <fcntl.h>
 #include <errno.h>
-#include "libstr.h"
-#include "http.h"
-#include "send.h"
-#include "log.h"
-#ifdef ENABLE_TOMAHAWK
-#include "tomahawk.h"
-#endif
 #ifdef ENABLE_XSLT
 #include <libxslt/transform.h>
 #include <libxslt/xsltutils.h>
 #endif
+#include "libstr.h"
+#include "http.h"
+#include "send.h"
+#include "log.h"
+#include "tomahawk.h"
+#include "memdbg.h"
 
 #define XSLT_INDEX "/index.xslt\0"
 #define XSLT_INDEX_LEN   12
@@ -147,19 +146,22 @@ static void add_http_header(t_session *session, const char **params, char *heade
 
 static void add_parameter_line(const char **params, char *line, char split, char *prefix, int *i) {
 	char *item, *key, *value, name[MAX_NAME_LEN + 1];
-	size_t prefix_len;
+	size_t prefix_len, key_len;
 
 	prefix_len = strlen(prefix);
 	while (line != NULL) {
 		split_string(line, &item, &line, split);
 		if (split_string(item, &key, &value, '=') == -1) {
 			continue;
-		} else if (prefix_len + strlen(key) > MAX_NAME_LEN) {
+		}
+
+		key_len = strlen(key);
+		if (prefix_len + key_len > MAX_NAME_LEN) {
 			continue;
 		}
 
 		memcpy(name, prefix, prefix_len);
-		strcpy(name + prefix_len, key);
+		strncpy(name + prefix_len, key, key_len + 1);
 
 		add_parameter(params, name, value, i);
 	}
@@ -458,7 +460,7 @@ int transform_xml(t_session *session, char *xslt_file) {
 
 /* Add XML tag to buffer
  */
-int add_tag(char **buffer, int *size, int extra_size, int *len, char *tag, char *str) {
+static int add_tag(char **buffer, int *size, int extra_size, int *len, char *tag, char *str) {
 	int result;
 	char data[32];
 

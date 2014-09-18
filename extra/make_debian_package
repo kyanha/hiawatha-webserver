@@ -19,7 +19,7 @@ echo "-- Checking for required packages"
 packages="make gcc libc6-dev dpkg-dev debhelper fakeroot libxml2-dev libxslt1-dev zlib1g-dev"
 missing=""
 for package in ${packages}; do
-	installed=`dpkg -l fakeroot | tail -1 | grep "^ii" | wc -l`
+	installed=`dpkg -l ${package} | tail -1 | grep "^ii" | wc -l`
 	if [ "$installed" = "0" ]; then
 		missing="${missing} ${package}"
 	fi

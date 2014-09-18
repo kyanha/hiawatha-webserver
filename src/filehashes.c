@@ -23,6 +23,7 @@
 #include "filehashes.h"
 #include "polarssl/version.h"
 #include "polarssl/sha256.h"
+#include "memdbg.h"
 
 void sha2_bin2hex(unsigned char bin[SHA_HASH_SIZE], char hex[FILE_HASH_SIZE + 1]) {
 	int i;
@@ -140,22 +141,13 @@ bool file_hash_match(char *filename, t_file_hash *file_hashes) {
 }
 
 int print_file_hashes(char *directory) {
-	char cwd[1024];
 	DIR *dp;
 	struct dirent *fileinfo;
 	unsigned char bin_hash[SHA_HASH_SIZE];
-	char hex_hash[FILE_HASH_SIZE];
+	char hex_hash[FILE_HASH_SIZE], *file;
+	int result = -1;
 
-	if (chdir(directory) != 0) {
-		return -1;
-	}
-
-	if (getcwd(cwd, 1024) == NULL) {
-		return -1;
-	}
-	cwd[1023] = '\0';
-
-	if ((dp = opendir(".")) == NULL) {
+	if ((dp = opendir(directory)) == NULL) {
 		return -1;
 	}
 
@@ -164,30 +156,40 @@ int print_file_hashes(char *directory) {
 			continue;
 		}
 
-		switch (is_directory(fileinfo->d_name)) {
+		if ((file = malloc(strlen(directory) + strlen(fileinfo->d_name) + 2)) == NULL) {
+			goto hash_fail;
+		}
+		sprintf(file, "%s/%s", directory, fileinfo->d_name);
+
+		switch (is_directory(file)) {
 			case yes:
-				print_file_hashes(fileinfo->d_name);
+				if (print_file_hashes(file) == -1) {
+					goto hash_fail;
+				}
 				break;
 			case no:
-				if (sha256_file(fileinfo->d_name, bin_hash, 0) != 0) {
-					closedir(dp);
-					return -1;
+				if (sha256_file(file, bin_hash, 0) != 0) {
+					goto hash_fail;
 				}
 				sha2_bin2hex(bin_hash, hex_hash);
 
-				printf("%s : %s/%s\n", hex_hash, cwd, fileinfo->d_name);
+				printf("%s : %s\n", hex_hash, file);
 				break;
 			default:
 				break;
 		}
 
+		free(file);
+		file = NULL;
 	}
 
+	result = 0;
+
+hash_fail:
 	closedir(dp);
-
-	if (chdir("..") != 0) {
-		return -1;
+	if (file != NULL) {
+		free(file);
 	}
 
-	return 0;
+	return result;
 }

@@ -17,7 +17,7 @@
 int  start_worker(t_session *session);
 #ifdef ENABLE_THREAD_POOL
 int  init_workers_module(int pool_size);
-void manage_thread_pool(void);
+void manage_thread_pool(int default_thread_pool_size, int thread_kill_rate);
 #ifdef ENABLE_TOMAHAWK
 int  count_threads_in_pool(void);
 int  count_waiting_workers(void);

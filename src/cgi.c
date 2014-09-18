@@ -33,6 +33,7 @@
 #include "serverconfig.h"
 #include "envir.h"
 #include "log.h"
+#include "memdbg.h"
 
 #define MAX_CGI_DELAY_TIMER (int)MINUTE / TASK_RUNNER_INTERVAL
 #define DUMMY_BUFFER_SIZE           64 * KILOBYTE

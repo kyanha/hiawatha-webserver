@@ -30,7 +30,7 @@
 #define IU_ISFILE        1
 #define IU_ISDIR         2
 
-typedef enum { tc_none, tc_match, tc_header, tc_request_uri
+typedef enum { tc_none, tc_match, tc_header, tc_request_uri, tc_method
 #ifdef ENABLE_SSL
                , tc_use_ssl
 #endif
@@ -66,6 +66,7 @@ typedef struct type_url_toolkit {
 typedef struct type_toolkit_options {
 	int  sub_depth;
 	char *new_url;
+	char *method;
 	char *website_root;
 	char *fastcgi_server;
 	int  ban;
@@ -82,11 +83,7 @@ typedef struct type_toolkit_options {
 t_url_toolkit *find_toolkit(char *toolkit_id, t_url_toolkit *url_toolkit);
 bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit);
 bool toolkit_rules_oke(t_url_toolkit *url_toolkit);
-void init_toolkit_options(t_toolkit_options *options, char *website_root, t_url_toolkit *toolkit,
-#ifdef ENABLE_SSL
-                          bool use_ssl,
-#endif
-                          bool allow_dot_files, t_http_header *http_headers);
+void init_toolkit_options(t_toolkit_options *options);
 int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options);
 
 #endif

@@ -17,6 +17,7 @@
 #include "libstr.h"
 #include "ip.h"
 #include "session.h"
+#include "memdbg.h"
 
 #define SSL_VAR_SIZE   512
 #define MAX_HEADER_LEN 100

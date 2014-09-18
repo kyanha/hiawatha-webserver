@@ -20,8 +20,10 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <errno.h>
+#include "global.h"
 #include "libfs.h"
 #include "libstr.h"
+#include "memdbg.h"
 
 static char *months[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
@@ -231,32 +233,78 @@ t_fsbool can_execute(char *file, uid_t uid, gid_t gid, t_groups *groups) {
 	}
 }
 
-/* Create a file with the right ownership and accessrights.
- */
-void touch_logfile(char *logfile, mode_t mode, uid_t uid, gid_t gid) {
-	int fd;
-
-	if (logfile == NULL) {
-		return;
-	}
-
-	if ((fd = open(logfile, O_RDONLY)) != -1) {
-		close(fd);
-		return;
-	}
-
-	if ((fd = open(logfile, O_CREAT|O_APPEND, mode)) == -1) {
-		fprintf(stderr, "Warning: couldn't create logfile %s\n", logfile);
-		return;
-	}
-
-	if (getuid() == 0) {
-		if (fchown(fd, uid, gid) == -1) {
-			fprintf(stderr, "Warning: couldn't chown logfile %s\n", logfile);
+#ifndef CYGWIN
+static int set_protection(char *file, struct stat *status, mode_t mode) {
+	if ((status->st_mode & 07777) != mode) {
+		if (chmod(file, mode) == -1) {
+			return -1;
 		}
 	}
 
-	close(fd);
+	return 0;
+}
+
+static int set_ownership(char *file, struct stat *status, uid_t uid, gid_t gid) {
+	if ((status->st_uid != uid) || (status->st_gid != gid)) {
+		if ((getuid() == 0) || (geteuid() == 0)) {
+			if (chown(file, uid, gid) == -1) {
+				return -1;
+			}
+		}
+	}
+
+	return 0;
+}
+#endif
+
+/* Create a file with the right protection and ownership
+ */
+int create_file(char *file, mode_t mode, uid_t UNUSED(uid), gid_t UNUSED(gid)) {
+	struct stat status;
+	int fd;
+
+	if (stat(file, &status) == -1) {
+		if (errno != ENOENT) {
+			return -1;
+		} else if ((fd = open(file, O_CREAT, mode)) == -1) {
+			return -2;
+		}
+		close(fd);
+	}
+
+#ifndef CYGWIN
+	if (set_protection(file, &status, mode) == -1) {
+		return -3;
+	} else if (set_ownership(file, &status, uid, gid) == -1) {
+		return -4;
+	}
+#endif
+
+	return 0;
+}
+
+/* Create a directory with the right protection and ownership
+ */
+int create_directory(char *directory, mode_t mode, uid_t UNUSED(uid), gid_t UNUSED(gid)) {
+	struct stat status;
+
+	if (stat(directory, &status) == -1) {
+		if (errno != ENOENT) {
+			return -1;
+		} else if (mkdir(directory, mode) == -1) {
+			return -2;
+		}
+	}
+
+#ifndef CYGWIN
+	if (set_protection(directory, &status, mode) == -1) {
+		return -3;
+	} else if (set_ownership(directory, &status, uid, gid) == -1) {
+		return -4;
+	}
+#endif
+
+	return 0;
 }
 
 /* Month number to month name.
@@ -373,7 +421,7 @@ int if_modified_since(int handle, char *datestr) {
 FILE *fopen_neighbour(char *filename, char *mode, char *neighbour) {
 	FILE *fp;
 	char *file, *slash;
-	int len;
+	int len_nb, len_fn;
 
 	if ((filename == NULL) || (mode == NULL)) {
 		return NULL;
@@ -389,13 +437,14 @@ FILE *fopen_neighbour(char *filename, char *mode, char *neighbour) {
 		return NULL;
 	}
 
-	len = slash - neighbour + 1;
-	if ((file = (char*)malloc(len + strlen(filename) + 1)) == NULL) {
+	len_nb = slash - neighbour + 1;
+	len_fn = strlen(filename);
+	if ((file = (char*)malloc(len_nb + len_fn + 1)) == NULL) {
 		return NULL;
 	}
 
-	memcpy(file, neighbour, len);
-	strcpy(file + len, filename);
+	memcpy(file, neighbour, len_nb);
+	strncpy(file + len_nb, filename, len_fn + 1);
 	fp = fopen(file, mode);
 	free(file);
 

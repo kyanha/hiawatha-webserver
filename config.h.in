@@ -13,7 +13,6 @@
 #define _GNU_SOURCE 1
 #cmakedefine CYGWIN ${CYGWIN}
 #cmakedefine CIFS ${CIFS}
-#cmakedefine MACOSX ${MACOSX}
 
 /* Hiawatha modules
  */

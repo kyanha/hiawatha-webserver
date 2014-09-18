@@ -27,6 +27,7 @@
 #include "session.h"
 #include "cache.h"
 #include "cgi.h"
+#include "memdbg.h"
 
 #define MAX_CACHE_INDEX 250
 #define EXTENSION_SIZE 10
@@ -127,19 +128,20 @@ static bool add_object_to_cache(t_cached_object *object) {
  */
 static char *make_url(t_session *session, char *request_uri) {
 	char *url;
-	size_t len;
+	size_t len, len_ru;
 
 	len = strlen(*(session->host->hostname.item));
 	if (request_uri == NULL) {
 		request_uri = session->request_uri;
 	}
 
-	if ((url = (char*)malloc(len + strlen(request_uri) + 1)) == NULL) {
+	len_ru = strlen(request_uri);
+	if ((url = (char*)malloc(len + len_ru + 1)) == NULL) {
 		return NULL;
 	}
 
 	memcpy(url, *(session->host->hostname.item), len);
-	strcpy(url + len, request_uri);
+	strncpy(url + len, request_uri, len_ru + 1);
 
 	return url;
 }

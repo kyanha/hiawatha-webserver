@@ -9,23 +9,23 @@ wigwam - check the Hiawatha webserver configuration for non-critical errors
 
 .SH SYNOPSIS
 .B wigwam
--b <username>: create password file entry for basic HTTP authentication.
+[options]
 .br
-[-c <path>] [-h] [-t [<toolkit_id> ...]] [-q] [-v]
+Options: -b <username> [<password>]: create password file entry for basic HTTP authentication.
 .br
--c path: path to where the configrationfiles are located.
+         -c path: path to where the configrationfiles are located.
 .br
--d <username> <realm>: create password file entry for digest HTTP authentication.
+         -d <username> <realm> [<password>]: create password file entry for digest HTTP authentication.
 .br
--h: show help and exit.
+         -h: show help and exit.
 .br
--q: don't print the test results.
+         -q: don't print the test results.
 .br
--s: print file hashes for current directory.
+         -s: print file hashes for current directory.
 .br
--t <toolkit_id>: test URL toolkit rule(s).
+         -t <toolkit_id>: test URL toolkit rule(s).
 .br
--v: show version and exit.
+         -v: show version and exit.
 
 
 .SH DESCRIPTION

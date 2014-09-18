@@ -28,6 +28,7 @@
 #include "monitor.h"
 #include "libstr.h"
 #include "ip.h"
+#include "memdbg.h"
 
 #define MAX_MONITOR_BUFFER_SIZE 50 * KILOBYTE
 #define MAX_TIMESTAMP_SIZE      16

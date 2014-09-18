@@ -9,8 +9,8 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _LIBSSL_H
-#define _LIBSSL_H
+#ifndef _SSL_H
+#define _SSL_H
 
 #include "config.h"
 

@@ -25,9 +25,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <fcntl.h>
-#ifdef ENABLE_SSL
 #include "ssl.h"
-#endif
 #include "libfs.h"
 #include "libstr.h"
 #include "liblist.h"
@@ -35,9 +33,8 @@
 #include "log.h"
 #include "send.h"
 #include "serverconfig.h"
-#ifdef ENABLE_TOMAHAWK
 #include "tomahawk.h"
-#endif
+#include "memdbg.h"
 
 #define MAX_TO_BUFFER  1000
 #define NONCE_DIGITS     10
@@ -61,7 +58,10 @@ char *hs_https   = "https://";                   /*  8 */
 char *hs_hsts    = "Strict-Transport-Security: max-age="; /* 35 */
 char *hs_range   = "Accept-Ranges: bytes\r\n";   /* 22 */
 char *hs_gzip    = "Content-Encoding: gzip\r\n"; /* 24 */
+char *hs_chunked = "Transfer-Encoding: chunked\r\n";  /* 28 */
 char *hs_eol     = "\r\n";                       /*  2 */
+char *hs_forwarded       = "Forwarded:";         /* 10 */
+char *hs_x_forwarded_for = "X-Forwarded-For:";   /* 16 */
 
 char *unknown_http_code = "Unknown Error";
 

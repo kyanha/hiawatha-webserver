@@ -23,11 +23,12 @@
 #include "global.h"
 #include "session.h"
 #include "libstr.h"
+#include "liblist.h"
+#include "ip.h"
 #include "tomahawk.h"
 #include "log.h"
-#ifdef ENABLE_MONITOR
 #include "monitor.h"
-#endif
+#include "memdbg.h"
 
 #define REQUEST_BUFFER_CHUNK     4 * KILOBYTE
 #define NO_REQUEST_LIMIT_TIME  300
@@ -35,6 +36,8 @@
 
 extern char *hs_conlen;
 extern char *hs_chunked;
+extern char *hs_forwarded;
+extern char *hs_x_forwarded_for;
 
 /* Detect chunked upload progress
  */
@@ -106,7 +109,7 @@ static long merge_chunks(char *buffer, int size, long *bytes_in_buffer) {
  */
 int fetch_request(t_session *session) {
 	char *new_reqbuf, *strstart, *strend;
-	long max_request_size, bytes_read, header_length = -1, content_length = -1, chunk_size_pos;
+	long max_request_size, bytes_read, header_length = -1, content_length = -1, chunk_size_pos = 0;
 	int result = 200, write_bytes, poll_result, upload_handle = -1, retval;
 	time_t deadline;
 	struct pollfd poll_data;
@@ -138,8 +141,8 @@ int fetch_request(t_session *session) {
 
 					if (store_on_disk) {
 	 					if ((session->uploaded_file = (char*)malloc(session->config->upload_directory_len + 15)) != NULL) {
-							strcpy(session->uploaded_file, session->config->upload_directory);
-							strcpy(session->uploaded_file + session->config->upload_directory_len, "/upload_XXXXXX");
+							memcpy(session->uploaded_file, session->config->upload_directory, session->config->upload_directory_len);
+							memcpy(session->uploaded_file + session->config->upload_directory_len, "/upload_XXXXXX", 15);
 
 							umask(S_IWGRP | S_IWOTH);
 							if ((upload_handle = mkstemp(session->uploaded_file)) == -1) {
@@ -584,6 +587,7 @@ int uri_to_path(t_session *session) {
 		length = strlen(alias->value);
 	}
 	length += session->uri_len + MAX_START_FILE_LENGTH;
+
 	if ((session->file_on_disk = (char*)malloc(length + 4)) == NULL) { /* + 3 for '.gz' (gzip encoding) */
 		return 500;
 	}
@@ -794,4 +798,65 @@ const char *http_error(int code) {
 
 bool empty_body_because_of_http_status(int status) {
 	return ((status >= 100) && (status < 200)) || (status == 204) || (status == 304);
+}
+
+int last_forwarded_ip(t_http_header *http_headers, t_ip_addr *ip_addr) {
+	char *forwarded, *search, ip_str[MAX_IP_STR_LEN + 1], *begin, *end;
+	size_t len;
+	int port;
+
+	if ((forwarded = get_http_header(hs_forwarded, http_headers)) != NULL) {	
+		/* Forwarded header
+		 */
+		begin = NULL;
+		while ((forwarded = strcasestr(forwarded, "for=")) == NULL) {
+			begin = forwarded;
+			forwarded++;
+		}
+
+		if (begin == NULL) {
+			return -1;
+		}
+
+		end = begin;
+		while ((*end != '\0') && (*end != ',') && (*end != ';')) {
+			end++;
+		}
+
+		if (*begin == '"') {
+			begin++;
+			end--;
+			if (*end != '"') {
+				return -1;
+			}
+		}
+
+		len = end - begin;
+		if (len > MAX_IP_STR_LEN) {
+			return -1;
+		}
+
+		memcpy(ip_str, begin, len);
+		*(ip_str + len) = '\0';
+		forwarded = ip_str;
+	} else if ((forwarded = get_http_header(hs_x_forwarded_for, http_headers)) != NULL) {
+		/* X-Forwarded-For header
+		 */
+		if ((search = strrchr(forwarded, ',')) != NULL) {
+			forwarded = search + 1;
+			while (*forwarded == ' ') {
+				forwarded++;
+			}
+		}
+	} else {
+		return -1;
+	}
+
+	if (parse_ip(forwarded, ip_addr) == -1) {
+		if (parse_ip_port(forwarded, ip_addr, &port) == -1) {
+			return -1;
+		}
+	}
+
+	return 0;
 }

@@ -12,11 +12,11 @@
 #ifndef _TOMAHAWK_H
 #define _TOMAHAWK_H
 
-#include <poll.h>
 #include "config.h"
 
 #ifdef ENABLE_TOMAHAWK
 
+#include <poll.h>
 #include "serverconfig.h"
 #include "ip.h"
 #include "liblist.h"

@@ -68,7 +68,7 @@ bool get_wrap_data(char *wrapid, char *handler, char *cgi, t_wrap *wrap_data, ch
 	char line[257], *item, *rest, *pipe;
 	struct passwd *pwd;
 	bool wrap_oke = false, handler_oke;
-	size_t len;
+	size_t len, len_ud;
 
 	handler_oke = (handler == NULL);
 
@@ -84,11 +84,12 @@ bool get_wrap_data(char *wrapid, char *handler, char *cgi, t_wrap *wrap_data, ch
 			return false;
 		}
 		len = strlen(pwd->pw_dir);
-		if ((wrap_data->cgiroot = (char*)malloc(len + strlen(user_directory) + 1)) == NULL) {
+		len_ud = strlen(user_directory);
+		if ((wrap_data->cgiroot = (char*)malloc(len + len_ud + 1)) == NULL) {
 			return false;
 		}
 		memcpy(wrap_data->cgiroot, pwd->pw_dir, len);
-		strcpy(wrap_data->cgiroot + len, user_directory);
+		strncpy(wrap_data->cgiroot + len, user_directory, len_ud + 1);
 		if (strncmp(wrap_data->cgiroot, cgi, strlen(wrap_data->cgiroot)) != 0) {
 			return false;
 		}
@@ -107,157 +108,164 @@ bool get_wrap_data(char *wrapid, char *handler, char *cgi, t_wrap *wrap_data, ch
 
 	/* Read CGI wrapper configuration
 	 */
-	if ((fp = fopen(CONFIG_DIR"/cgi-wrapper.conf", "r")) != NULL) {
-		line[256] = '\0';
-
-		while (fgets(line, 256, fp) != NULL) {
-			rest = uncomment(line);
-			if (*rest == '\0') {
-				continue;
-			}
-
-			if (split_configline(rest, &item, &rest) == 0) {
-				strlower(item);
-				if (strcmp(item, "cgihandler") == 0) {
-					/* CGI handler
-					 */
-					if (handler_oke) {
-						continue;
-					}
-					do {
-						split_string(rest, &item, &rest, ',');
-						if (strcmp(handler, item) == 0) {
-							handler_oke = true;
-							break;
-						}
-					} while (rest != NULL);
-				} else if (strcmp(item, "wrap") == 0) {
-					/* Wrap entry
-					 */
-					if (wrap_oke) {
-						continue;
-					}
-
-					/* Wrap Id
-					 */
-					if (split_string(rest, &item, &rest, DELIMITER) == -1) {
-						break;
-					}
-					if (strcmp(item, wrapid) != 0) {
-						continue;
-					}
-
-					/* Homedirectory
-					 */
-					if (split_string(rest, &item, &rest, DELIMITER) == -1) {
-						break;
-					}
-					if (*item == '/') {
-						/* chroot directory
-						 */
-						if ((pipe = strchr(item, '|')) != NULL) {
-							*pipe = '\0';
-							len = pipe - item + 1;
-							if ((wrap_data->chroot = (char*)malloc(len)) == NULL) {
-								break;
-							}
-							memcpy(wrap_data->chroot, item, len);
-							*pipe = '/';
-						}
-
-						if ((len = strlen(item)) == 0) {
-							break;
-						}
-						if ((strncmp(item, cgi, len) != 0) || (*(cgi + len) != '/')) {
-							log_error("CGI not in WebsiteRoot");
-							break;
-						}
-
-						if (pipe != NULL) {
-							cgi += (pipe - item);
-							item = pipe;
-						}
-
-						if ((wrap_data->cgiroot = strdup(item)) == NULL) {
-							break;
-						}
-					} else if (*item == '~') {
-						if ((pwd = getpwnam(item + 1)) == NULL) {
-							log_error("invalid username");
-							break;
-						}
-						len = strlen(pwd->pw_dir);
-						if ((wrap_data->cgiroot = (char*)malloc(len + strlen(user_directory) + 1)) == NULL) {
-							break;
-						}
-						memcpy(wrap_data->cgiroot, pwd->pw_dir, len);
-						strcpy(wrap_data->cgiroot + len, user_directory);
-						if (strncmp(wrap_data->cgiroot, cgi, strlen(wrap_data->cgiroot)) != 0) {
-							log_error("CGI not in user directory");
-							break;
-						}
-					} else {
-						log_error("invalid CGI root");
-						break;
-					}
-
-					/* User Id
-					 */
-					split_string(rest, &item, &rest, ':');
-					if (parse_userid(item, &(wrap_data->uid)) != 1) {
-						log_error("invalid userid");
-						break;
-					}
-
-					/* Group id
-					 */
-					if (rest != NULL) {
-						if (parse_groups(rest, &(wrap_data->gid), &(wrap_data->groups)) != 1) {
-							log_error("syntax error in groupid");
-							break;
-						}
-					} else {
-						if (lookup_group_ids(wrap_data->uid, &(wrap_data->gid), &(wrap_data->groups)) != 1) {
-							log_error("invalid group (user member of root?)");
-							break;
-						}
-					}
-
-					wrap_oke = true;
-				} else {
-					/* Crap in configurationfile
-					 */
-					log_error("syntax error in configurationfile");
-					break;
-				}
-				if (wrap_oke && handler_oke) {
-					break;
-				}
-			} else {
-				/* split_string() error
-				 */
-				break;
-			}
-		}
-		fclose(fp);
-
-		if (wrap_oke == false) {
-			log_error("no valid Wrap found");
-		}
-		if (handler_oke == false) {
-			log_error("no valid CGIhandler found");
-		}
-
-		return (wrap_oke && handler_oke);
-	} else {
+	if ((fp = fopen(CONFIG_DIR"/cgi-wrapper.conf", "r")) == NULL) {
 		return false;
 	}
+
+	line[256] = '\0';
+
+	while (fgets(line, 256, fp) != NULL) {
+		rest = uncomment(line);
+		if (*rest == '\0') {
+			continue;
+		}
+
+		if (split_configline(rest, &item, &rest) == 0) {
+			strlower(item);
+			if (strcmp(item, "cgihandler") == 0) {
+				/* CGI handler
+				 */
+				if (handler_oke) {
+					continue;
+				}
+				do {
+					split_string(rest, &item, &rest, ',');
+					if (strcmp(handler, item) == 0) {
+						handler_oke = true;
+						break;
+					}
+				} while (rest != NULL);
+			} else if (strcmp(item, "wrap") == 0) {
+				/* Wrap entry
+				 */
+				if (wrap_oke) {
+					continue;
+				}
+
+				/* Wrap Id
+				 */
+				if (split_string(rest, &item, &rest, DELIMITER) == -1) {
+					break;
+				}
+				if (strcmp(item, wrapid) != 0) {
+					continue;
+				}
+
+				/* Homedirectory
+				 */
+				if (split_string(rest, &item, &rest, DELIMITER) == -1) {
+					break;
+				}
+				if (*item == '/') {
+					/* chroot directory
+					 */
+					if ((pipe = strchr(item, '|')) != NULL) {
+						*pipe = '\0';
+						len = pipe - item + 1;
+						if ((wrap_data->chroot = (char*)malloc(len)) == NULL) {
+							break;
+						}
+						memcpy(wrap_data->chroot, item, len);
+						if (*(pipe + 1) == '\0') {
+							*pipe = '\0';
+						} else {
+							*pipe = '/';
+						}
+					}
+
+					if ((len = strlen(item)) == 0) {
+						break;
+					}
+					if ((strncmp(item, cgi, len) != 0) || (*(cgi + len) != '/')) {
+						log_error("CGI not in WebsiteRoot");
+						break;
+					}
+
+					if (pipe != NULL) {
+						cgi += (pipe - item);
+						item = pipe;
+					}
+
+					if ((wrap_data->cgiroot = strdup(item)) == NULL) {
+						break;
+					}
+				} else if (*item == '~') {
+					if ((pwd = getpwnam(item + 1)) == NULL) {
+						log_error("invalid username");
+						break;
+					}
+					len = strlen(pwd->pw_dir);
+					len_ud = strlen(user_directory);
+					if ((wrap_data->cgiroot = (char*)malloc(len + len_ud + 1)) == NULL) {
+						break;
+					}
+					memcpy(wrap_data->cgiroot, pwd->pw_dir, len);
+					strncpy(wrap_data->cgiroot + len, user_directory, len_ud + 1);
+					if (strncmp(wrap_data->cgiroot, cgi, strlen(wrap_data->cgiroot)) != 0) {
+						log_error("CGI not in user directory");
+						break;
+					}
+				} else {
+					log_error("invalid CGI root");
+					break;
+				}
+
+				/* User Id
+				 */
+				split_string(rest, &item, &rest, ':');
+				if (parse_userid(item, &(wrap_data->uid)) != 1) {
+					log_error("invalid userid");
+					break;
+				}
+
+				/* Group id
+				 */
+				if (rest != NULL) {
+					if (parse_groups(rest, &(wrap_data->gid), &(wrap_data->groups)) != 1) {
+						log_error("syntax error in groupid");
+						break;
+					}
+				} else {
+					if (lookup_group_ids(wrap_data->uid, &(wrap_data->gid), &(wrap_data->groups)) != 1) {
+						log_error("invalid group (user member of root?)");
+						break;
+					}
+				}
+
+				wrap_oke = true;
+			} else {
+				/* Crap in configurationfile
+				 */
+				log_error("syntax error in configurationfile");
+				break;
+			}
+			if (wrap_oke && handler_oke) {
+				break;
+			}
+		} else {
+			/* split_string() error
+			 */
+			break;
+		}
+	}
+	fclose(fp);
+
+	if (wrap_oke == false) {
+		log_error("no valid Wrap found");
+	}
+
+	if (handler_oke == false) {
+		log_error("no valid CGIhandler found");
+	}
+
+	return wrap_oke && handler_oke;
 }
 
 int main(int argc, char *argv[]) {
 	char buffer[8], *wrapid, *var, *user_directory;
 	FILE *fp;
-	int i, handle, arg_offset, time_for_cgi, len;
+	int i, handle, arg_offset, time_for_cgi;
+	size_t len;
 	t_wrap wrap_data;
 	bool follow_symlinks = true, usecgi_handler;
 
@@ -281,12 +289,12 @@ int main(int argc, char *argv[]) {
 	}
 	fclose(fp);
 
-	if ((i = strlen(buffer)) == 0) {
+	if ((len = strlen(buffer)) == 0) {
 		print_code(-1);
-	} else if (buffer[i - 1] != '\n') {
+	} else if (buffer[len - 1] != '\n') {
 		print_code(-1);
 	}
-	buffer[i - 1] = '\0';
+	buffer[len - 1] = '\0';
 
 	if ((i = str_to_int(buffer)) == -1) {
 		print_code(-1);
@@ -343,13 +351,13 @@ int main(int argc, char *argv[]) {
 		/* CGI handler
 		 */
 		if (get_wrap_data(wrapid, argv[0], argv[2], &wrap_data, user_directory) == false) {
-			print_code(403);
+			print_code(500);
 		}
 	} else {
 		/* CGI program
 		 */
 		if (get_wrap_data(wrapid, NULL, argv[1], &wrap_data, user_directory) == false) {
-			print_code(403);
+			print_code(500);
 		}
 	}
 

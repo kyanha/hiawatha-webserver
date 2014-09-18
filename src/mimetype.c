@@ -15,6 +15,7 @@
 #include <string.h>
 #include "libstr.h"
 #include "mimetype.h"
+#include "memdbg.h"
 
 #define MAX_LINE_LENGTH 256
 #define MAX_EXT_LEN      16

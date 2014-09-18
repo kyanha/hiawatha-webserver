@@ -19,13 +19,10 @@
 #include <sys/wait.h>
 #include "global.h"
 #include "client.h"
-#ifdef ENABLE_TOMAHAWK
 #include "tomahawk.h"
-#endif
-#ifdef ENABLE_MONITOR
 #include "monitor.h"
-#endif
 #include "log.h"
+#include "memdbg.h"
 
 #define MAX_PASSWORD_DELAY_TIMER (int)(MINUTE / TASK_RUNNER_INTERVAL)
 

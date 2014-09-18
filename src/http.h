@@ -22,5 +22,6 @@ int get_path_info(t_session *session);
 bool validate_url(t_session *session);
 const char *http_error(int code);
 bool empty_body_because_of_http_status(int status);
+int last_forwarded_ip(t_http_header *http_headers, t_ip_addr *ip_addr);
 
 #endif

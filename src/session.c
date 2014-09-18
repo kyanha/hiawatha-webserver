@@ -17,6 +17,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <pwd.h>
+#include <regex.h>
 #include <sys/socket.h>
 #include "global.h"
 #include "alternative.h"
@@ -25,20 +26,18 @@
 #include "session.h"
 #include "log.h"
 #include "ssl.h"
-#ifdef ENABLE_MONITOR
 #include "monitor.h"
-#endif
-#ifdef ENABLE_TOMAHAWK
 #include "tomahawk.h"
-#endif
-#include <regex.h>
+#include "memdbg.h"
 
 static const struct {
 	const char *text;
 } sqli_detection[] = {
-	{"union\\s*select"},
-	{"[\\s'0-9a-z]\\s*--\\s+.+"},
-	{"'\\s*(and|or|&&|\\|\\|)\\s*('|[0-9]|[a-z.]*\\s*=)"},
+	{"union\\s+(\\(\\s*)?select\\s+"},
+	{"'\\s*--\\s"},
+	{"'\\s*(and|or|xor|&&|\\|\\|)\\s*('|[0-9]|`?[a-z\\._-]+`?\\s*=|[a-z]+\\s*\\()"},
+	{"'\\s*like\\s*['a-z]"},
+	{"'\\s*(not\\s+)?in\\s*\\(\\s*['0-9]"},
 	{NULL}
 };
 
@@ -304,8 +303,8 @@ int get_homedir(t_session *session, char *username) {
 
 	old_root = session->host->website_root;
 
-	len = strlen(pwd->pw_dir) + strlen(session->config->user_directory) + 2;
-	if ((session->host->website_root = (char*)malloc(len)) == NULL) {
+	len = strlen(pwd->pw_dir) + strlen(session->config->user_directory) + 1;
+	if ((session->host->website_root = (char*)malloc(len + 1)) == NULL) {
 		session->host->website_root = old_root;
 		return -1;
 	}
@@ -355,12 +354,34 @@ bool is_volatile_object(t_session *session) {
 	return false;
 }
 
+int load_user_root_config(t_session *session) {
+	char *conffile;
+	int result;
+
+	if ((conffile = malloc(session->host->website_root_len + 11)) == NULL) {
+		return -1;
+	}
+
+	memcpy(conffile, session->host->website_root, session->host->website_root_len);
+	memcpy(conffile + session->host->website_root_len, "/.hiawatha\0", 11);
+
+	if ((result = read_user_configfile(conffile, session->host, &(session->tempdata), only_root_config)) != 0) {
+		log_file_error(session, conffile, "error in configuration file on line %d", result);
+		result = -1;
+	}
+
+	free(conffile);
+
+	return result;
+}
+
 /* Load configfile from directories
  */
 int load_user_config(t_session *session) {
 	char *search, *conffile;
 	size_t length;
 	int result;
+	t_user_config_mode read_mode;
 
 	if (session->file_on_disk == NULL) {
 		return 0;
@@ -375,9 +396,17 @@ int load_user_config(t_session *session) {
 		if (*search == '/') {
 			length = search - session->file_on_disk + 1;
 
+			if (length - 1 != session->host->website_root_len) {
+				read_mode = non_root_config;
+			} else if (memcmp(session->file_on_disk, session->host->website_root, length - 1) != 0) {
+				read_mode = non_root_config;
+			} else {
+				read_mode = ignore_root_config;
+			}
+
 			memcpy(conffile, session->file_on_disk, length);
 			memcpy(conffile + length, ".hiawatha\0", 10);
-			result = read_user_configfile(conffile, session->host, &(session->tempdata));
+			result = read_user_configfile(conffile, session->host, &(session->tempdata), read_mode);
 
 			if (result != 0) {
 				log_file_error(session, conffile, "error in configuration file on line %d", result);
@@ -600,7 +629,7 @@ int init_sqli_detection(void) {
 /* Prevent SQL injection
  */
 static int prevent_sqli_str(t_session *session, char *str, int length) {
-	char *data, *c;
+	char *data, *c, *begin, *end;
 	t_sqli_pattern *pattern;
 	int result = 0;
 
@@ -621,6 +650,17 @@ static int prevent_sqli_str(t_session *session, char *str, int length) {
 			*c = ' ';
 		}
 		c++;
+	}
+
+	/* Remove comments
+	 */
+	end = data;
+	while ((begin = strstr(end, "/*")) != NULL) {
+		if ((end = strstr(begin + 2, "*/")) == NULL) {
+			break;
+		}
+		end += 2;
+		memset(begin, ' ', end - begin);
 	}
 
 	pattern = sqli_patterns;

@@ -32,6 +32,7 @@
 #include "log.h"
 #include "polarssl/base64.h"
 #include "polarssl/md5.h"
+#include "memdbg.h"
 
 #define ha_ALLOWED   200
 #define ha_DENIED    401
@@ -376,6 +377,7 @@ static int digest_http_authentication(t_session *session, char *auth_str) {
 	char *key, *value, *rest, *empty = "", *passwd, A1[33], A2[33], result[33];
 	char *username = empty, *realm = empty, *nonce = empty, *uri = empty, *response = empty;
 	//char *opaque = empty, *algoritm = empty, *cnonce = empty, *nc = empty, *qop = empty;
+	size_t len;
 
 	key = rest = auth_str;
 	while (*key != '\0') {
@@ -456,7 +458,8 @@ static int digest_http_authentication(t_session *session, char *auth_str) {
 
 	/* Calculate A2
 	 */
-	if ((value = (char*)malloc(strlen(session->method) + strlen(uri) + 2)) == NULL) {
+	len = strlen(session->method) + strlen(uri);
+	if ((value = (char*)malloc(len + 2)) == NULL) {
 		return ha_ERROR;
 	}
 	sprintf(value, "%s:%s", session->method, uri);
@@ -466,7 +469,8 @@ static int digest_http_authentication(t_session *session, char *auth_str) {
 
 	/* Calculate response
 	 */
-	if ((value = (char*)malloc(strlen(A1) + strlen(nonce) + strlen(A2) + 6)) == NULL) {
+	len = strlen(A1) + strlen(nonce) + strlen(A2);
+	if ((value = (char*)malloc(len + 3)) == NULL) {
 		return ha_ERROR;
 	}
 	sprintf(value, "%s:%s:%s", A1, nonce, A2);

@@ -1,3 +1,18 @@
+hiawatha (9.7) stable; urgency=low
+
+  * UseToolkit now possible in .hiawatha file at root of website.
+  * Method option added to URL Toolkit.
+  * SetResourceLimit option added.
+  * ThreadKillRate option added.
+  * Improved SQL injection detection.
+  * Default value for DHsize set to 2048.
+  * PolarSSL updated to version 1.3.8.
+  * Memory allocation debugger module added.
+  * Small bugfixes and improvements.
+  * Bugfix: incorrect file hash printing by wigwam with directory as symlink.
+
+ -- Hugo Leisink <hugo@leisink.net>  Thu, 21 Aug 2014 22:20:49 +0200
+
 hiawatha (9.6) stable; urgency=medium
 
   * Logfile rotation for access logfiles.
@@ -7,9 +22,9 @@ hiawatha (9.6) stable; urgency=medium
   * The Hiawatha Monitor is now supported without the need for XSLT.
   * PolarSSL updated to version 1.3.7.
   * A few bugfixes as reported by Coverity.
+  * Small bugfixes.
   * Bugfix: SQL injection detection was broken since 8.6.
   * Bugfix: XSS detection didn't work for reverse proxy.
-  * Small bugfixes.
 
  -- Hugo Leisink <hugo@leisink.net>  Sat, 31 May 2014 20:07:55 +0200
 
@@ -35,7 +50,7 @@ hiawatha (9.4) stable; urgency=low
   * PolarSSL updated to version 1.3.4.
   * Added support for Hyper Text Coffee Pot Control Protocol (RFC2324).
   * Added SSL_CIPHER to CGI environment.
-  * Added Public/Private to UrlToolkit expire option.
+  * Added Public/Private to URL Toolkit expire option.
   * Small improvements.
 
  -- Hugo Leisink <hugo@leisink.net>  Sat, 22 Mar 2014 10:53:03 +0100
@@ -91,9 +106,9 @@ hiawatha (9.0) stable; urgency=low
   * PolarSSL updated to version 1.2.6.
   * Improved Reverse Proxy caching support for requests with URL parameters.
   * CacheMinFilesize option removed.
-  * DenyBot option removed. Use UrlToolkit's Header option instead.
+  * DenyBot option removed. Use URL Toolkit's Header option instead.
   * OldBrowser option removed from URL Toolkit. Use Header option instead.
-  * Improved UrlToolkit rule testing in wigwam.
+  * Improved URL Toolkit rule testing in wigwam.
   * Small bugfixes and improvements.
 
  -- Hugo Leisink <hugo@leisink.net>  Thu, 28 Mar 2013 11:46:52 +0100
@@ -307,7 +322,7 @@ hiawatha (7.2) stable; urgency=low
 hiawatha (7.1) stable; urgency=low
 
   * Small bugfixes.
-  * Bugfix: deny access and redirect result via toolkit subroutine.
+  * Bugfix: deny access and redirect result via URL Toolkit subroutine.
   * Bugfix: broken flooding protection.
 
  -- Hugo Leisink <hugo@leisink.net>  Sun, 28 Mar 2010 10:39:12 +0200
@@ -426,7 +441,7 @@ hiawatha (6.11) stable; urgency=low
     set as XSLT parameter.
   * Non-present HTTP/CGI variable set as empty XSLT parameter.
   * Small bugfixes and improvements.
-  * Bugfix: toolkit's FastCGI setting issues.
+  * Bugfix: URL Toolkit's FastCGI setting issues.
 
  -- Hugo Leisink <hugo@leisink.net>  Mon, 29 Dec 2008 08:57:42 +0100
 

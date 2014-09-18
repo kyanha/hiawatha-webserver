@@ -1,5 +1,6 @@
 option(USE_STATIC_POLARSSL_LIBRARY "Build PolarSSL static library." ON)
 option(USE_SHARED_POLARSSL_LIBRARY "Build PolarSSL shared library." OFF)
+option(LINK_WITH_PTHREAD "Explicitly link PolarSSL library to pthread." OFF)
 
 set(src
      aes.c
@@ -11,6 +12,7 @@ set(src
      bignum.c
      blowfish.c
      camellia.c
+     ccm.c
      certs.c
      cipher.c
      cipher_wrap.c
@@ -80,6 +82,10 @@ if(CMAKE_COMPILER_IS_GNUCC)
   set(CMAKE_C_FLAGS_CHECKFULL "${CMAKE_C_FLAGS_CHECK} -Wcast-qual")
 endif(CMAKE_COMPILER_IS_GNUCC)
 
+if(CMAKE_COMPILER_IS_CLANG)
+  set(CMAKE_C_FLAGS_CHECK "${CMAKE_C_FLAGS_CHECK} -Wmissing-declarations -Wmissing-prototypes")
+endif(CMAKE_COMPILER_IS_CLANG)
+
 if (NOT USE_STATIC_POLARSSL_LIBRARY AND NOT USE_SHARED_POLARSSL_LIBRARY)
 	message(FATAL_ERROR "Need to choose static or shared polarssl build!")
 endif(NOT USE_STATIC_POLARSSL_LIBRARY AND NOT USE_SHARED_POLARSSL_LIBRARY)
@@ -101,6 +107,9 @@ if(USE_STATIC_POLARSSL_LIBRARY)
 		target_link_libraries(${polarssl_static_target} ${ZLIB_LIBRARIES})
 	endif(ZLIB_FOUND)
 
+	if(LINK_WITH_PTHREAD)
+        target_link_libraries(${polarssl_static_target} pthread)
+	endif()
 
 	install(TARGETS ${polarssl_static_target}
 			DESTINATION ${LIB_INSTALL_DIR}
@@ -109,13 +118,17 @@ endif()
 
 if(USE_SHARED_POLARSSL_LIBRARY)
 	add_library(polarssl SHARED ${src})
-	set_target_properties(polarssl PROPERTIES VERSION 1.3.7 SOVERSION 6)
+	set_target_properties(polarssl PROPERTIES VERSION 1.3.8 SOVERSION 7)
 
 	target_link_libraries(polarssl ${libs})
 
 	if(ZLIB_FOUND)
 		target_link_libraries(polarssl ${ZLIB_LIBRARIES})
 	endif(ZLIB_FOUND)
+
+	if(LINK_WITH_PTHREAD)
+        target_link_libraries(polarssl pthread)
+	endif()
 
 	install(TARGETS polarssl
 			DESTINATION ${LIB_INSTALL_DIR}

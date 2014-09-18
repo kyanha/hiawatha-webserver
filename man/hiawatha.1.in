@@ -2,22 +2,24 @@
 .\"
 .TH HIAWATHA 1
 
+
 .SH NAME
 hiawatha - advanced and secure webserver
 
+
 .SH SYNOPSIS
 .B hiawatha
-[-c <path>] [-d] [-k] [-h] [-v]
+[options]
 .br
--c <path>: path to where the configrationfiles are located.
+Options: -c <path>: path to where the configrationfiles are located.
 .br
--d: don't fork to the background.
+         -d: don't fork to the background.
 .br
--k: check configuration and exit.
+         -k: check configuration and exit.
 .br
--h: show help and exit.
+         -h: show help and exit.
 .br
--v: show version and compile information and exit.
+         -v: show version and compile information and exit.
 
 .SH DESCRIPTION
 Hiawatha is a secure webserver for Unix. It has been written with 'being secure' and 'easy to use' as its main goals. Hiawatha has lots of features that no other webserver has. Although most of them started as an experiment, many of them turned out to be quite effective.
@@ -171,7 +173,7 @@ Default = 100, example: ConnectionsTotal = 250
 .B DHsize = 1024|2048|4096
 Set the size of the Diffie-Hellman key.
 .br
-Default = PolarSSL's default key size (=1024), Example: DHsize = 4096
+Default = 2048, example: DHsize = 4096
 .TP
 .B ExploitLogfile = <filename with full path>
 Logfile for all exploit attempts: CSRF, denied bodies, SQL injection and XSS
@@ -231,7 +233,7 @@ Default = mimetype.conf, example: MimetypeConfig = /etc/mime.types
 .B MinSSLversion = SSL3.0|TLS1.0|TLS1.1|TLS1.2
 Specify the minimum SSL version Hiawatha accepts for HTTPS connections.
 .br
-Default = TLS1.1, Example: MinSSLversion = TLS1.2
+Default = TLS1.0, Example: MinSSLversion = TLS1.1
 .br
 
 (requires that Hiawatha was compiled with -DENABLE_SSL=on)
@@ -279,6 +281,11 @@ The text behind 'Server:' in the HTTP header of a response. Use 'none' to comple
 .br
 Default = Hiawatha v<version>, example: ServerString = myWebserver
 .TP
+.B SetResourceLimits = yes|no
+Let Hiawatha set the resource limits for number of threads and file descriptors.
+.br
+Default = yes, example: SetResourceLimits = no
+.TP
 .B SocketSendTimeout = <time>
 Sets the SO_SNDTIMEO value for all client connection sockets. Use 0 to disable this feature.
 .br
@@ -288,6 +295,11 @@ Default = 3, example: SocketSendTimeout = 10
 Logfile for all system- and errormessages.
 .br
 Default = @LOG_DIR@/system.log, example: SystemLogfile = /var/log/hiawatha.sys
+.TP
+.B ThreadKillRate = <amount>
+At startup, Hiawatha starts the amount of threads as specified by ThreadPoolSize. When more threads are required, Hiawatha spawns them on the fly. When those extra threads are no longer needed, max <amount> threads are killed per 10 seconds.
+.br
+Default = 1, example: ThreadKillRate = 10
 .TP
 .B ThreadPoolSize = <size>
 Initial size of the thread pool.
@@ -374,7 +386,7 @@ The maximum size of a request in kilobytes the webserver is allowed to receive. 
 Default = 64, example: MaxRequestSize = 256
 .TP
 .B MaxUploadSize = <size>
-The maximum size of a PUT request entity in megabytes the webserver is allowed to receive. The maximum size is 100 megabytes.
+The maximum size of a PUT request entity in megabytes the webserver is allowed to receive. The maximum size is 2047 megabytes.
 .br
 Default = 1, example: MaxUploadSize = 15
 .TP
@@ -589,7 +601,7 @@ Example: Setenv PHPRC = /var/www/conf
 .B ScriptAlias = <softlink>:<script>
 A script alias is a virtual softlink to a CGI script. Every request to <websiteroot>/<softlink> will be rerouted to <script>.
 .br
-Example: Alias = /script.cgi:/usr/lib/script.cgi
+Example: ScriptAlias = /script.cgi:/usr/lib/script.cgi
 .TP
 .B ShowIndex = yes|no|<XSLT file with full path>|xml
 Return a directory listing in HTML format for a directory request when the startfile does not exist. If you want to change the index layout completely, specify the path of a XSLT file. If the XSLT file is not found or 'xml' is used, Hiawatha will output the XML of the directory index. An example of the XML output can be found in extra/index.xml inside the source package.
@@ -626,6 +638,11 @@ Default = no, example: UserWebsites = yes
 The FastCGI server to use for this virtual host. The first FastCGI server record that matches (including extension), will be used (see chapter FASTCGI CONFIGURATION for more information). This option sets ExecuteCGI to 'yes' for this host.
 .br
 Example: UseFastCGI = PHP5
+.TP
+.B UseGZfile = yes|no
+If available, upload <requested file>.gz with gzip content encoding instead of the requested file.
+.br
+Default = no, example: UseGZfile = yes
 .TP
 .B UseToolkit = <toolkit_id>[, <toolkit_id>, ...]
 Perform special operations, like rewriting via regular expressions, on the URL (see chapter URL TOOLKIT for more information).
@@ -680,11 +697,6 @@ Example: RunOnDownload = /var/www/log_download
 Set the uploadspeed in kB/s for all the files in the directory regardless of the extension or mimetype. The uploadspeed per connection will be divided by the number of connections.
 .br
 Example: UploadSpeed = 20,4
-.TP
-.B UseGZfile = yes|no
-If available, upload <requested file>.gz with gzip content encoding instead of the requested file.
-.br
-Default = no, example: UseGZfile = yes
 .PP
 .br
 .B AccessList
@@ -721,9 +733,12 @@ Default = no, example: UseGZfile = yes
 ,
 .br
 .B StartFile
-and
+,
 .br
 .B TimeForCGI
+and
+.br
+.B UseGZfile
 
 .\" ==========[ FastCGI configuration ]========================================
 .SH FASTCGI CONFIGURATION
@@ -951,9 +966,13 @@ A user can override the settings listed below for a certain directory. This can 
 ,
 .br
 .B StartFile
-and
+,
 .br
 .B UseGZfile
+and
+.br
+.B UseToolkit
+(only valid in the root directory of a website)
 
 .SH MIMETYPES
 Specify the mimetypes of files in /etc/hiawatha/mimetypes.conf.

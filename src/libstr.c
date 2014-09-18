@@ -21,6 +21,7 @@
 #include "global.h"
 #include "alternative.h"
 #include "libstr.h"
+#include "memdbg.h"
 
 #define MAX_DEC_VALUE (INT_MAX - 10) / 10
 #define MAX_HEX_VALUE (INT_MAX - 16) / 16

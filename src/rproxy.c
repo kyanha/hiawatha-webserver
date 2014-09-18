@@ -27,12 +27,11 @@
 #include <pthread.h>
 #include "global.h"
 #include "rproxy.h"
-#ifdef ENABLE_SSL
 #include "ssl.h"
-#endif
 #include "libstr.h"
 #include "libfs.h"
 #include "polarssl/md5.h"
+#include "memdbg.h"
 
 #define RPROXY_ID_LEN             10 /* Must be smaller than 32 */
 #define MAX_SEND_BUFFER            2 * KILOBYTE
@@ -46,6 +45,7 @@ static char   *rproxy_id_key = "X-Hiawatha-RProxy-ID:";
 static char   rproxy_id[33];
 
 extern char *hs_forwarded;
+extern char *hs_x_forwarded_for;
 extern char *hs_conn;
 extern char *hs_concl;
 
@@ -58,10 +58,10 @@ typedef struct type_send_buffer {
  */
 int init_rproxy_module(void) {
 	unsigned char digest[16];
-	char str[50];
-	time_t t;
+	char str[50], *format = "%s %s\r\n";
 	struct tm s;
-	char *format = "%s %s\r\n";
+	time_t t;
+	size_t len;
 
 	time(&t);
 	localtime_r(&t, &s);
@@ -72,7 +72,8 @@ int init_rproxy_module(void) {
 	md5_bin2hex(digest, rproxy_id);
 	rproxy_id[RPROXY_ID_LEN] = '\0';
 
-	if ((rproxy_header = (char*)malloc(strlen(format) - 4 + strlen(rproxy_id_key) + RPROXY_ID_LEN + 1)) == NULL) {
+	len = strlen(format) - 4 + strlen(rproxy_id_key) + RPROXY_ID_LEN;
+	if ((rproxy_header = (char*)malloc(len + 1)) == NULL) {
 		return -1;
 	}
 	sprintf(rproxy_header, format, rproxy_id_key, rproxy_id);
@@ -490,9 +491,22 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 			return -1;
 		}
 
-		if (strncasecmp(http_header->data, hs_forwarded, 16) == 0) {
+		if (strncasecmp(http_header->data, hs_forwarded, 10) == 0) {
+			/* Add IP to Forwarded header
+			 */
+			if (sprintf(forwarded_for, ", for=\"%s\"\r\n", ip_addr) == -1) {
+				return -1;
+			} else if (send_to_webserver(webserver, result, &send_buffer, forwarded_for, strlen(forwarded_for)) == -1) {
+				return -1;
+			}
+
+			forwarded_found = true;
+		}
+
+		if (strncasecmp(http_header->data, hs_x_forwarded_for, 16) == 0) {
 			/* Add IP to X-Forwarded-For header
 			 */
+
 			if (sprintf(forwarded_for, ", %s\r\n", ip_addr) == -1) {
 				return -1;
 			} else if (send_to_webserver(webserver, result, &send_buffer, forwarded_for, strlen(forwarded_for)) == -1) {
@@ -505,10 +519,16 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 		}
 	}
 
-	/* Send X-Forwarded-For
+	/* Send Forwarded and X-Forwarded-For headers
 	 */
 	if (forwarded_found == false) {
-		if (sprintf(forwarded_for, "%s %s\r\n", hs_forwarded, ip_addr) == -1) {
+		if (sprintf(forwarded_for, "%s for=\"%s\"\r\n", hs_forwarded, ip_addr) == -1) {
+			return -1;
+		} else if (send_to_webserver(webserver, result, &send_buffer, forwarded_for, strlen(forwarded_for)) == -1) {
+			return -1;
+		}
+
+		if (sprintf(forwarded_for, "%s %s\r\n", hs_x_forwarded_for, ip_addr) == -1) {
 			return -1;
 		} else if (send_to_webserver(webserver, result, &send_buffer, forwarded_for, strlen(forwarded_for)) == -1) {
 			return -1;

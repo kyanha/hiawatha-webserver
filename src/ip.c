@@ -19,6 +19,7 @@
 #include <netdb.h>
 #include "libstr.h"
 #include "ip.h"
+#include "memdbg.h"
 
 char *unknown_ip = "<unknown>";
 

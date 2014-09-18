@@ -18,6 +18,7 @@
 #include <grp.h>
 #include "libstr.h"
 #include "userconfig.h"
+#include "memdbg.h"
 
 void init_groups(t_groups *groups) {
 	groups->number = 0;

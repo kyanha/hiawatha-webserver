@@ -32,6 +32,7 @@
 #include <netinet/tcp.h>
 #endif
 #include <sys/socket.h>
+#include <sys/resource.h>
 #include "global.h"
 #include "alternative.h"
 #include "mimetype.h"
@@ -44,22 +45,12 @@
 #include "log.h"
 #include "global.h"
 #include "httpauth.h"
-#ifdef ENABLE_TOMAHAWK
 #include "tomahawk.h"
-#endif
-#ifdef ENABLE_SSL
 #include "ssl.h"
-#include "polarssl/version.h"
-#endif
-#ifdef ENABLE_CACHE
 #include "cache.h"
-#endif
-#ifdef ENABLE_XSLT
 #include "xslt.h"
-#endif
-#ifdef ENABLE_MONITOR
 #include "monitor.h"
-#endif
+#include "memdbg.h"
 
 #define rs_NONE                  0
 #define rs_QUIT_SERVER           1
@@ -67,7 +58,7 @@
 #define rs_UNLOCK_LOGFILES       3
 #define rs_CLEAR_CACHE           4
 
-#define MAX_ADMIN_CONNECTIONS 3
+#define MAX_TOMAHAWK_CONNECTIONS 3
 
 typedef struct {
 	char *config_dir;
@@ -114,18 +105,24 @@ char *version_string = "Hiawatha v"VERSION
 
 /* Create all logfiles with the right ownership and accessrights
  */
-void touch_logfiles(t_config *config) {
+void create_logfile(char *logfile, mode_t mode, uid_t uid, gid_t gid) {
+	if (create_file(logfile, mode, uid, gid) != 0) {
+		fprintf(stderr, "Error creating logfile %s or changing its protection or ownership.\n", logfile);
+	}
+}
+
+void create_logfiles(t_config *config) {
 	t_host *host;
 
-	touch_logfile(config->system_logfile, LOG_PERM, config->server_uid, config->server_gid);
+	create_logfile(config->system_logfile, LOG_PERM, config->server_uid, config->server_gid);
 	if (config->garbage_logfile != NULL) {
-		touch_logfile(config->garbage_logfile, LOG_PERM, config->server_uid, config->server_gid);
+		create_logfile(config->garbage_logfile, LOG_PERM, config->server_uid, config->server_gid);
 	}
 	if (config->exploit_logfile != NULL) {
-		touch_logfile(config->exploit_logfile, LOG_PERM, config->server_uid, config->server_gid);
+		create_logfile(config->exploit_logfile, LOG_PERM, config->server_uid, config->server_gid);
 	}
 #ifdef ENABLE_DEBUG
-	touch_logfile(LOG_DIR"/debug.log", LOG_PERM, config->server_uid, config->server_gid);
+	create_logfile(LOG_DIR"/debug.log", LOG_PERM, config->server_uid, config->server_gid);
 #endif
 
 	host = config->first_host;
@@ -133,8 +130,8 @@ void touch_logfiles(t_config *config) {
 		if (host->access_fileptr != NULL) {
 			fflush(host->access_fileptr);
 		}
-		touch_logfile(host->access_logfile, LOG_PERM, config->server_uid, config->server_gid);
-		touch_logfile(host->error_logfile, LOG_PERM, config->server_uid, config->server_gid);
+		create_logfile(host->access_logfile, LOG_PERM, config->server_uid, config->server_gid);
+		create_logfile(host->error_logfile, LOG_PERM, config->server_uid, config->server_gid);
 		host = host->next;
 	}
 }
@@ -156,11 +153,19 @@ void task_runner(t_config *config) {
 	do {
 		sleep(1);
 
-		if (delay == TASK_RUNNER_INTERVAL) {
+		if (delay >= TASK_RUNNER_INTERVAL) {
 			now = time(NULL);
 
+#ifdef ENABLE_DEBUG
+			/* Print memory usage
+			 */
+		    memdbg_print_log(true);
+#endif
+
 #ifdef ENABLE_THREAD_POOL
-			manage_thread_pool();
+			/* Manage thread pool
+			 */
+			manage_thread_pool(config->thread_pool_size, config->thread_kill_rate);
 #endif
 
 			/* Client checks
@@ -191,6 +196,8 @@ void task_runner(t_config *config) {
 			}
 #endif
 
+			/* Rotate access logfiles
+			 */
 			if (config->rotate_access_logs) {
 				rotate_access_logfiles(config, now);
 			}
@@ -550,7 +557,7 @@ int change_uid_gid(t_config *config) {
 /* Run the Hiawatha webserver.
  */
 int run_server(t_settings *settings) {
-	int                number_of_bindings;
+	int                number_of_bindings = 0;
 	pthread_attr_t     task_runner_attr;
 	pthread_t          task_runner_thread;
 	struct pollfd      *poll_data, *current_poll;
@@ -564,9 +571,9 @@ int run_server(t_settings *settings) {
 	pid_t              pid;
 	t_binding          *binding;
 	t_config           *config;
-#ifndef CYGWIN
-	struct stat        status;
 	mode_t             access_rights;
+#ifndef CYGWIN
+	struct rlimit      resource_limit;
 #endif
 #ifdef ENABLE_SSL
 	t_host             *host;
@@ -575,6 +582,8 @@ int run_server(t_settings *settings) {
 	struct accept_filter_arg afa;
 #endif
 
+	/* Read configuration
+	 */
 	config = default_config();
 	if (chdir(settings->config_dir) == -1) {
 		perror(settings->config_dir);
@@ -608,11 +617,13 @@ int run_server(t_settings *settings) {
 	if (init_ssl_module(config->system_logfile) == -1) {
 		return -1;
 	}
+#endif
 
 	/* Load private keys and certificate for bindings
 	 */
 	binding = config->binding;
 	while (binding != NULL) {
+#ifdef ENABLE_SSL
 		if (binding->use_ssl) {
 			if (ssl_load_key_cert(binding->key_cert_file, &(binding->private_key), &(binding->certificate)) != 0) {
 				return -1;
@@ -629,9 +640,21 @@ int run_server(t_settings *settings) {
 				}
 			}
 		}
+#endif
+
+		number_of_bindings++;
 		binding = binding->next;
 	}
 
+#ifdef ENABLE_TOMAHAWK
+	binding = config->tomahawk_port;
+	while (binding != NULL) {
+		number_of_bindings++;
+		binding = binding->next;
+	}
+#endif
+
+#ifdef ENABLE_SSL
 	host = config->first_host;
 	while (host != NULL) {
 		/* Load private key and certificates for virtual hosts
@@ -663,7 +686,6 @@ int run_server(t_settings *settings) {
 
 		host = host->next;
 	}
-
 #endif
 
 #ifdef ENABLE_TOMAHAWK
@@ -702,85 +724,34 @@ int run_server(t_settings *settings) {
 
 	/* Create work directory
 	 */
-	if (mkdir(config->work_directory, S_IRWXU) == -1) {
-		if (errno != EEXIST) {
-			fprintf(stderr, "Error creating work directory '%s'\n", config->work_directory);
-			return -1;
-#ifndef CYGWIN
-		} else if (chmod(config->work_directory, S_IRWXU) == -1) {
-			fprintf(stderr, "Can't change access permissions of work directory '%s'\n", config->work_directory);
-			return -1;
-#endif
-		}
+	if (create_directory(config->work_directory, S_IRWXU, config->server_uid, config->server_gid) == -1) {
+		fprintf(stderr, "Error creating work directory '%s'\n", config->work_directory);
+		return -1;
 	}
-#ifndef CYGWIN
-	if ((getuid() == 0) || (geteuid() == 0)) {
-		if (chown(config->work_directory, config->server_uid, config->server_gid) == -1) {
-			perror("chown(WorkDirectory)");
-			return -1;
-		}
-	}
-#endif
 
 	/* Create the upload directory for PUT requests
 	 */
-	if (mkdir(config->upload_directory, S_IRWXU | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH) == -1) {
-		if (errno != EEXIST) {
-			fprintf(stderr, "Error while creating UploadDirectory '%s'\n", config->upload_directory);
-			return -1;
-		}
+
+	if ((getuid() == 0) || (geteuid() == 0)) {
+		access_rights = S_ISVTX | S_IRWXU | S_IWGRP | S_IXGRP | S_IWOTH | S_IXOTH;
+	} else {
+		access_rights = S_ISVTX | S_IWUSR | S_IXUSR | S_IWGRP | S_IXGRP | S_IWOTH | S_IXOTH;
 	}
 
-#ifndef CYGWIN
-	if (stat(config->upload_directory, &status) == -1) {
-		perror("stat(UploadDirectory)");
+	if (create_directory(config->upload_directory, access_rights, 0, 0) != 0) {
+		fprintf(stderr, "Error creating upload directory '%s'\n", config->upload_directory);
 		return -1;
 	}
-	access_rights = 01733;
-	if (status.st_uid != 0) {
-		if ((getuid() == 0) || (geteuid() == 0)) {
-			if (chown(config->upload_directory, 0, 0) == -1) {
-				perror("chown(UploadDirectory, 0, 0)");
-				return -1;
-			}
-		} else {
-			access_rights = 01333;
-		}
-	}
-
-	if ((status.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) != access_rights) {
-		if (chmod(config->upload_directory, access_rights) == -1) {
-			fprintf(stderr, "Can't change access permissions of UploadDirectory '%s'.\n", config->upload_directory);
-			return -1;
-		}
-	}
-#endif
 
 #ifdef ENABLE_MONITOR
 	/* Create monitor cache directory
 	 */
 	if (config->monitor_enabled) {
-		if (mkdir(config->monitor_directory, S_IRWXU) == -1) {
-			if (errno != EEXIST) {
-				fprintf(stderr, "Error creating monitor directory '%s'\n", config->monitor_directory);
-				return -1;
-#ifndef CYGWIN
-			} else if (chmod(config->monitor_directory, S_IRWXU) == -1) {
-				fprintf(stderr, "Can't change access permissions of monitor directory '%s'\n", config->monitor_directory);
-				return -1;
-#endif
-			}
-		}
-
-#ifndef CYGWIN
-		if ((getuid() == 0) || (geteuid() == 0)) {
-			if (chown(config->monitor_directory, config->server_uid, config->server_gid) == -1) {
-				perror("chown(MonitorDirectory)");
-				return -1;
-			}
+		if (create_directory(config->monitor_directory, S_IRWXU, config->server_uid, config->server_gid) != 0) {
+			fprintf(stderr, "Error creating monitor cache directory %s or changing its protection or ownership.\n", config->monitor_directory);
+			return -1;
 		}
 	}
-#endif
 #endif
 
 	/* Initialize random generator
@@ -789,11 +760,29 @@ int run_server(t_settings *settings) {
 
 	/* Create logfiles
 	 */
-	touch_logfiles(config);
+	create_logfiles(config);
 
-	/* Change userid
-	 */
 #ifndef CYGWIN
+	/* Set resource limits
+	 */
+	if (config->set_rlimits) {
+		resource_limit.rlim_max = resource_limit.rlim_cur = config->total_connections + 3;
+		if (setrlimit(RLIMIT_NPROC, &resource_limit) != 0) {
+			fprintf(stderr, "Error setting RLIMIT_NPROC.\n");
+		}
+
+		/* system: system.log, exploit.log, garbage.log, debug.log, all bindings, tomahawk connections
+		 * per child: socket, access.log, error.log, 3 CGI pipes
+		 */
+		resource_limit.rlim_max = resource_limit.rlim_cur = 4 + number_of_bindings + MAX_TOMAHAWK_CONNECTIONS +
+															6 * config->total_connections;
+		if (setrlimit(RLIMIT_NOFILE, &resource_limit) != 0) {
+			fprintf(stderr, "Error setting RLIMIT_NOFILE.\n");
+		}
+	}
+
+	/* Change user and group id
+	 */
 	if ((getuid() == 0) || (geteuid() == 0)) {
 		if (change_uid_gid(config) == -1) {
 			fprintf(stderr, "\nError while changing uid/gid!\n");
@@ -802,15 +791,14 @@ int run_server(t_settings *settings) {
 	}
 #endif
 
+	/* Set signal handlers
+	 */
 	if (settings->daemon == false) {
 		printf("Press Ctrl-C to shutdown the Hiawatha webserver.\n");
 		signal(SIGINT, TERM_handler);
 	} else {
 		signal(SIGINT, SIG_IGN);
 	}
-
-	/* Set signal handlers
-	 */
 	if (config->wait_for_cgi == false) {
 		signal(SIGCHLD, SIG_IGN);
 	}
@@ -905,6 +893,9 @@ int run_server(t_settings *settings) {
 		monitor_version(version_string);
 	}
 #endif
+#ifdef ENABLE_DEBUG
+	init_memdbg();
+#endif
 
 #ifdef HAVE_ACCF
 	binding = config->binding;
@@ -920,7 +911,6 @@ int run_server(t_settings *settings) {
 		binding = binding->next;
 	}
 #endif
- 
 
 	/* Redirecting I/O to /dev/null
 	 */
@@ -961,27 +951,15 @@ int run_server(t_settings *settings) {
 	}
 	pthread_attr_destroy(&task_runner_attr);
 
-	/* Count bindings
+#ifdef ENABLE_DEBUG
+	/* Clear memory debugger log
 	 */
-	number_of_bindings = 0;
-
-	binding = config->binding;
-	while (binding != NULL) {
-		number_of_bindings++;
-		binding = binding->next;
-	}
-
-#ifdef ENABLE_TOMAHAWK
-	binding = config->tomahawk_port;
-	while (binding != NULL) {
-		number_of_bindings++;
-		binding = binding->next;
-	}
+	memdbg_clear_log();
 #endif
 
 	/* Setup poll data
 	 */
-	if ((poll_data = (struct pollfd*)malloc((number_of_bindings + MAX_ADMIN_CONNECTIONS) * sizeof(struct pollfd))) == NULL) {
+	if ((poll_data = (struct pollfd*)malloc((number_of_bindings + MAX_TOMAHAWK_CONNECTIONS) * sizeof(struct pollfd))) == NULL) {
 		return -1;
 	}
 
@@ -1060,7 +1038,7 @@ int run_server(t_settings *settings) {
 								usleep(1000);
 								break;
 							}
-						} else if (number_of_admins >= MAX_ADMIN_CONNECTIONS) {
+						} else if (number_of_admins >= MAX_TOMAHAWK_CONNECTIONS) {
 							if ((admin_fp = fdopen(admin_socket, "r+")) != NULL) {
 								fprintf(admin_fp, "Maximum number of admin connections reached.\n\n");
 							}

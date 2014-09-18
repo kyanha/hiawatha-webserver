@@ -23,6 +23,7 @@
 #include "libstr.h"
 #include "libfs.h"
 #include "alternative.h"
+#include "memdbg.h"
 
 #define REGEXEC_NMATCH 10
 #define MAX_SUB_DEPTH  10
@@ -62,11 +63,225 @@ static int replace(char *src, int ofs, int len, char *rep, char **dst) {
 	return 0;
 }
 
+static bool parse_parameters(t_toolkit_rule *new_rule, char *value, char **operation) {
+	char *rest;
+	bool allowed = false;
+	int loop, time;
+
+	split_string(value, &value, &rest, ' ');
+
+	while (*operation != NULL) {
+		if (strcasecmp(*operation, value) == 0) {
+			allowed = true;
+			break;
+		}
+		operation++;
+	}
+
+	if (allowed == false) {
+		return false;
+	}
+
+	if (strcasecmp(value, "ban") == 0) {
+		/* Ban
+		 */
+		new_rule->operation = to_ban;
+
+		if ((new_rule->value = str_to_int(rest)) == false) {
+			return false;
+		}
+	} else if (strcasecmp(value, "call") == 0) {
+		/* Call
+		 */
+		new_rule->operation = to_sub;
+
+		if (rest == NULL) {
+			return false;
+		} else if ((new_rule->parameter = strdup(rest)) == NULL) {
+			return false;
+		}
+	} else if (strcasecmp(value, "denyaccess") == 0) {
+		/* Deny access
+		 */
+		new_rule->operation = to_deny_access;
+		new_rule->flow = tf_exit;
+	} else if (strcasecmp(value, "exit") == 0) {
+		/* Exit
+		 */
+		new_rule->flow = tf_exit;
+	} else if (strcasecmp(value, "expire") == 0) {
+		/* Expire
+		 */
+		new_rule->operation = to_expire;
+
+		if (split_string(rest, &value, &rest, ' ') == -1) {
+			return false;
+		}
+		if ((new_rule->value = str_to_int(value)) == -1) {
+			return false;
+		}
+
+		time = new_rule->value;
+
+		split_string(rest, &value, &rest, ' ');
+		if (strcasecmp(value, "minutes") == 0) {
+			new_rule->value *= MINUTE;
+		} else if (strcasecmp(value, "hours") == 0) {
+			new_rule->value *= HOUR;
+		} else if (strcasecmp(value, "days") == 0) {
+			new_rule->value *= DAY;
+		} else if (strcasecmp(value, "weeks") == 0) {
+			new_rule->value *= 7 * DAY;
+		} else if (strcasecmp(value, "months") == 0) {
+			new_rule->value *= 30.5 * DAY;
+		} else if (strcasecmp(value, "seconds") != 0) {
+			return false;
+		}
+
+		if (new_rule->value < time) {
+			return false;
+		}
+
+		/* public / private
+		 */
+		if (rest == NULL) {
+			return true;
+		}
+		split_string(rest, &value, &rest, ' ');
+		if (strcasecmp(value, "private") == 0) {
+			new_rule->caco_private = true;
+		} else if (strcasecmp(value, "public") == 0) {
+			new_rule->caco_private = false;
+		} else if (rest == NULL) {
+			rest = value;
+		} else {
+			return false;
+		}
+
+		/* exit / return
+		 */
+		if (rest == NULL) {
+			return true;
+		}
+		if (strcasecmp(rest, "exit") == 0) {
+			new_rule->flow = tf_exit;
+		} else if (strcasecmp(rest, "return") == 0) {
+			new_rule->flow = tf_return;
+		} else {
+			return false;
+		}
+	} else if (strcasecmp(value, "goto") == 0) {
+		/* Goto
+		 */
+		new_rule->operation = to_sub;
+		new_rule->flow = tf_exit;
+
+		if (rest == NULL) {
+			return false;
+		} else if ((new_rule->parameter = strdup(rest)) == NULL) {
+			return false;
+		}
+	} else if (strcasecmp(value, "redirect") == 0) {
+		/* Redirect
+		 */
+		new_rule->operation = to_redirect;
+		new_rule->flow = tf_exit;
+
+		if (rest == NULL) {
+			return false;
+		} else if ((new_rule->parameter = strdup(rest)) == NULL) {
+			return false;
+		}
+	} else if (strcasecmp(value, "return") == 0) {
+		/* Return
+		 */
+		new_rule->flow = tf_return;
+	} else if (strcasecmp(value, "rewrite") == 0) {
+		/* Rewrite
+		 */
+		new_rule->operation = to_rewrite;
+		new_rule->flow = tf_exit;
+
+		split_string(rest, &value, &rest, ' ');
+		if (value == NULL) {
+			return false;
+		} else if ((new_rule->parameter = strdup(value)) == NULL) {
+			return false;
+		}
+
+		if (rest != NULL) {
+			split_string(rest, &value, &rest, ' ');
+			if ((loop = str_to_int(value)) > 0) {
+				if (loop > MAX_MATCH_LOOP) {
+					return false;
+				}
+				new_rule->match_loop = loop;
+				if ((value = rest) == NULL) {
+					return true;
+				}
+			} else if (rest != NULL) {
+				return false;
+			}
+
+			if (strcasecmp(value, "continue") == 0) {
+				new_rule->flow = tf_continue;
+			} else if (strcasecmp(value, "return") == 0) {
+				new_rule->flow = tf_return;
+			} else {
+				return false;
+			}
+		}
+	} else if (strcasecmp(value, "skip") == 0) {
+		/* Skip
+		 */
+		new_rule->operation = to_skip;
+
+		if ((new_rule->value = str_to_int(rest)) < 1) {
+			return false;
+		}
+	} else if (strcasecmp(value, "use") == 0) {
+		/* Use
+		 */
+		new_rule->operation = to_replace;
+		new_rule->flow = tf_exit;
+
+		if (valid_uri(rest, false) == false) {
+			return false;
+		} else if ((new_rule->parameter = strdup(rest)) == NULL) {
+			return false;
+		}
+	} else if (strcasecmp(value, "usefastcgi") == 0) {
+		/* Match UseFastCGI
+		 */
+		new_rule->operation = to_fastcgi;
+		new_rule->flow = tf_exit;
+
+		if (rest == NULL) {
+			return false;
+		} else if ((new_rule->parameter = strdup(rest)) == NULL) {
+			return false;
+		} 
+	} else {
+		/* Error
+		 */
+		return false;
+	}
+
+	return true;
+}
+
 bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 	t_toolkit_rule *new_rule, *rule;
 	char *rest;
-	int loop, time, cflags;
+	int cflags;
 	size_t len;
+	char *header_operations[] = {"call", "denyaccess", "exit", "goto", "redirect", "return", "skip", "use", NULL};
+	char *match_operations[] = {"ban", "call", "denyaccess", "exit", "expire", "goto", "redirect", "return", "rewrite", "skip", "usefastcgi", NULL};
+	char *method_operations[] = {"call", "denyaccess", "exit", "goto", "redirect", "return", "skip", "use", NULL};
+	char *requesturi_operations[] = {"exit", "return", NULL};
+#ifdef ENABLE_SSL
+	char *usessl_operations[] = {"call", "exit", "goto", "return", "skip", NULL};
+#endif
 
 	if ((key == NULL) || (value == NULL) || (toolkit == NULL)) {
 		return false;
@@ -147,71 +362,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			return false;
 		}
 
-		split_string(rest, &value, &rest, ' ');
-
-		if (strcasecmp(value, "call") == 0) {
-			/* Header Call
-			 */
-			new_rule->operation = to_sub;
-
-			if (rest == NULL) {
-				return false;
-			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
-				return false;
-			}
-		} else if (strcasecmp(value, "denyaccess") == 0) {
-			/* Header Deny access
-			 */
-			new_rule->operation = to_deny_access;
-			new_rule->flow = tf_exit;
-		} else if (strcasecmp(value, "exit") == 0) {
-			/* Header Exit
-			 */
-			new_rule->flow = tf_exit;
-		} else if (strcasecmp(value, "goto") == 0) {
-			/* Header Goto
-			 */
-			new_rule->operation = to_sub;
-			new_rule->flow = tf_exit;
-
-			if (rest == NULL) {
-				return false;
-			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
-				return false;
-			}
-		} else if (strcasecmp(value, "redirect") == 0) {
-			/* Header Redirect
-			 */
-			new_rule->operation = to_redirect;
-			new_rule->flow = tf_exit;
-
-			if (rest == NULL) {
-				return false;
-			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
-				return false;
-			}
-		} else if (strcasecmp(value, "return") == 0) {
-			/* Header Return
-			 */
-			new_rule->flow = tf_return;
-		} else if (strcasecmp(value, "skip") == 0) {
-			/* Header Skip
-			 */
-			if ((new_rule->value = str_to_int(rest)) < 1) {
-				return false;
-			}
-		} else if (strcasecmp(value, "use") == 0) {
-			/* Header Use
-			 */
-			new_rule->operation = to_replace;
-			new_rule->flow = tf_exit;
-
-			if (valid_uri(rest, false) == false) {
-				return false;
-			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
-				return false;
-			}
-		} else {
+		if (parse_parameters(new_rule, rest, header_operations) == false) {
 			return false;
 		}
 	} else if (strcmp(key, "match") == 0) {
@@ -233,177 +384,23 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		if (regcomp(&(new_rule->pattern), value, cflags) != 0) {
 			return false;
 		}
-		split_string(rest, &value, &rest, ' ');
 
-		if (strcasecmp(value, "ban") == 0) {
-			/* Match Ban
-			 */
-			new_rule->operation = to_ban;
+		if (parse_parameters(new_rule, rest, match_operations) == false) {
+			return false;
+		}
+	} else if (strcasecmp(key, "method") == 0) {
+		/* Method
+		 */
+		new_rule->condition = tc_method;
+		new_rule->flow = tf_continue;
+		
+		if (split_string(value, &value, &rest, ' ') == -1) {
+			return false;
+		} else if ((new_rule->parameter = strdup(value)) == NULL) {
+			return false;
+		}
 
-			if ((new_rule->value = str_to_int(rest)) == false) {
-				return false;
-			}
-		} else if (strcasecmp(value, "call") == 0) {
-			/* Match Call
-			 */
-			new_rule->operation = to_sub;
-
-			if (rest == NULL) {
-				return false;
-			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
-				return false;
-			}
-		} else if (strcasecmp(value, "denyaccess") == 0) {
-			/* Match DenyAccess
-			 */
-			new_rule->operation = to_deny_access;
-			new_rule->flow = tf_exit;
-		} else if (strcasecmp(value, "exit") == 0) {
-			/* Match Exit
-			 */
-			new_rule->flow = tf_exit;
-		} else if (strcasecmp(value, "expire") == 0) {
-			/* Match Expire
-			 */
-			new_rule->operation = to_expire;
-
-			if (split_string(rest, &value, &rest, ' ') == -1) {
-				return false;
-			}
-			if ((new_rule->value = str_to_int(value)) == -1) {
-				return false;
-			}
-
-			time = new_rule->value;
-
-			split_string(rest, &value, &rest, ' ');
-			if (strcasecmp(value, "minutes") == 0) {
-				new_rule->value *= MINUTE;
-			} else if (strcasecmp(value, "hours") == 0) {
-				new_rule->value *= HOUR;
-			} else if (strcasecmp(value, "days") == 0) {
-				new_rule->value *= DAY;
-			} else if (strcasecmp(value, "weeks") == 0) {
-				new_rule->value *= 7 * DAY;
-			} else if (strcasecmp(value, "months") == 0) {
-				new_rule->value *= 30.5 * DAY;
-			} else if (strcasecmp(value, "seconds") != 0) {
-				return false;
-			}
-
-			if (new_rule->value < time) {
-				return false;
-			}
-
-			/* public / private
-			 */
-			if (rest == NULL) {
-				return true;
-			}
-			split_string(rest, &value, &rest, ' ');
-			if (strcasecmp(value, "private") == 0) {
-				new_rule->caco_private = true;
-			} else if (strcasecmp(value, "public") == 0) {
-				new_rule->caco_private = false;
-			} else if (rest == NULL) {
-				rest = value;
-			} else {
-				return false;
-			}
-
-			/* exit / return
-			 */
-			if (rest == NULL) {
-				return true;
-			}
-			if (strcasecmp(rest, "exit") == 0) {
-				new_rule->flow = tf_exit;
-			} else if (strcasecmp(rest, "return") == 0) {
-				new_rule->flow = tf_return;
-			} else {
-				return false;
-			}
-		} else if (strcasecmp(value, "goto") == 0) {
-			/* Match Goto
-			 */
-			new_rule->operation = to_sub;
-			new_rule->flow = tf_exit;
-
-			if (rest == NULL) {
-				return false;
-			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
-				return false;
-			}
-		} else if (strcasecmp(value, "redirect") == 0) {
-			/* Match Redirect
-			 */
-			new_rule->operation = to_redirect;
-			new_rule->flow = tf_exit;
-
-			if (rest == NULL) {
-				return false;
-			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
-				return false;
-			}
-		} else if (strcasecmp(value, "return") == 0) {
-			/* Match Return
-			 */
-			new_rule->flow = tf_return;
-		} else if (strcasecmp(value, "rewrite") == 0) {
-			/* Match Rewrite
-			 */
-			new_rule->operation = to_rewrite;
-			new_rule->flow = tf_exit;
-
-			split_string(rest, &value, &rest, ' ');
-			if (value == NULL) {
-				return false;
-			} else if ((new_rule->parameter = strdup(value)) == NULL) {
-				return false;
-			}
-
-			if (rest != NULL) {
-				split_string(rest, &value, &rest, ' ');
-				if ((loop = str_to_int(value)) > 0) {
-					if (loop > MAX_MATCH_LOOP) {
-						return false;
-					}
-					new_rule->match_loop = loop;
-					if ((value = rest) == NULL) {
-						return true;
-					}
-				} else if (rest != NULL) {
-					return false;
-				}
-
-				if (strcasecmp(value, "continue") == 0) {
-					new_rule->flow = tf_continue;
-				} else if (strcasecmp(value, "return") == 0) {
-					new_rule->flow = tf_return;
-				} else {
-					return false;
-				}
-			}
-		} else if (strcasecmp(value, "skip") == 0) {
-			/* Match Skip
-			 */
-			new_rule->operation = to_skip;
-
-			if ((new_rule->value = str_to_int(rest)) < 1) {
-				return false;
-			}
-		} else if (strcasecmp(value, "usefastcgi") == 0) {
-			/* Match UseFastCGI
-			 */
-			new_rule->operation = to_fastcgi;
-			new_rule->flow = tf_exit;
-
-			if (rest == NULL) {
-				return false;
-			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
-				return false;
-			}
-		} else {
+		if (parse_parameters(new_rule, rest, method_operations) == false) {
 			return false;
 		}
 	} else if (strcmp(key, "requesturi") == 0) {
@@ -425,11 +422,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			return false;
 		}
 
-		if (strcasecmp(rest, "return") == 0) {
-			new_rule->flow = tf_return;
-		} else if (strcasecmp(rest, "exit") == 0) {
-			new_rule->flow = tf_exit;
-		} else {
+		if (parse_parameters(new_rule, rest, requesturi_operations) == false) {
 			return false;
 		}
 	} else if (strcmp(key, "skip") == 0) {
@@ -445,43 +438,8 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		/* UseSSL
 		 */
 		new_rule->condition = tc_use_ssl;
-		split_string(value, &value, &rest, ' ');
 
-		if (strcasecmp(value, "call") == 0) {
-			/* UseSSL Call
-			 */
-			new_rule->operation = to_sub;
-			if (rest == NULL) {
-				return false;
-			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
-				return false;
-			}
-		} else if (strcasecmp(value, "exit") == 0) {
-			/* UseSSL Exit
-			 */
-			new_rule->flow = tf_exit;
-		} else if (strcasecmp(value, "goto") == 0) {
-			/* UseSSL Goto
-			 */
-			new_rule->operation = to_sub;
-			new_rule->flow = tf_exit;
-			if (rest == NULL) {
-				return false;
-			} else if ((new_rule->parameter = strdup(rest)) == NULL) {
-				return false;
-			}
-		} else if (strcasecmp(value, "return") == 0) {
-			/* UseSSL Return
-			 */
-			new_rule->flow = tf_return;
-		} else if (strcasecmp(value, "skip") == 0) {
-			/* UseSSL Skip
-			 */
-			new_rule->operation = to_skip;
-			if ((new_rule->value = str_to_int(rest)) < 1) {
-				return false;
-			}
-		} else {
+		if (parse_parameters(new_rule, value, usessl_operations) == false) {
 			return false;
 		}
 #endif
@@ -601,23 +559,20 @@ static int do_rewrite(char *url, regex_t *regexp, regmatch_t *pmatch, char *rep,
 	return 0;
 }
 
-void init_toolkit_options(t_toolkit_options *options, char *website_root, t_url_toolkit *toolkit,
-#ifdef ENABLE_SSL
-	                      bool use_ssl,
-#endif
-						  bool allow_dot_files, t_http_header *http_headers) {
+void init_toolkit_options(t_toolkit_options *options) {
 	options->sub_depth = 0;
 	options->new_url = NULL;
-	options->website_root = website_root;
+	options->method = NULL;
+	options->website_root = NULL;
 	options->fastcgi_server = NULL;
 	options->ban = 0;
 	options->expire = -1;
-	options->url_toolkit = toolkit;
+	options->url_toolkit = NULL;
+	options->allow_dot_files = false;
+	options->http_headers = NULL;
 #ifdef ENABLE_SSL
-	options->use_ssl = use_ssl;
+	options->use_ssl = false;
 #endif
-	options->allow_dot_files = allow_dot_files;
-	options->http_headers = http_headers;
 }
 
 int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
@@ -680,6 +635,13 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 				}
 				if (rule->neg_match) {
 					condition_met = (condition_met == false);
+				}
+				break;
+			case tc_method:
+				/* Request method
+				 */
+				if (strcmp(options->method, rule->parameter) == 0) {
+					condition_met = true;
 				}
 				break;
 			case tc_request_uri:

@@ -17,6 +17,7 @@
 #include "global.h"
 #include "libstr.h"
 #include "liblist.h"
+#include "memdbg.h"
 
 /*---< headerlist >-----------------------------------------------------------*/
 
@@ -518,6 +519,7 @@ void remove_tempdata(t_tempdata *tempdata) {
 				remove_error_handler((t_error_handler*)tdata->content);
 				break;
 		}
+
 		free(tdata);
 	}
 }

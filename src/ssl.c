@@ -34,6 +34,7 @@
 #include "polarssl/dhm.h"
 #include "polarssl/ssl_cache.h"
 #include "polarssl/error.h"
+#include "memdbg.h"
 
 typedef struct type_sni_list {
 	t_charlist *hostname;
@@ -45,7 +46,17 @@ typedef struct type_sni_list {
 	struct type_sni_list *next;
 } t_sni_list;
 
-static int ciphersuites[] = {
+static int ciphersuites_ssl30[] = {
+	TLS_RSA_WITH_RC4_128_MD5,
+	TLS_RSA_WITH_RC4_128_SHA,
+	TLS_RSA_WITH_AES_128_CBC_SHA,
+	TLS_RSA_WITH_AES_256_CBC_SHA,
+	TLS_RSA_WITH_CAMELLIA_128_CBC_SHA,
+	TLS_RSA_WITH_CAMELLIA_256_CBC_SHA,
+	0
+};
+
+static int ciphersuites_tls10[] = {
 	TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
 	TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
 	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
@@ -397,9 +408,9 @@ int ssl_accept(t_ssl_accept_data *sad) {
 	ssl_set_sni(sad->context, sni_callback, sad);
 	ssl_set_session_cache(sad->context, ssl_cache_get, &cache, ssl_cache_set, &cache);
 
-	ssl_set_ciphersuites_for_version(sad->context, ciphersuites, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_0);
-	ssl_set_ciphersuites_for_version(sad->context, ciphersuites, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1);
-	ssl_set_ciphersuites_for_version(sad->context, ciphersuites, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_2);
+	ssl_set_ciphersuites_for_version(sad->context, ciphersuites_ssl30, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_0);
+	ssl_set_ciphersuites_for_version(sad->context, ciphersuites_tls10, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1);
+	ssl_set_ciphersuites_for_version(sad->context, ciphersuites_tls10, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_2);
 	ssl_set_ciphersuites_for_version(sad->context, ciphersuites_tls12, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_3);
 
 	ssl_set_own_cert(sad->context, sad->certificate, sad->private_key);
@@ -574,7 +585,7 @@ int ssl_connect(ssl_context *ssl, int *sock, char *hostname) {
 	if (hostname != NULL) {
 		ssl_set_hostname(ssl, hostname);
 	}
-	ssl_set_ciphersuites(ssl, ciphersuites);
+	ssl_set_ciphersuites(ssl, ciphersuites_tls10);
 
 	if (ssl_handshake(ssl) != 0) {
 		return SSL_HANDSHAKE_ERROR;

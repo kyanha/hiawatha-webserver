@@ -29,9 +29,7 @@
 #include "liblist.h"
 #include "libfs.h"
 #include "ip.h"
-#ifdef ENABLE_TOOLKIT
 #include "toolkit.h"
-#endif
 #include "filehashes.h"
 #include "polarssl/md5.h"
 
@@ -696,10 +694,13 @@ void check_url_toolkit(char *config_dir, char **toolkit_id) {
 			printf("Bad URL: missing leading slash.\n");
 		}
 
+		init_toolkit_options(&options);
+		options.method = "GET";
+		options.website_root = ".";
+		options.url_toolkit = url_toolkit;
+		options.http_headers = http_headers;
 #ifdef ENABLE_SSL
-		init_toolkit_options(&options, ".", url_toolkit, false, false, http_headers);
-#else
-		init_toolkit_options(&options, ".", url_toolkit, false, http_headers);
+		options.use_ssl = strcmp(getenv("HTTP_SCHEME"), "https") == 0;
 #endif
 
 		id = toolkit_id;
@@ -779,15 +780,18 @@ void read_password(char *buffer, int size) {
 	printf("\n");
 }
 
-void create_basic_password(char *username) {
-	char password[100], salt[21], *encrypted;
+void create_basic_password(char *username, char *password) {
+	char input[100], salt[21], *encrypted;
 	char *salt_digits = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./";
 	int len, i;
 
 	srand((unsigned)time(NULL));
 	len = strlen(salt_digits);
 
-	read_password(password, 100);
+	if (password == NULL) {
+		read_password(input, 100);
+		password = input;
+	}
 
 	sprintf(salt, "$%d$", HASH_ALGORITM);
 	for (i = 3; i < 19; i++) {
@@ -799,11 +803,14 @@ void create_basic_password(char *username) {
 	printf("%s:%s\n", username, encrypted);
 }
 
-void create_digest_password(char *username, char *realm) {
-	char password[100], *data, encrypted[33];
+void create_digest_password(char *username, char *realm, char *password) {
+	char input[100], *data, encrypted[33];
 	unsigned char digest[16];
 
-	read_password(password, 100);
+	if (password == NULL) {
+		read_password(input, 100);
+		password = input;
+	}
 
 	if ((data = (void*)malloc(strlen(username) + strlen(realm) + strlen(password) + 4)) == NULL) {
 		return;
@@ -820,9 +827,9 @@ void create_digest_password(char *username, char *realm) {
 
 void show_help(char *wigwam) {
 	printf("Usage: %s [options]\n", wigwam);
-	printf("Options: -b <username>: create password file entry for Basic HTTP authentication.\n");
+	printf("Options: -b <username> [<password>]: create password file entry for Basic HTTP authentication.\n");
 	printf("         -c <path>: path to where the configration files are located.\n");
-	printf("         -d <username> <realm>: create password file entry for Digest HTTP authentication.\n");
+	printf("         -d <username> <realm> [<password>]: create password file entry for Digest HTTP authentication.\n");
 	printf("         -h: show this information and exit.\n");
 	printf("         -q: don't print the test results.\n");
 	printf("         -s: print file hashes for current directory.\n");
@@ -834,12 +841,17 @@ void show_help(char *wigwam) {
 
 int main(int argc, char *argv[]) {
 	int i, errors_found = 0;
-	char *config_dir = CONFIG_DIR;
+	char *config_dir = CONFIG_DIR, *password, cwd[1024];
 
 	for (i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "-b") == 0) {
 			if (++i < argc) {
-				create_basic_password(argv[i]);
+				if (i + 1 < argc) {
+					password = argv[i + 1];
+				} else {
+					password = NULL;
+				}
+				create_basic_password(argv[i], password);
 				return EXIT_SUCCESS;
 			} else {
 				fprintf(stderr, "Specify a username.\n");
@@ -854,7 +866,12 @@ int main(int argc, char *argv[]) {
 			}
 		} else if (strcmp(argv[i], "-d") == 0) {
 			if (++i < argc - 1) {
-				create_digest_password(argv[i], argv[i + 1]);
+				if (i + 2 < argc) {
+					password = argv[i + 2];
+				} else {
+					password = NULL;
+				}
+				create_digest_password(argv[i], argv[i + 1], password);
 				return EXIT_SUCCESS;
 			} else {
 				fprintf(stderr, "Specify a username and a realm.\n");
@@ -864,7 +881,12 @@ int main(int argc, char *argv[]) {
 			show_help(argv[0]);
 			return EXIT_SUCCESS;
 		} else if (strcmp(argv[i], "-s") == 0) {
-			print_file_hashes(".");
+			if (getcwd(cwd, 1024) == NULL) {
+				fprintf(stderr, "Error getting current directory.\n");
+				return EXIT_FAILURE;
+			}
+			cwd[1023] = '\0';
+			print_file_hashes(cwd);
 			return EXIT_SUCCESS;
 #ifdef ENABLE_TOOLKIT
 		} else if (strcmp(argv[i], "-t") == 0) {

@@ -2,9 +2,10 @@
 set(cgi_wrapper_src
 	src/alternative.c
 	src/cgi-wrapper.c
-	src/userconfig.c
+	src/memdbg.c
 	src/libfs.c
 	src/libstr.c
+	src/userconfig.c
 )
 
 # hiawatha sources
@@ -23,6 +24,7 @@ set(hiawatha_src
 	src/liblist.c
 	src/libstr.c
 	src/log.c
+	src/memdbg.c
 	src/mimetype.c
 	src/monitor.c
 	src/rproxy.c
@@ -52,6 +54,7 @@ set(ssi_cgi_src
 	src/libfs.c
 	src/liblist.c
 	src/libstr.c
+	src/memdbg.c
 	src/ssi-cgi.c
 )
 
@@ -63,6 +66,7 @@ set(wigwam_src
 	src/libfs.c
 	src/libstr.c
 	src/liblist.c
+	src/memdbg.c
 	src/toolkit.c
 	src/wigwam.c
 )

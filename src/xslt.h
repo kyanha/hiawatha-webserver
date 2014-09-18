@@ -14,16 +14,20 @@
 
 #include "config.h"
 
-#ifdef ENABLE_XSLT
+#if defined(ENABLE_XSLT) || defined(ENABLE_MONITOR)
 
 #include <stdbool.h>
 #include "session.h"
 
+#ifdef ENABLE_XSLT
 void init_xslt_module();
 char *find_xslt_file(t_session *session);
 int transform_xml(t_session *session, char *xslt_file);
+#endif
 int show_index(t_session *session);
+#ifdef ENABLE_XSLT
 int show_http_code_body(t_session *session);
+#endif
 
 #endif
 

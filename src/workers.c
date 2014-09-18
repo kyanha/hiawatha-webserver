@@ -29,30 +29,18 @@
 #include "send.h"
 #include "log.h"
 #include "httpauth.h"
-#ifdef ENABLE_TOMAHAWK
 #include "tomahawk.h"
-#endif
-#ifdef ENABLE_SSL
 #include "ssl.h"
-#endif
-#ifdef ENABLE_CACHE
 #include "cache.h"
-#endif
-#ifdef ENABLE_TOOLKIT
 #include "toolkit.h"
-#endif
-#ifdef ENABLE_XSLT
 #include "xslt.h"
-#endif
-#ifdef ENABLE_MONITOR
 #include "monitor.h"
-#endif
+#include "memdbg.h"
 
 extern char *hs_conlen;
-char *hs_forwarded  = "X-Forwarded-For:"; /* 16 */
-char *fb_filesystem = "access denied via filesystem";
-char *fb_accesslist = "access denied via accesslist";
-char *unknown_host  = "(unknown)";
+char *fb_filesystem      = "access denied via filesystem";
+char *fb_accesslist      = "access denied via accesslist";
+char *unknown_host       = "(unknown)";
 
 #ifdef ENABLE_THREAD_POOL
 typedef struct type_thread_pool {
@@ -69,7 +57,6 @@ typedef struct type_session_list {
 	struct type_session_list *next;
 } t_session_list;
 
-static int initial_thread_pool_size;
 static t_thread_pool *thread_pool = NULL;
 static pthread_cond_t thread_pool_cond;
 static pthread_mutex_t thread_pool_mutex;
@@ -167,6 +154,7 @@ static int handle_error(t_session *session, int error_code) {
 	session->vars = error_handler->parameters;
 
 	if ((new_fod = (char*)malloc(session->host->website_root_len + strlen(error_handler->handler) + 4)) == NULL) { /* + 3 for .gz (gzip encoding) */
+		log_error(session, "malloc() error while handling error");
 		return 500;
 	}
 
@@ -179,6 +167,7 @@ static int handle_error(t_session *session, int error_code) {
 	strcpy(session->file_on_disk + session->host->website_root_len, error_handler->handler);
 
 	if (get_target_extension(session) == -1) {
+		log_error(session, "error getting extension while handing error");
 		return 500;
 	}
 	check_target_is_cgi(session);
@@ -301,15 +290,12 @@ static int run_program(t_session *session, char *program, int return_code) {
 }
 
 static t_access allow_client(t_session *session) {
-	char *x_forwarded_for;
 	t_ip_addr forwarded_ip;
 	t_access access;
 
 	if ((access = ip_allowed(&(session->ip_address), session->host->access_list)) != allow) {
 		return access;
-	} else if ((x_forwarded_for = get_http_header(hs_forwarded, session->http_headers)) == NULL) {
-		return allow;
-	} else if (parse_ip(x_forwarded_for, &forwarded_ip) == -1) {
+ 	} else if (last_forwarded_ip(session->http_headers, &forwarded_ip) == -1) {
 		return allow;
 	} else if (ip_allowed(&forwarded_ip, session->host->access_list) == deny) {
 		return deny;
@@ -322,12 +308,12 @@ static t_access allow_client(t_session *session) {
  */
 static int serve_client(t_session *session) {
 	int result, length, auth_result;
-	char *search, *qmark, chr, *client_ip;
+	char *qmark, chr;
 	t_host *host_record;
 	t_access access;
 	t_deny_body *deny_body;
 	t_req_method request_method;
-	t_ip_addr ip;
+	t_ip_addr ip_addr;
 #ifdef ENABLE_XSLT
 	char *xslt_file;
 #endif
@@ -393,21 +379,9 @@ static int serve_client(t_session *session) {
 	/* Hide reverse proxies
 	 */
 	if (in_iplist(session->config->hide_proxy, &(session->ip_address))) {
-		if ((client_ip = get_http_header(hs_forwarded, session->http_headers)) != NULL) {
-			if ((search = strrchr(client_ip, ',')) != NULL) {
-				client_ip = search + 1;
-			}
-
-			while ((*client_ip == ' ') && (*client_ip != '\0')) {
-				client_ip++;
-			}
-
-			if (*client_ip != '\0') {
-				if (parse_ip(client_ip, &ip) != -1) {
-					if (reposition_client(session, &ip) != -1) {
-						copy_ip(&(session->ip_address), &ip);
-					}
-				}
+		if (last_forwarded_ip(session->http_headers, &ip_addr) == 0) {
+			if (reposition_client(session, &ip_addr) != -1) {
+				copy_ip(&(session->ip_address), &ip_addr);
 			}
 		}
 	}
@@ -416,6 +390,7 @@ static int serve_client(t_session *session) {
 	 */
 	if (session->hostname != NULL) {
 		if (remove_port_from_hostname(session) == -1) {
+			log_error(session, "error removing port from hostname");
 			return 500;
 		}
 
@@ -525,11 +500,13 @@ static int serve_client(t_session *session) {
 
 			if ((session->vars != NULL) && (session->host->secure_url)) {
 				if (forbidden_chars_present(session->vars)) {
+					log_error(session, "URL contains forbidden characters");
 					return 403;
 				}
 			}
 
 			if (duplicate_host(session) == false) {
+				log_error(session, "duplicate_host() error");
 				return 500;
 			}
 
@@ -626,15 +603,28 @@ static int serve_client(t_session *session) {
 			break;
 	}
 
+	if (duplicate_host(session) == false) {
+		log_error(session, "duplicate_host() error");
+		return 500;
+	}
+
 #ifdef ENABLE_TOOLKIT
+	if (session->host->ignore_dot_hiawatha == false) {
+		if (load_user_root_config(session) == -1) {
+			return 500;
+		}
+	}
+
 	/* URL toolkit
 	 */
+	init_toolkit_options(&toolkit_options);
+	toolkit_options.method = session->method;
+	toolkit_options.website_root = session->host->website_root;
+	toolkit_options.url_toolkit = session->config->url_toolkit;
+	toolkit_options.allow_dot_files = session->host->allow_dot_files;
+	toolkit_options.http_headers = session->http_headers;
 #ifdef ENABLE_SSL
-	init_toolkit_options(&toolkit_options, session->host->website_root, session->config->url_toolkit,
-	                     session->binding->use_ssl, session->host->allow_dot_files, session->http_headers);
-#else
-	init_toolkit_options(&toolkit_options, session->host->website_root, session->config->url_toolkit,
-	                     session->host->allow_dot_files, session->http_headers);
+	toolkit_options.use_ssl = session->binding->use_ssl;
 #endif
 
 	if (((session->request_method != PUT) && (session->request_method != DELETE)) || session->host->webdav_app) {
@@ -658,6 +648,7 @@ static int serve_client(t_session *session) {
 			if (toolkit_options.new_url != NULL) {
 				if (register_tempdata(&(session->tempdata), toolkit_options.new_url, tc_data) == -1) {
 					free(toolkit_options.new_url);
+					log_error(session, "error registering temporary data");
 					return 500;
 				}
 				session->uri = toolkit_options.new_url;
@@ -696,12 +687,9 @@ static int serve_client(t_session *session) {
 
 	if ((session->vars != NULL) && (session->host->secure_url)) {
 		if (forbidden_chars_present(session->vars)) {
+			log_error(session, "URL contains forbidden characters");
 			return 403;
 		}
-	}
-
-	if (duplicate_host(session) == false) {
-		return 500;
 	}
 
 	if (validate_url(session) == false) {
@@ -773,6 +761,7 @@ static int serve_client(t_session *session) {
 	}
 
 	if (get_target_extension(session) == -1) {
+		log_error(session, "error getting extension");
 		return 500;
 	}
 
@@ -1168,6 +1157,12 @@ static void connection_handler(t_session *session) {
 		remove_client(session, true);
 	}
 
+#ifdef ENABLE_DEBUG
+	/* Show memory usage by thread
+	 */
+	memdbg_print_log(false);
+#endif
+
 	/* Client session ends here
 	 */
 #ifndef ENABLE_THREAD_POOL
@@ -1374,15 +1369,13 @@ int start_worker(t_session *session) {
 int init_workers_module(int pool_size) {
 	int i;
 
-	initial_thread_pool_size = pool_size;
-
 	if (pthread_cond_init(&thread_pool_cond, NULL) != 0) {
 		return -1;
 	} else if (pthread_mutex_init(&thread_pool_mutex, NULL) != 0) {
 		return -1;
 	}
 
-	for (i = 0; i < initial_thread_pool_size; i++) {
+	for (i = 0; i < pool_size; i++) {
 		if (add_thread_to_pool(NULL) == -1) {
 			return -1;
 		}
@@ -1393,7 +1386,7 @@ int init_workers_module(int pool_size) {
 
 /* Check thread pool
  */
-void manage_thread_pool(void) {
+void manage_thread_pool(int default_thread_pool_size, int thread_kill_rate) {
 	int last_run = 0, kill;
 	t_thread_pool *thread;
 
@@ -1407,14 +1400,20 @@ void manage_thread_pool(void) {
 		thread = thread->next;
 	}
 
-	kill = (thread_pool_size - last_run) - initial_thread_pool_size;
+	kill = (thread_pool_size - last_run) - default_thread_pool_size;
 
 	if (kill > 0) {
+		if (kill > thread_kill_rate) {
+			kill = thread_kill_rate;
+		}
+
 		thread = thread_pool;
 		while (thread != NULL) {
 			if (thread->quit == false) {
 				thread->quit = true;
-				break;
+				if (--kill == 0) {
+					break;
+				}
 			}
 			thread = thread->next;
 		}

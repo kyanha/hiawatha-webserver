@@ -20,18 +20,17 @@
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif
-#ifdef ENABLE_SSL
-#include "polarssl/ssl.h"
-#endif
 #include <regex.h>
+#include "ssl.h"
 #include "serverconfig.h"
 #include "libstr.h"
 #include "libfs.h"
+#include "memdbg.h"
 
 #define ID_NOBODY             65534
 #define MAX_LENGTH_CONFIGLINE   512
 #define MAX_CACHE_SIZE          100
-#define MAX_UPLOAD_SIZE         100
+#define MAX_UPLOAD_SIZE        2047
 #define MONITOR_HOSTNAME  "monitor"
 
 enum t_section { syntax_error = -1, none, binding, virtual_host, directory, fcgi_server
@@ -39,6 +38,8 @@ enum t_section { syntax_error = -1, none, binding, virtual_host, directory, fcgi
 	, url_toolkit
 #endif
 	};
+
+enum t_user_config { uc_only_root, uc_ignore_root, uc_non_root };
 
 static bool including = false;
 static t_keyvalue *variables = NULL;
@@ -280,6 +281,10 @@ t_config *default_config(void) {
 	init_charlist(&(config->cgi_extension));
 #ifdef ENABLE_THREAD_POOL
 	config->thread_pool_size   = 25;
+	config->thread_kill_rate   = 1;
+#endif
+#ifndef CYGWIN
+	config->set_rlimits        = true;
 #endif
 	config->total_connections  = 100;
 	config->connections_per_ip = 10;
@@ -359,7 +364,7 @@ t_config *default_config(void) {
 
 #ifdef ENABLE_SSL
 	config->min_ssl_version    = SSL_MINOR_VERSION_1;
-	config->dh_size            = 0;
+	config->dh_size            = 2048;
 #endif
 	return config;
 }
@@ -1007,6 +1012,12 @@ static bool system_setting(char *key, char *value, t_config *config) {
 				return true;
 			}
 		}
+#ifndef CYGWIN
+	} else if (strcmp(key, "setresourcelimits") == 0) {
+		if (parse_yesno(value, &(config->set_rlimits)) == 0) {
+			return true;
+		}
+#endif
 	} else if (strcmp(key, "socketsendtimeout") == 0) {
 		if ((config->socket_send_timeout = str_to_int(value)) >= 0) {
 			return true;
@@ -1018,6 +1029,10 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			}
 		}
 #ifdef ENABLE_THREAD_POOL	
+	} else if (strcmp(key, "threadkillrate") == 0) {
+		if ((config->thread_kill_rate = str_to_int(value)) >= 1) {
+			return true;
+		}
 	} else if (strcmp(key, "threadpoolsize") == 0) {
 		if ((config->thread_pool_size = str_to_int(value)) >= 1) {
 			return true;
@@ -1101,6 +1116,18 @@ static bool system_setting(char *key, char *value, t_config *config) {
 	return false;
 }
 
+#ifdef ENABLE_TOOLKIT
+static bool user_root_setting(char *key, char *value, t_host *host) {
+	if (strcmp(key, "usetoolkit") == 0) {
+		if (parse_charlist(value, &(host->toolkit_rules)) != 0) {
+			return false;
+		}
+	}
+
+	return true;
+}
+#endif
+
 static bool user_setting(char *key, char *value, t_host *host, t_tempdata **tempdata) {
 	char *pwd = NULL, *grp = NULL;
 	t_error_handler *handler;
@@ -1160,8 +1187,9 @@ static bool user_setting(char *key, char *value, t_host *host, t_tempdata **temp
 					}
 					return false;
 				}
-				host->passwordfile = pwd;
 			}
+			host->passwordfile = pwd;
+
 			if (grp != NULL) {
 				if (register_tempdata(tempdata, grp, tc_data) == -1) {
 					free(grp);
@@ -2040,12 +2068,15 @@ next_setting:
 	return retval;
 }
 
-int read_user_configfile(char *configfile, t_host *host, t_tempdata **tempdata) {
+int read_user_configfile(char *configfile, t_host *host, t_tempdata **tempdata, t_user_config_mode read_mode) {
 	int  retval, counter, lines_read;
 	FILE *fp;
 	char line[MAX_LENGTH_CONFIGLINE + 1], *key, *value;
 	t_accesslist *acs_list = NULL, *alt_list = NULL;
 	t_charlist req_grp, alt_grp;
+#ifdef ENABLE_TOOLKIT
+	t_charlist toolkit;
+#endif
 
 	if ((fp = fopen(configfile, "r")) == NULL) {
 		return 0;
@@ -2055,15 +2086,22 @@ int read_user_configfile(char *configfile, t_host *host, t_tempdata **tempdata) 
 	counter = retval = 0;
 
 	if (tempdata != NULL) {
-		acs_list = host->access_list;
-		host->access_list = NULL;
-		alt_list = host->alter_list;
-		host->alter_list = NULL;
+		if (read_mode == only_root_config) {
+#ifdef ENABLE_TOOLKIT
+			copy_charlist(&toolkit, &(host->toolkit_rules));
+			init_charlist(&(host->toolkit_rules));
+#endif
+		} else {
+			acs_list = host->access_list;
+			host->access_list = NULL;
+			alt_list = host->alter_list;
+			host->alter_list = NULL;
 
-		copy_charlist(&alt_grp, &(host->alter_group));
-		init_charlist(&(host->alter_group));
-		copy_charlist(&req_grp, &(host->required_group));
-		init_charlist(&(host->required_group));
+			copy_charlist(&alt_grp, &(host->alter_group));
+			init_charlist(&(host->alter_group));
+			copy_charlist(&req_grp, &(host->required_group));
+			init_charlist(&(host->required_group));
+		}
 	}
 
 	while ((lines_read = fgets_multi(line, MAX_LENGTH_CONFIGLINE, fp)) != 0) {
@@ -2078,9 +2116,27 @@ int read_user_configfile(char *configfile, t_host *host, t_tempdata **tempdata) 
 		if (*key != '\0') {
 			if (split_configline(key, &key, &value) != -1) {
 				strlower(key);
-				if (user_setting(key, value, host, tempdata) == false) {
-					retval = counter;
-					break;
+
+				if (read_mode == only_root_config) {
+#ifdef ENABLE_TOOLKIT
+					if (user_root_setting(key, value, host) == false) {
+						retval = counter;
+						break;
+					}
+#endif
+				} else {
+#ifdef ENABLE_TOOLKIT
+					if (read_mode == ignore_root_config) {
+						if (strcmp(key, "usetoolkit") == 0) {
+							continue;
+						}
+					}
+#endif
+
+					if (user_setting(key, value, host, tempdata) == false) {
+						retval = counter;
+						break;
+					}
 				}
 			} else {
 				retval = counter;
@@ -2092,30 +2148,46 @@ int read_user_configfile(char *configfile, t_host *host, t_tempdata **tempdata) 
 	fclose(fp);
 
 	if (tempdata != NULL) {
-		if (host->access_list == NULL) {
-			host->access_list = acs_list;
-		} else if (register_tempdata(tempdata, host->access_list, tc_accesslist) == -1) {
-			host->access_list = remove_accesslist(host->access_list);
-			retval = -1;
-		}
-		if (host->alter_list == NULL) {
-			host->alter_list = alt_list;
-		} else if (register_tempdata(tempdata, host->alter_list, tc_accesslist) == -1) {
-			host->alter_list = remove_accesslist(host->alter_list);
-			retval = -1;
-		}
+		if (read_mode == only_root_config) {
+#ifdef ENABLE_TOOLKIT
+			if (host->toolkit_rules.size == 0) {
+				copy_charlist(&(host->toolkit_rules), &toolkit);
+			} else if (register_tempdata(tempdata, &(host->toolkit_rules), tc_charlist) == -1) {
+				remove_charlist(&(host->toolkit_rules));
+				copy_charlist(&(host->toolkit_rules), &toolkit);
+				retval = -1;
+			}
+#endif
+		} else {
+			if (host->access_list == NULL) {
+				host->access_list = acs_list;
+			} else if (register_tempdata(tempdata, host->access_list, tc_accesslist) == -1) {
+				remove_accesslist(host->access_list);
+				host->access_list = acs_list;
+				retval = -1;
+			}
+			if (host->alter_list == NULL) {
+				host->alter_list = alt_list;
+			} else if (register_tempdata(tempdata, host->alter_list, tc_accesslist) == -1) {
+				remove_accesslist(host->alter_list);
+				host->alter_list = alt_list;
+				retval = -1;
+			}
 
-		if (host->alter_group.size == 0) {
-			copy_charlist(&(host->alter_group), &alt_grp);
-		} else if (register_tempdata(tempdata, &(host->alter_group), tc_charlist) == -1) {
-			remove_charlist(&(host->alter_group));
-			retval = -1;
-		}
-		if (host->required_group.size == 0) {
-			copy_charlist(&(host->required_group), &req_grp);
-		} else if (register_tempdata(tempdata, &(host->required_group), tc_charlist) == -1) {
-			remove_charlist(&(host->required_group));
-			retval = -1;
+			if (host->alter_group.size == 0) {
+				copy_charlist(&(host->alter_group), &alt_grp);
+			} else if (register_tempdata(tempdata, &(host->alter_group), tc_charlist) == -1) {
+				remove_charlist(&(host->alter_group));
+				copy_charlist(&(host->alter_group), &alt_grp);
+				retval = -1;
+			}
+			if (host->required_group.size == 0) {
+				copy_charlist(&(host->required_group), &req_grp);
+			} else if (register_tempdata(tempdata, &(host->required_group), tc_charlist) == -1) {
+				remove_charlist(&(host->required_group));
+				copy_charlist(&(host->required_group), &req_grp);
+				retval = -1;
+			}
 		}
 	}
 

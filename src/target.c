@@ -37,18 +37,11 @@
 #include "log.h"
 #include "cgi.h"
 #include "send.h"
-#ifdef ENABLE_CACHE
 #include "cache.h"
-#endif
-#ifdef ENABLE_MONITOR
 #include "monitor.h"
-#endif
-#ifdef ENABLE_TOMAHAWK
 #include "tomahawk.h"
-#endif
-#ifdef ENABLE_XSLT
 #include "xslt.h"
-#endif
+#include "memdbg.h"
 
 #define MAX_VOLATILE_SIZE      1 * MEGABYTE
 #define FILE_BUFFER_SIZE      32 * KILOBYTE
@@ -65,7 +58,6 @@
 
 #define NEW_FILE -1
 
-char *hs_chunked   = "Transfer-Encoding: chunked\r\n";  /* 28 */
 char *fb_alterlist = "access denied via alterlist";
 
 extern char *fb_filesystem;
@@ -75,7 +67,7 @@ extern char *hs_conn;
 extern char *hs_concl;
 extern char *hs_conlen;
 extern char *hs_contyp;
-extern char *hs_forwarded;
+extern char *hs_chunked;
 
 /* Read a file from disk and send it to the client.
  */
@@ -88,6 +80,7 @@ int send_file(t_session *session) {
 	struct tm fdate;
 #ifdef ENABLE_CACHE
 	t_cached_object *cached_object;
+	int result;
 #endif
 
 #ifdef ENABLE_DEBUG
@@ -221,6 +214,7 @@ int send_file(t_session *session) {
 			if (strncmp(range, "bytes=", 6) == 0) {
 				if ((range = strdup(range + 6)) == NULL) {
 					close(handle);
+					log_error(session, "strdup() error");
 					return 500;
 				}
 
@@ -391,10 +385,13 @@ int send_file(t_session *session) {
 			}
 
 			if (cached_object != NULL) {
-				if (send_buffer(session, cached_object->content + send_begin, send_size) == -1) {
+				result = send_buffer(session, cached_object->content + send_begin, send_size);
+				done_with_cached_object(cached_object, false);
+				cached_object = NULL;
+
+				if (result == -1) {
 					goto fail;
 				}
-				done_with_cached_object(cached_object, false);
 			} else
 #endif
 			if ((buffer = (char*)malloc(FILE_BUFFER_SIZE)) == NULL) {
@@ -799,7 +796,7 @@ int execute_cgi(t_session *session) {
 #endif
 						cgi_info.input_len = 0;
 					} else {
-						/* Read HTTP header
+						/* Read CGI header
 						 */
 						*(cgi_info.input_buffer + cgi_info.input_len) = '\0';
 
@@ -807,6 +804,7 @@ int execute_cgi(t_session *session) {
 							/* Fix crappy CGI headers
 							 */
 							if ((result = fix_crappy_cgi_headers(&cgi_info)) == -1) {
+								log_error(session, "error fixing crappy CGI headers");
 								retval = 500;
 								break;
 							} else if (result == 0) {
@@ -977,7 +975,7 @@ int execute_cgi(t_session *session) {
 							in_body = true;
 							cgi_info.input_len = 0;
 						} else if (cgi_info.input_len > MAX_OUTPUT_HEADER) {
-							log_error(session, "CGI's HTTP header too large");
+							log_error(session, "CGI header too large");
 							retval = 500;
 							break;
 						}
@@ -997,7 +995,7 @@ int execute_cgi(t_session *session) {
 					if (cgi_info.input_len == 0) {
 						log_error(session, "no output");
 					} else {
-						log_error(session, "CGI only printed a HTTP header, no content");
+						log_error(session, "CGI only printed a header, no content");
 					}
 				}
 		} /* switch */
@@ -1088,6 +1086,7 @@ int handle_trace_request(t_session *session) {
 	/* Header
 	 */
 	if (snprintf(buffer, MAX_TRACE_HEADER, "%d\r\nContent-Type: message/http\r\n\r\n", body_size) < 0) {
+		log_error(session, "snprintf() error");
 		return 500;
 	} else if (send_header(session) == -1) {
 		return -1;
@@ -1135,15 +1134,12 @@ int handle_trace_request(t_session *session) {
 /* Determine allowance of alter requests
  */
 static t_access allow_alter(t_session *session) {
-	char *x_forwarded_for;
 	t_ip_addr forwarded_ip;
 	t_access access;
 
 	if ((access = ip_allowed(&(session->ip_address), session->host->alter_list)) != allow) {
 		return access;
-	} else if ((x_forwarded_for = get_http_header(hs_forwarded, session->http_headers)) == NULL) {
-		return allow;
-	} else if (parse_ip(x_forwarded_for, &forwarded_ip) == -1) {
+	} else if (last_forwarded_ip(session->http_headers, &forwarded_ip) == -1) {
 		return allow;
 	} else if (ip_allowed(&forwarded_ip, session->host->alter_list) == deny) {
 		return deny;
@@ -1167,6 +1163,7 @@ int handle_put_request(t_session *session) {
 #endif
 
 	if (session->uploaded_file == NULL) {
+		log_error(session, "no uploaded file available for PUT request");
 		return 500;
 	}
 
@@ -1213,6 +1210,7 @@ int handle_put_request(t_session *session) {
 		/* Existing file */
 		if ((file_size = filesize(session->file_on_disk)) == -1) {
 			close(handle_write);
+			log_error(session, "filesize() error");
 			return 500;
 		}
 		result = 204;
@@ -1275,6 +1273,7 @@ int handle_put_request(t_session *session) {
 				result = 416;
 			} else if (write_begin > 0) {
 				if (lseek(handle_write, write_begin, SEEK_SET) == -1) {
+					log_error(session, "lseek() error");
 					result = 500;
 				}
 			}
@@ -1292,11 +1291,13 @@ int handle_put_request(t_session *session) {
 			if (file_size == NEW_FILE) {
 				unlink(session->file_on_disk);
 			}
+			log_error(session, "can't open uploaded file of PUT request");
 			return 500;
 		}
 
 		if ((file_size != NEW_FILE) && (range_found == false)) {
 			if (ftruncate(handle_write, session->uploaded_size) == -1) {
+				log_error(session, "ftruncate() error");
 				result = 500;
 			}
 		}
@@ -1312,16 +1313,19 @@ int handle_put_request(t_session *session) {
 						} else if (write_buffer(handle_write, buffer, bytes_read) != -1) {
 							total_written += bytes_read;
 						} else {
+							log_error(session, "error writing file of PUT request");
 							result = 500;
 							break;
 						}
 					} else if (errno != EINTR) {
+						log_error(session, "error reading file of PUT request");
 						result = 500;
 						break;
 					}
 				}
 				free(buffer);
 			} else {
+				log_error(session, "malloc() error for PUT request");
 				result = 500;
 			}
 		}
@@ -1389,6 +1393,7 @@ int handle_delete_request(t_session *session) {
 			case ENOTDIR:
 				return 405;
 			default:
+				log_error(session, "error deleting file for DELETE request");
 				return 500;
 		}
 	}
@@ -1662,6 +1667,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 					result = -1;
 					keep_reading = false;
 					keep_alive = false;
+					log_string(session->host->error_logfile, "Reverse proxy connection error for %s", rproxy->hostname);
 				}
 				break;
 			case 0:
@@ -1669,6 +1675,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 					result = 504;
 					keep_reading = false;
 					keep_alive = false;
+					log_string(session->host->error_logfile, "Reverse proxy timeout for %s", rproxy->hostname);
 				}
 				break;
 			default:
@@ -1689,6 +1696,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 							result = -1;
 							keep_reading = false;
 							keep_alive = false;
+							log_string(session->host->error_logfile, "Reverse proxy read error for %s", rproxy->hostname);
 						}
 						break;
 					case 0:

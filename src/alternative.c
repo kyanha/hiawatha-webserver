@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "memdbg.h"
 
 #ifndef HAVE_SETENV
 int setenv(const char *key, const char *value, int overwrite) {
