@@ -29,7 +29,7 @@ Hiawatha has been tested and runs perfectly on Linux, BSD, MacOS X and Cygwin.
 
 .\" ==========[ Configuration files ]==========================================
 .SH CONFIGURATION FILES
-Hiawatha has the following configurationfiles:
+Hiawatha has the following configuration files:
 .TP
 .B cgi-wrapper.conf
 See cgi-wrapper(1) for more information.
@@ -191,7 +191,7 @@ A request sent from the supplied IP address will be searched for a X-Forwarded-F
 Example: HideProxy = 192.168.10.20
 .TP
 .B Include <filename>|<directory>
-Include another configurationfile or configurationfiles in a directory.
+Include another configuration file or configuration files in a directory.
 .br
 Example: Include /etc/hiawatha/hosts.conf
 .TP
@@ -225,8 +225,8 @@ The maximum length of the path of an URL that the webserver accepts as being val
 .br
 Default = 1000, example: MaxUrlLength = 500
 .TP
-.B MimetypeConfig = <configurationfile>
-The location of the mimetype configurationfile. It the path is omitted, Hiawatha's configurationfile directory will be used.
+.B MimetypeConfig = <configuration file>
+The location of the mimetype configuration file. It the path is omitted, Hiawatha's configuration file directory will be used.
 .br
 Default = mimetype.conf, example: MimetypeConfig = /etc/mime.types
 .TP
@@ -674,6 +674,11 @@ Rootdirectory for this virtual host.
 .br
 Example: WebsiteRoot = /home/webmaster/website
 .TP
+.B WebSocket = ws[s]://<IP address>:<port> <request uri>[,...] [connection timeout]
+This setting will make Hiawatha forward the connection to a websocket for every request matching the <request uri>. A wildcard request URI will forward every request for this host. The connection timeout is in minutes and the default is 10.
+.br
+Example: WebSocket = ws://127.0.0.1:5000 /chat 30
+.TP
 .B WrapCGI = <wrap_id>
 Specify a CGI-wrapper id for this virtual host (see cgi-wrapper(1) for more information).
 .br
@@ -786,7 +791,7 @@ Perform an action when the HTTP header <key> matches the regular expresion <patt
 .br
 Call, DenyAccess, Exit, Goto, Redirect, Return, Skip and Use.
 .br
-A negative pattern (leading exclamation mark) can't be used with the redirect action.
+A negative pattern (leading exclamation mark) can't be used with the redirect action. The <key> can be * to test every HTTP header.
 .TP
 .B Match [!]<pattern> <action>
 .br
@@ -795,6 +800,14 @@ Perform an action when the URL matches the regular expression <pattern>, where <
 Ban, Call, DenyAccess, Exit, Expire, Goto, Redirect, Return, Rewrite, Skip or UseFastCGI.
 .br
 Use MatchCI to perform case insensitive URL matching. A negative pattern (leading exclamation mark) can't be used with the redirect and rewrite action.
+.TP
+.B Method <request method> <action>
+.br
+Perform an action when the request method equals <request method>, where <action> can be one of the following:
+.br
+Call, DenyAccess, Exit, Goto, Redirect, Return, Skip or Use
+.br
+Example: Method POST Return
 .TP
 .B RequestURI exists|isfile|isdir Return|Exit
 If the requested URL exists on disk, don't continue with the URL toolkit.

@@ -28,7 +28,7 @@
 #include "memdbg.h"
 
 #define ID_NOBODY             65534
-#define MAX_LENGTH_CONFIGLINE   512
+#define MAX_LENGTH_CONFIGLINE  1024
 #define MAX_CACHE_SIZE          100
 #define MAX_UPLOAD_SIZE        2047
 #define MONITOR_HOSTNAME  "monitor"
@@ -132,6 +132,7 @@ static t_host *new_host(void) {
 	host->monitor_host        = false;
 #endif
 	host->file_hashes         = NULL;
+	host->websockets          = NULL;
 
 	host->next                = NULL;
 
@@ -311,6 +312,9 @@ t_config *default_config(void) {
 	config->system_logfile     = LOG_DIR"/system.log";
 	config->garbage_logfile    = NULL;
 	config->exploit_logfile    = LOG_DIR"/exploit.log";
+#ifdef ENABLE_DEBUG
+	config->debug_logfile    = LOG_DIR"/debug.log";
+#endif
 	config->logfile_mask       = NULL;
 
 	config->ban_on_denied_body = 0;
@@ -1274,6 +1278,7 @@ static bool user_setting(char *key, char *value, t_host *host, t_tempdata **temp
 static bool host_setting(char *key, char *value, t_host *host) {
 	t_deny_body *deny_body;
 	char *rest;
+	t_websocket *websocket, *ws;
 #ifdef ENABLE_RPROXY
 	t_rproxy *rproxy, *list;
 #endif
@@ -1496,6 +1501,48 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			if ((host->website_root = strdup(value)) != NULL) {
 				host->website_root_len = strlen(host->website_root);
 				return true;
+			}
+		}
+	} else if (strcmp(key, "websocket") == 0) {
+		if ((websocket = (t_websocket*)malloc(sizeof(t_websocket))) != NULL) {
+			init_charlist(&(websocket->path));
+			websocket->timeout = 10 * MINUTE * 1000;
+			websocket->next = NULL;
+
+			if (host->websockets == NULL) {
+				host->websockets = websocket;
+			} else {
+				ws = host->websockets;
+				while (ws->next != NULL) {
+					ws = ws->next;
+				}
+				ws->next = websocket;
+			}
+
+			if (strncmp(value, "ws://", 5) == 0) {
+				value += 5;
+#ifdef ENABLE_SSL
+				websocket->use_ssl = false;
+			} else if (strncmp(value, "wss://", 6) == 0) {
+				value += 6;
+				websocket->use_ssl = true;
+#endif
+			} else {
+				return false;
+			}
+
+			if (split_string(value, &value, &rest, ' ') == 0) {
+				if (parse_ip_port(value, &(websocket->ip_address), &(websocket->port)) == 0) {
+					split_string(rest, &value, &rest, ' ');
+					if (parse_charlist(value, &(websocket->path)) == 0) {
+						if (rest == NULL) {
+							return true;
+						} else if ((websocket->timeout = str_to_int(rest)) > 0) {
+							websocket->timeout *= MINUTE * 1000;
+							return true;
+						}
+					}
+				}
 			}
 		}
 	} else if (strcmp(key, "wrapcgi") == 0) {

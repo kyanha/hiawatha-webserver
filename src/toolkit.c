@@ -337,11 +337,15 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			return false;
 		}
 
-		len = strlen(value);
-		if ((new_rule->header = (char*)malloc(len + 2)) == NULL) {
-			return false;
+		if (strcmp(value, "*") == 0) {
+			new_rule->header = NULL;
+		} else {
+			len = strlen(value);
+			if ((new_rule->header = (char*)malloc(len + 2)) == NULL) {
+				return false;
+			}
+			sprintf(new_rule->header, "%s:", value);
 		}
-		sprintf(new_rule->header, "%s:", value);
 
 		if ((*rest == '\'') || (*rest == '"')) {
 			value = rest + 1;
@@ -583,6 +587,7 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 	char *file, *qmark, *header;
 	regmatch_t pmatch[REGEXEC_NMATCH];
 	struct stat fileinfo;
+	t_http_header *headers;
 
 	if (options == NULL) {
 		return UT_ERROR;
@@ -627,14 +632,32 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 			case tc_header:
 				/* Header
 				 */
-				if ((header = get_http_header(rule->header, options->http_headers)) == NULL) {
-					break;
-				}
-				if (regexec(&(rule->pattern), header, REGEXEC_NMATCH, pmatch, 0) == 0) {
-					condition_met = true;
-				}
-				if (rule->neg_match) {
-					condition_met = (condition_met == false);
+				if (rule->header == NULL) {
+					headers = options->http_headers;
+					while (headers != NULL) {
+						if (regexec(&(rule->pattern), headers->data + headers->value_offset, REGEXEC_NMATCH, pmatch, 0) == 0) {
+							condition_met = true;
+						}
+						if (rule->neg_match) {
+							condition_met = (condition_met == false);
+						}
+
+						if (condition_met) {
+							break;
+						}
+
+						headers = headers->next;
+					}
+				} else {
+					if ((header = get_http_header(rule->header, options->http_headers)) == NULL) {
+						break;
+					}
+					if (regexec(&(rule->pattern), header, REGEXEC_NMATCH, pmatch, 0) == 0) {
+						condition_met = true;
+					}
+					if (rule->neg_match) {
+						condition_met = (condition_met == false);
+					}
 				}
 				break;
 			case tc_method:

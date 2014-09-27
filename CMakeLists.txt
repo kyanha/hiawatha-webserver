@@ -34,7 +34,7 @@ include(cmake/CopyIfNotExists.cmake)
 
 # Settings
 set(HIAWATHA_VERSION_MAJOR 9)
-set(HIAWATHA_VERSION_MINOR 7)
+set(HIAWATHA_VERSION_MINOR 8)
 set(HIAWATHA_VERSION_PATCH 0)
 string(TOLOWER ${CMAKE_PROJECT_NAME} PROJECT_NAME)
 if(${HIAWATHA_VERSION_PATCH} EQUAL 0)
@@ -66,6 +66,7 @@ check_function_exists(strncasecmp HAVE_STRNCASECMP)
 check_function_exists(strnstr HAVE_STRNSTR)
 check_function_exists(strcasestr HAVE_STRCASESTR)
 check_function_exists(strncasestr HAVE_STRNCASESTR)
+check_function_exists(arc4random_uniform HAVE_ARC4RANDOM)
 
 check_library_exists(crypt crypt_r "" HAVE_CRYPT_R)
 check_library_exists(crypt crypt "" HAVE_CRYPT_LIBRARY)

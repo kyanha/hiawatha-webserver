@@ -32,6 +32,10 @@
 #include "toolkit.h"
 #include "filehashes.h"
 #include "polarssl/md5.h"
+#ifdef ENABLE_SSL
+#include "polarssl/ssl.h"
+#include "polarssl/x509.h"
+#endif
 
 #define MAX_INPUT_SIZE KILOBYTE
 #define MAX_PATH 1024
@@ -41,6 +45,10 @@
 #define HASH_SHA512 6
 
 #define HASH_ALGORITM HASH_MD5
+
+#ifdef ENABLE_SSL
+#define RSA_MIN_SIZE 2048
+#endif
 
 typedef struct type_line {
 	char *key, *value, *file;
@@ -319,6 +327,11 @@ int check_main_config(char *config_dir) {
 	t_line *config = NULL, *haystack, *needles, *needle;
 	char *item, *rest, *info;
 	bool inside_section, has_dot;
+#ifdef ENABLE_SSL
+	pk_context private_key;
+	x509_crt certificate;
+	char *last_file = NULL;
+#endif
 
 	if (quiet == false) {
 		printf("Using %s\n", config_dir);
@@ -368,7 +381,7 @@ int check_main_config(char *config_dir) {
 	dispose_result(needles, false);
 	dispose_result(haystack, true);
 
-	/* Binding Id check
+	/* Binding ID check
 	 */
 	haystack = search_key(config, "bindingid");
 	needles = needle = search_key(config, "requiredbinding");
@@ -389,7 +402,7 @@ int check_main_config(char *config_dir) {
 	dispose_result(needles, false);
 	dispose_result(haystack, false);
 
-	/* FastCGI Id check
+	/* FastCGI ID check
 	 */
 	haystack = search_key(config, "fastcgiid");
 	needles = needle = search_key(config, "usefastcgi");
@@ -551,6 +564,50 @@ int check_main_config(char *config_dir) {
 
 		haystack = haystack->next;
 	}
+
+#ifdef ENABLE_SSL
+	/* SSL checks
+	 */
+	needles = needle = search_key(config, "sslcertfile");
+	while (needle != NULL) {
+		if (last_file != NULL) {
+			if (strcmp(needle->value, last_file) == 0) {
+				goto next_crt;
+			}
+		}
+
+		/* Private key check
+		 */
+		pk_init(&private_key);
+		if (pk_parse_keyfile(&private_key, needle->value, NULL) != 0) {
+			printf("Error loading RSA private key from %s.\n", needle->value);
+			errors++;
+			goto next_crt;
+		}
+
+		if ((pk_get_type(&private_key) == POLARSSL_PK_RSA) && (pk_get_size(&private_key) < RSA_MIN_SIZE)) {
+			printf("Warning: the RSA key size in %s should be at least %d bits.\n", needle->value, RSA_MIN_SIZE);
+		}
+
+		/* Certificate check
+		 */
+		x509_crt_init(&certificate);
+		if (x509_crt_parse_file(&certificate, needle->value) != 0) {
+			printf("Error loading X.509 certificate from %s.\n", needle->value);
+			errors++;
+			goto next_crt;
+		}
+
+		if (certificate.sig_md < POLARSSL_MD_SHA256) {
+			printf("Warning: the certificate signature algoritm in %s should at least be SHA256.\n", needle->value);
+		}
+
+next_crt:
+		last_file = needle->value;
+		needle = needle->next;
+	}
+	dispose_result(needles, false);
+#endif
 
 	dispose_result(config, true);
 
@@ -795,7 +852,11 @@ void create_basic_password(char *username, char *password) {
 
 	sprintf(salt, "$%d$", HASH_ALGORITM);
 	for (i = 3; i < 19; i++) {
+#ifdef HAVE_ARC4RANDOM
+		salt[i] = salt_digits[arc4random_uniform(len)];
+#else
 		salt[i] = salt_digits[rand() % len];
+#endif
 	}
 	strcpy(salt + 19, "$");
 	encrypted = crypt(password, salt);

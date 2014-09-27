@@ -28,6 +28,7 @@
 #include "global.h"
 #include "rproxy.h"
 #include "ssl.h"
+#include "ip.h"
 #include "libstr.h"
 #include "libfs.h"
 #include "polarssl/md5.h"
@@ -278,52 +279,6 @@ bool rproxy_loop_detected(t_http_header *http_headers) {
  */
 void init_rproxy_result(t_rproxy_result *result) {
 	result->bytes_sent = 0;
-}
-
-/* Connect to the webserver
- */
-int connect_to_server(t_ip_addr *ip_addr, int port) {
-	int sock = -1;
-	struct sockaddr_in saddr4;
-#ifdef ENABLE_IPV6
-	struct sockaddr_in6 saddr6;
-#endif
-
-	if (ip_addr == NULL) {
-		return -1;
-	}
-
-	if (ip_addr->family == AF_INET) {
-		/* IPv4
-		 */
-		if ((sock = socket(AF_INET, SOCK_STREAM, 0)) > 0) {
-			memset(&saddr4, 0, sizeof(struct sockaddr_in));
-			saddr4.sin_family = AF_INET;
-			saddr4.sin_port = htons(port);
-			memcpy(&saddr4.sin_addr.s_addr, &(ip_addr->value), ip_addr->size);
-			if (connect(sock, (struct sockaddr*)&saddr4, sizeof(struct sockaddr_in)) != 0) {
-				close(sock);
-				sock = -1;
-			}
-		}
-#ifdef ENABLE_IPV6
-	} else if (ip_addr->family == AF_INET6) {
-		/* IPv6
-		 */
-		if ((sock = socket(AF_INET6, SOCK_STREAM, 0)) > 0) {
-			memset(&saddr6, 0, sizeof(struct sockaddr_in6));
-			saddr6.sin6_family = AF_INET6;
-			saddr6.sin6_port = htons(port);
-			memcpy(&saddr6.sin6_addr.s6_addr, &(ip_addr->value), ip_addr->size);
-			if (connect(sock, (struct sockaddr*)&saddr6, sizeof(struct sockaddr_in6)) != 0) {
-				close(sock);
-				sock = -1;
-			}
-		}
-#endif
-	}
-
-	return sock;
 }
 
 /* Send output buffer to webserver

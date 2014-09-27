@@ -1,7 +1,5 @@
 #!/bin/sh
 
-echo "=== Warning, this package building script is still in beta stage.\n"
-
 if [ ! -f /etc/redhat-release ]; then
 	echo "Red Hat (clone) required."
 	exit
@@ -47,6 +45,10 @@ cd ..
 #
 rm -f ~/rpmbuild/SOURCES/hiawatha-${version}.tar.gz
 cd ..
+if [ ! -d "hiawatha-${version}" ]; then
+	echo -e "\n!! Invalid source directory name. Should be named 'hiawatha-${version}'."
+	exit
+fi
 mkdir -p ${HOME}/rpmbuild/SOURCES
 tar -czf ${HOME}/rpmbuild/SOURCES/hiawatha-${version}.tar.gz hiawatha-${version}
 cd hiawatha-${version}
@@ -59,4 +61,4 @@ rpmbuild -bb build_redhat_package/hiawatha.spec
 # Done
 #
 rm -rf build_redhat_package
-echo -e "\n-- Package located at ~/rpmbuild/RPMS/${MACHTYPE}/"
+echo -e "\n-- Package located at ~/rpmbuild/RPMS/"

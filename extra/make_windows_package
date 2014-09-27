@@ -1,5 +1,7 @@
 #!/bin/sh
 
+install_dir="C:\\\\Program Files\\\\Hiawatha"
+
 if [ `uname -o` != "Cygwin" ]; then
 	echo "Cygwin required."
 	exit
@@ -31,19 +33,20 @@ fi
 # Setup build directory
 #
 cd `dirname $0`/..
-if [ -d build ]; then
-	rm -rf build
+if [ -d build_windows_package ]; then
+	rm -rf build_windows_package
 fi
-mkdir build
-cd build
+mkdir build_windows_package
+cd build_windows_package
 
 # Compile Hiawatha
 #
-cmake .. -DCMAKE_INSTALL_SBINDIR="/cygdrive/c/Program Files/Hiawatha/bin" \
-         -DCONFIG_DIR="/cygdrive/c/Program Files/Hiawatha/config" \
-         -DLOG_DIR="/cygdrive/c/Program Files/Hiawatha/log" \
-         -DPID_DIR="/cygdrive/c/Program Files/Hiawatha/log" \
-         -DWORK_DIR="/cygdrive/c/Program Files/Hiawatha/work" \
+install_dir_cyg=`cygpath -p "${install_dir}"`
+cmake .. -DCMAKE_INSTALL_SBINDIR="${install_dir_cyg}/bin" \
+         -DCONFIG_DIR="${install_dir_cyg}/config" \
+         -DLOG_DIR="${install_dir_cyg}/log" \
+         -DPID_DIR="${install_dir_cyg}/log" \
+         -DWORK_DIR="${install_dir_cyg}/work" \
          -DWEBROOT_DIR="C:\wwwroot" -DCMAKE_LEGACY_CYGWIN_WIN32=0
 make
 
@@ -71,12 +74,15 @@ for file in ${files}; do
 	cp /bin/${file} ${dir}/Hiawatha/bin
 done
 
+install_dir="C:\Program Files\Hiawatha"
+
 cp ../config/index.xslt ${dir}/Hiawatha/config
 cp ../config/error.xslt ${dir}/Hiawatha/config
 cp ../config/mimetype.conf ${dir}/Hiawatha/config
 cp ../extra/windows/*.lnk ${dir}/Hiawatha
-cp ../extra/windows/*.bat ${dir}/Hiawatha/bin
-cp ../extra/windows/hiawatha.conf ${dir}/Hiawatha/config
+sed "s/INSTALL_DIR/${install_dir}/" ../extra/windows/Hiawatha.bat > ${dir}/Hiawatha/bin/Hiawatha.bat
+sed "s/INSTALL_DIR/${install_dir}/" ../extra/windows/TestConfig.bat > ${dir}/Hiawatha/bin/TestConfig.bat
+sed "s/INSTALL_DIR/${install_dir}/" ../extra/windows/hiawatha.conf > ${dir}/Hiawatha/config/hiawatha.conf
 cp ../extra/windows/Hiawatha.ico ${dir}/Hiawatha
 cp ../extra/windows/Installation.txt ${dir}
 cp ../extra/index.html ${dir}/wwwroot
@@ -100,5 +106,5 @@ zip -r ../hiawatha-${version}.zip ${dir}
 #
 cd ..
 if [ "$1" != "-b" ]; then
-	rm -rf build
+	rm -rf build_windows_package
 fi

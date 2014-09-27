@@ -162,7 +162,7 @@ static void secure_header(char *buffer, int size) {
 		strcpy(pos, "X-Empty: ");
 		pos += 9;
 		do {
-			*(pos++) = ' ';
+			*(pos++) = 'x';
 		} while ((*pos != '\r') && (*pos != '\0'));
 	}
 }

@@ -66,5 +66,6 @@ int  hostname_to_ip(char *hostname, t_ip_addr *ip);
 int  parse_iplist(char *line, t_iplist **list);
 bool in_iplist(t_iplist *list, t_ip_addr *ip);
 void remove_iplist(t_iplist *list);
+int  connect_to_server(t_ip_addr *ip_addr, int port);
 
 #endif

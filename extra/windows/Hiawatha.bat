@@ -1,8 +1,8 @@
 @ECHO OFF
 
-"C:\Program Files\Hiawatha\bin\wigwam.exe" -q
+"INSTALL_DIR\bin\wigwam.exe" -q
 IF ERRORLEVEL 1 GOTO ERROR
-"C:\Program Files\Hiawatha\bin\hiawatha.exe" -d
+"INSTALL_DIR\bin\hiawatha.exe" -d
 IF ERRORLEVEL 1 GOTO ERROR
 GOTO END
 

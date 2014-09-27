@@ -81,7 +81,6 @@ t_rproxy *rproxy_setting(char *line);
 bool rproxy_match(t_rproxy *rproxy, char *uri);
 bool rproxy_loop_detected(t_http_header *http_headers);
 void init_rproxy_result(t_rproxy_result *result);
-int  connect_to_server(t_ip_addr *ip_addr, int port);
 int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *options,
                               t_rproxy *rproxy, t_rproxy_result *result, bool session_keep_alive);
 int tunnel_ssh_connection(int client_sock);

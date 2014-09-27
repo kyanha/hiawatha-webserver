@@ -34,6 +34,13 @@
 #include "polarssl/dhm.h"
 #include "polarssl/ssl_cache.h"
 #include "polarssl/error.h"
+#ifdef ENABLE_SSL
+#include "polarssl/ssl.h"
+#include "polarssl/x509.h"
+#ifdef ENABLE_DEBUG
+#include "polarssl/debug.h"
+#endif
+#endif
 #include "memdbg.h"
 
 typedef struct type_sni_list {
@@ -167,24 +174,34 @@ static char dhm_8192_P =
 static char *dhm_8192_G = "02";
 */
 
-static char *ssl_error_logfile;
 static pthread_mutex_t random_mutex;
 static pthread_mutex_t cache_mutex;
 static ssl_cache_context cache;
 static t_sni_list *sni_list = NULL;
 static ctr_drbg_context ctr_drbg;
 static entropy_context entropy;
+#ifdef ENABLE_DEBUG
+static char *ssl_error_logfile;
+#endif
 
 /* Initialize SSL library
  */
+#ifdef ENABLE_DEBUG
 int init_ssl_module(char *logfile) {
 	ssl_error_logfile = logfile;
+#else
+int init_ssl_module(void) {
+#endif
 
 #if POLARSSL_VERSION_NUMBER >= 0x01030700
 	if (version_check_feature("POLARSSL_THREADING_PTHREAD") != 0) {
 		fprintf(stderr, "PolarSSL was compiled without the required POLARSSL_THREADING_PTHREAD compiler flag.\n");
 		return -1;
 	}
+
+#ifdef ENABLE_DEBUG
+	debug_set_threshold(SSL_DEBUG_LEVEL);
+#endif
 #endif
 
 	entropy_init(&entropy);
@@ -209,7 +226,7 @@ int init_ssl_module(char *logfile) {
  */
 int ssl_register_sni(t_charlist *hostname, pk_context *private_key, x509_crt *certificate,
                 x509_crt *ca_certificate, x509_crl *ca_crl) {
-	t_sni_list *sni;
+	t_sni_list *sni, *last;
 
 	if ((sni = (t_sni_list*)malloc(sizeof(t_sni_list))) == NULL) {
 		return -1;
@@ -220,9 +237,17 @@ int ssl_register_sni(t_charlist *hostname, pk_context *private_key, x509_crt *ce
 	sni->certificate = certificate;
 	sni->ca_certificate = ca_certificate;
 	sni->ca_crl = ca_crl;
+	sni->next = NULL;
 
-	sni->next = sni_list;
-	sni_list = sni;
+	if (sni_list == NULL) {
+		sni_list = sni;
+	} else {
+		last = sni_list;
+		while (last->next != NULL) {
+			last = last->next;
+		}
+		last->next = sni;
+	}
 
 	return 0;
 }
@@ -235,7 +260,7 @@ static void ssl_debug(void *thread_id, int level, const char *str) {
 		return;
 	}
 
-	log_string(ssl_error_logfile, "PolarSSL (%d):%s", *(int*)thread_id, str);
+	log_string(ssl_error_logfile, "PolarSSL (%d): %s", *(int*)thread_id, str);
 }
 #endif
 
@@ -372,6 +397,7 @@ static int sni_callback(void *sad, ssl_context *context, const unsigned char *sn
 				return 0;
 			}
 		}
+
 		sni = sni->next;
 	}
 
@@ -473,7 +499,9 @@ int ssl_receive(ssl_context *ssl, char *buffer, unsigned int maxlength) {
 		result = ssl_read(ssl, (unsigned char*)buffer, maxlength);
 	} while (result == POLARSSL_ERR_NET_WANT_READ);
 
-	if (result < 0) {
+	if (result == POLARSSL_ERR_SSL_PEER_CLOSE_NOTIFY) {
+		return 0;
+	} else if (result < 0) {
 		return -1;
 	}
 
@@ -585,7 +613,9 @@ int ssl_connect(ssl_context *ssl, int *sock, char *hostname) {
 	if (hostname != NULL) {
 		ssl_set_hostname(ssl, hostname);
 	}
-	ssl_set_ciphersuites(ssl, ciphersuites_tls10);
+	ssl_set_ciphersuites_for_version(ssl, ciphersuites_tls10, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1);
+	ssl_set_ciphersuites_for_version(ssl, ciphersuites_tls10, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_2);
+	ssl_set_ciphersuites_for_version(ssl, ciphersuites_tls12, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_3);
 
 	if (ssl_handshake(ssl) != 0) {
 		return SSL_HANDSHAKE_ERROR;

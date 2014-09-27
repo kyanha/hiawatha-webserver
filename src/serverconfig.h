@@ -73,6 +73,18 @@ typedef struct type_monitor_host_stats {
 } t_monitor_host_stats;
 #endif
 
+typedef struct type_websocket {
+	t_ip_addr ip_address;
+	int port;
+	t_charlist path;
+	int timeout;
+#ifdef ENABLE_SSL
+	bool use_ssl;
+#endif
+
+	struct type_websocket *next;
+} t_websocket;
+
 typedef struct type_deny_body {
 	regex_t pattern;
 	struct type_deny_body *next;
@@ -275,6 +287,7 @@ typedef struct type_host {
 	bool            monitor_host;
 #endif
 	t_file_hash     *file_hashes;
+	t_websocket     *websockets;
 
 	struct type_host *next;
 } t_host;
@@ -306,6 +319,9 @@ typedef struct type_config {
 	char          *system_logfile;
 	char          *garbage_logfile;
 	char          *exploit_logfile;
+#ifdef ENABLE_DEBUG
+	char          *debug_logfile;
+#endif
 	char          *pidfile;
 	t_accesslist  *logfile_mask;
 	char          *user_directory;

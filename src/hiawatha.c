@@ -122,7 +122,7 @@ void create_logfiles(t_config *config) {
 		create_logfile(config->exploit_logfile, LOG_PERM, config->server_uid, config->server_gid);
 	}
 #ifdef ENABLE_DEBUG
-	create_logfile(LOG_DIR"/debug.log", LOG_PERM, config->server_uid, config->server_gid);
+	create_logfile(config->debug_logfile, LOG_PERM, config->server_uid, config->server_gid);
 #endif
 
 	host = config->first_host;
@@ -469,6 +469,8 @@ int accept_connection(t_binding *binding, t_config *config) {
 
 	if (session->request_limit == false) {
 		conns_per_ip = config->total_connections;
+	} else if (in_iplist(config->hide_proxy, &(session->ip_address))) {
+		conns_per_ip = config->total_connections;
 	} else {
 		conns_per_ip = config->connections_per_ip;
 	}
@@ -614,7 +616,11 @@ int run_server(t_settings *settings) {
 	}
 
 #ifdef ENABLE_SSL
-	if (init_ssl_module(config->system_logfile) == -1) {
+#ifdef ENABLE_DEBUG
+	if (init_ssl_module(config->debug_logfile) == -1) {
+#else
+	if (init_ssl_module() == -1) {
+#endif
 		return -1;
 	}
 #endif

@@ -28,5 +28,6 @@ int handle_xml_file(t_session *session, char *xslt_file);
 #ifdef ENABLE_RPROXY
 int proxy_request(t_session *session, t_rproxy *proxy);
 #endif
+int forward_to_websocket(t_session *session);
 
 #endif

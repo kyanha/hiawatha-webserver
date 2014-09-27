@@ -207,6 +207,7 @@ static const char **get_transform_parameters(t_session *session) {
 
 	add_http_header(session, params, "Accept:", "HTTP_ACCEPT", &i);
 	add_http_header(session, params, "Accept-Charset:", "HTTP_ACCEPT_CHARSET", &i);
+	add_http_header(session, params, "Accept-Encoding:", "HTTP_ACCEPT_ENCODING", &i);
 	add_http_header(session, params, "Accept-Language:", "HTTP_ACCEPT_LANGUAGE", &i);
 	add_http_header(session, params, "Client-IP:", "HTTP_CLIENT_IP", &i);
 	add_http_header(session, params, "From:", "HTTP_FROM", &i);
@@ -623,7 +624,7 @@ int show_index(t_session *session) {
 		return -1;
 	}
 
-	if ((ruri = strdup(session->request_uri)) == NULL) {
+	if (xml_special_chars(session->request_uri, &ruri) == -1) {
 		free(text_xml);
 		remove_filelist(filelist);
 		return -1;
@@ -877,7 +878,7 @@ int show_http_code_body(t_session *session) {
 	xmlDocPtr data_xml;
 	char *text_xml;
 	int text_size, text_max, result;
-	char ecode[5], *emesg;
+	char ecode[5], *emesg, *uri;
 
 	ecode[4] = '\0';
 	snprintf(ecode, 4, "%d", session->return_code);
@@ -919,10 +920,16 @@ int show_http_code_body(t_session *session) {
 		return -1;
 	}
 
-	if (add_tag(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "request_uri", session->request_uri) == -1) {
+	if (xml_special_chars(session->request_uri, &uri) == -1) {
 		free(text_xml);
 		return -1;
 	}
+	if (add_tag(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "request_uri", uri) == -1) {
+		free(uri);
+		free(text_xml);
+		return -1;
+	}
+	free(uri);
 
 	if (session->config->server_string != NULL) {
 		if (add_tag(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "software", session->config->server_string) == -1) {

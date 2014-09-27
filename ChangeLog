@@ -1,3 +1,13 @@
+hiawatha (9.8) stable; urgency=low
+
+  * Added support for websockets. WebSocket option added.
+  * Added Red Hat package building script (extra/make_redhat_package).
+    Thanks to Paul F. Bernal B.
+  * SSL key and certificate checks added to wigwam.
+  * Small bugfixes and improvements.
+
+ -- Hugo Leisink <hugo@leisink.net>  Sat, 27 Sep 2014 14:13:21 +0200
+
 hiawatha (9.7) stable; urgency=low
 
   * UseToolkit now possible in .hiawatha file at root of website.

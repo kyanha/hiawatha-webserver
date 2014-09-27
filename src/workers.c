@@ -308,7 +308,7 @@ static t_access allow_client(t_session *session) {
  */
 static int serve_client(t_session *session) {
 	int result, length, auth_result;
-	char *qmark, chr;
+	char *qmark, chr, *header;
 	t_host *host_record;
 	t_access access;
 	t_deny_body *deny_body;
@@ -343,6 +343,18 @@ static int serve_client(t_session *session) {
 
 	session->time = time(NULL);
 
+	/* Hide reverse proxies
+	 */
+	if (in_iplist(session->config->hide_proxy, &(session->ip_address))) {
+		if (last_forwarded_ip(session->http_headers, &ip_addr) == 0) {
+			if (reposition_client(session, &ip_addr) != -1) {
+				copy_ip(&(session->ip_address), &ip_addr);
+			}
+		}
+	}
+
+	/* SSH tunneling
+	 */
 #ifdef ENABLE_RPROXY
 	if (session->request_method == CONNECT) {
 		if (in_iplist(session->config->tunnel_ssh, &(session->ip_address)) == false) {
@@ -375,16 +387,6 @@ static int serve_client(t_session *session) {
 		return 200;
 	}
 #endif
-
-	/* Hide reverse proxies
-	 */
-	if (in_iplist(session->config->hide_proxy, &(session->ip_address))) {
-		if (last_forwarded_ip(session->http_headers, &ip_addr) == 0) {
-			if (reposition_client(session, &ip_addr) != -1) {
-				copy_ip(&(session->ip_address), &ip_addr);
-			}
-		}
-	}
 
 	/* Find host record
 	 */
@@ -477,6 +479,38 @@ static int serve_client(t_session *session) {
 		}
 
 		*(session->body + session->content_length) = chr;
+	}
+
+	/* Websocket
+	 */
+	if (session->request_method == GET) {
+		if ((header = get_http_header("Connection:", session->http_headers)) != NULL) {
+			if (strcasestr(header, "upgrade") != NULL) {
+				if ((header = get_http_header("Upgrade:", session->http_headers)) != NULL) {
+					if (strcasecmp(header, "websocket") == 0) {
+						switch (access = allow_client(session)) {
+							case deny:
+								log_error(session, fb_accesslist);
+								return 403;
+							case allow:
+								break;
+							case pwd:
+							case unspecified:
+								if ((auth_result = http_authentication_result(session, access == unspecified)) != 200) {
+									return auth_result;
+								}
+						}
+
+						session->keep_alive = false;
+						if (forward_to_websocket(session) == -1) {
+							return 500;
+						}
+
+						return 200;
+					}
+				}
+			}
+		}
 	}
 
 #ifdef ENABLE_RPROXY

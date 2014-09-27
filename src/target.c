@@ -49,6 +49,7 @@
 #define CGI_BUFFER_SIZE       32 * KILOBYTE
 #define RPROXY_BUFFER_SIZE    32 * KILOBYTE
 #define MAX_TRACE_HEADER       2 * KILOBYTE
+#define WS_BUFFER_SIZE        32 * KILOBYTE
 #define VALUE_SIZE            64
 #define WAIT_FOR_LOCK          3
 
@@ -1465,7 +1466,7 @@ static int remove_header(char *buffer, char *header, int header_length, int size
 }
 
 static int find_chunk_size(char *buffer, int size, int *chunk_size, int *chunk_left) {
-	int extra, total;
+	int total;
 	char *c;
 
 	if (*chunk_left > 0) {
@@ -1484,15 +1485,17 @@ static int find_chunk_size(char *buffer, int size, int *chunk_size, int *chunk_l
 		return -1;
 	}
 
-	extra = 4 + c - buffer;
+	*c = '\0';
+	*chunk_size = hex_to_int(buffer);
+	*c = '\r';
 
-	if ((*chunk_size = hex_to_int(buffer)) == -1) {
+	if (*chunk_size == -1) {
 		return -1;
 	} else if (*chunk_size == 0) { 
 		return 0;
 	}
 
-	total = *chunk_size + extra;
+	total = *chunk_size + 4 + (c - buffer);
 
 	if (total < size) {
 		return find_chunk_size(buffer + total, size - total, chunk_size, chunk_left);
@@ -1648,18 +1651,16 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	 */
 	deadline = time(NULL) + rproxy->timeout;
 
+	poll_data.fd = webserver.socket;
+	poll_data.events = POLL_EVENT_BITS;
+
 	do {
 #ifdef ENABLE_SSL
 		poll_result = session->binding->use_ssl ? ssl_pending(&(session->ssl_context)) : 0;
 
-		if (poll_result == 0) {
+		if (poll_result == 0)
 #endif
-			poll_data.fd = webserver.socket;
-			poll_data.events = POLL_EVENT_BITS;
 			poll_result = poll(&poll_data, 1, 1000);
-#ifdef ENABLE_SSL
-		}
-#endif
 
 		switch (poll_result) {
 			case -1:
@@ -1942,3 +1943,206 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	return result;
 }
 #endif
+
+static int add_to_buffer(char *str, char *buffer, size_t *size, size_t max_size) {
+	size_t str_len;
+
+	str_len = strlen(str);
+	if (*size + str_len >= max_size) {
+		return -1;
+	}
+
+	memcpy(buffer + *size, str, str_len);
+	*size += str_len;
+	*(buffer + *size) = '\0';
+
+	return 0;
+}
+
+int forward_to_websocket(t_session *session) {
+	t_websocket *ws;
+	int result = -1, ws_socket, poll_result, bytes_read;
+	size_t size;
+	t_http_header *http_header;
+	struct pollfd poll_data[2];
+	bool keep_reading = true;
+	char buffer[WS_BUFFER_SIZE];
+#ifdef ENABLE_SSL
+	ssl_context ws_ssl_context;
+#endif
+
+	ws = session->host->websockets;
+	while (ws != NULL) {
+		if (in_charlist(session->uri, &(ws->path))) {
+			break;
+		} else if (in_charlist("*", &(ws->path))) {
+			break;
+		}
+		ws = ws->next;
+	}
+
+	if (ws == NULL) {
+		return -1;
+	}
+
+	if ((ws_socket = connect_to_server(&(ws->ip_address), ws->port)) == -1) {
+		return -1;
+	}
+
+#ifdef ENABLE_SSL
+	if (ws->use_ssl) {
+		if (ssl_connect(&ws_ssl_context, &ws_socket, NULL) == SSL_HANDSHAKE_ERROR) {
+			close(ws_socket);
+			return -1;
+		}
+	}
+#endif
+
+	size = 0;
+	add_to_buffer("GET ", buffer, &size, WS_BUFFER_SIZE);
+	if (add_to_buffer(session->uri, buffer, &size, WS_BUFFER_SIZE) == -1) {
+		goto ws_error;
+	}
+
+	if (add_to_buffer(" HTTP/1.1\r\n", buffer, &size, WS_BUFFER_SIZE) == -1) {
+		goto ws_error;
+	}
+
+	http_header = session->http_headers;
+	while (http_header != NULL) {
+		if (add_to_buffer(http_header->data, buffer, &size, WS_BUFFER_SIZE) == -1) {
+			goto ws_error;
+		}
+
+		if (add_to_buffer("\r\n", buffer, &size, WS_BUFFER_SIZE) == -1) {
+			goto ws_error;
+		}
+
+    	http_header = http_header->next;
+	}
+
+	if (add_to_buffer("\r\n", buffer, &size, WS_BUFFER_SIZE) == -1) {
+		goto ws_error;
+	}
+
+	if (write_buffer(ws_socket, buffer, size) == -1) {
+		goto ws_error;
+	}
+
+	poll_data[0].fd = ws_socket;
+	poll_data[0].events = POLL_EVENT_BITS;
+	poll_data[1].fd = session->client_socket;
+	poll_data[1].events = POLL_EVENT_BITS;
+
+	result = 0;
+
+	/* Forward data
+	 */
+	do {
+#ifdef ENABLE_SSL
+		poll_result = session->binding->use_ssl ? ssl_pending(&(session->ssl_context)) : 0;
+
+		if (poll_result == 0)
+#endif
+			poll_result = poll(poll_data, 2, ws->timeout);
+
+		switch (poll_result) {
+			case -1:
+				result = -1;
+				keep_reading = false;
+				break;
+			case 0:
+				result = 504;
+				keep_reading = false;
+				break;
+			default:
+				/* Data from websocket to client
+				 */
+				if (poll_data[0].revents != 0) {
+#ifdef ENABLE_SSL
+					if (ws->use_ssl) {
+						if ((bytes_read = ssl_receive(&ws_ssl_context, buffer, WS_BUFFER_SIZE)) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+					} else
+#endif
+						if ((bytes_read = read(ws_socket, buffer, WS_BUFFER_SIZE)) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+
+					if (bytes_read == 0) {
+						keep_reading = false;
+						break;
+					}
+
+#ifdef ENABLE_SSL
+					if (session->binding->use_ssl) {
+						if (ssl_send(&(session->ssl_context), buffer, bytes_read) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+					} else
+#endif
+						if (write_buffer(session->client_socket, buffer, bytes_read) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+				}
+
+				/* Data from client to websocket
+				 */
+				if (poll_data[1].revents != 0) {
+#ifdef ENABLE_SSL
+					if (session->binding->use_ssl) {
+						if ((bytes_read = ssl_receive(&(session->ssl_context), buffer, WS_BUFFER_SIZE)) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+					} else
+#endif
+						if ((bytes_read = read(session->client_socket, buffer, WS_BUFFER_SIZE)) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+
+					if (bytes_read == 0) {
+						keep_reading = false;
+						break;
+					}
+
+#ifdef ENABLE_SSL
+					if (ws->use_ssl) {
+						if (ssl_send(&ws_ssl_context, buffer, bytes_read) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+					} else
+#endif
+						if (write_buffer(ws_socket, buffer, bytes_read) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+				}
+		}
+	} while (keep_reading);
+
+ws_error:
+#ifdef ENABLE_SSL
+	if (ws->use_ssl) {
+		ssl_close(&ws_ssl_context);
+	}
+#endif
+	close(ws_socket);
+
+	return result;
+}

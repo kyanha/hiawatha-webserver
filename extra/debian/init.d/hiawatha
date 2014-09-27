@@ -43,7 +43,7 @@ function start_hiawatha {
 
 	if [ "${result}" != "0" ]; then
 		echo -e "${RED}Hiawatha has NOT been started!${NORMAL}"
-		exit 7
+		exit 0
 	fi
 
 	echo -n "Starting webserver: "
@@ -53,7 +53,7 @@ function start_hiawatha {
 		echo -e "${GREEN}Hiawatha${NORMAL}"
 	else
 		echo -e "${RED}error!${NORMAL}"
-		exit 7
+		exit 0
 	fi
 }
 
@@ -61,7 +61,7 @@ function stop_hiawatha {
 	if [ ! -f ${PIDFILE} ]; then
 		echo -e "Hiawatha${NORMAL}"
 		echo -e "${YELLOW}Hiawatha PID file not found${NORMAL}"
-		exit 7
+		exit 0
 	fi
 
 	PID=`cat ${PIDFILE}`
@@ -70,7 +70,7 @@ function stop_hiawatha {
 	if [ ! -d /proc/${PID} ]; then
 		echo -e "Hiawatha${NORMAL}"
 		echo -e "${YELLOW}Hiawatha is not running${NORMAL}"
-		exit 7
+		exit 0
 	fi
 
 	echo -en "Stopping webserver: ${GREEN}"

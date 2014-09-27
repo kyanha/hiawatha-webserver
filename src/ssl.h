@@ -47,7 +47,11 @@ typedef struct {
 #endif
 } t_ssl_accept_data;
 
+#ifdef ENABLE_DEBUG
 int  init_ssl_module(char *logfile);
+#else
+int  init_ssl_module(void);
+#endif
 #if POLARSSL_VERSION_NUMBER >= 0x01020000
 int  ssl_register_sni(t_charlist *hostname, pk_context *private_key, x509_crt *certificate,
                   x509_crt *ca_certificate, x509_crl *ca_crl);
