@@ -643,7 +643,7 @@ int add_header(t_http_header **headers, char *env_key, char *header_key) {
 
 void check_url_toolkit(char *config_dir, char **toolkit_id) {
 	t_line *config = NULL;
-	char input[MAX_INPUT_SIZE + 1], **id, *url, current_dir[MAX_PATH];
+	char input[MAX_INPUT_SIZE + 1], **id, *url, current_dir[MAX_PATH], *scheme;
 	t_url_toolkit *url_toolkit, *toolkit = NULL, *new_toolkit;
 	t_toolkit_options options;
 	t_http_header *http_headers;
@@ -701,6 +701,7 @@ void check_url_toolkit(char *config_dir, char **toolkit_id) {
 
 			in_rule_section = true;
 		}
+
 		config = config->next;
 	}
 
@@ -757,7 +758,11 @@ void check_url_toolkit(char *config_dir, char **toolkit_id) {
 		options.url_toolkit = url_toolkit;
 		options.http_headers = http_headers;
 #ifdef ENABLE_SSL
-		options.use_ssl = strcmp(getenv("HTTP_SCHEME"), "https") == 0;
+		if ((scheme = getenv("HTTP_SCHEME")) != NULL) {
+			options.use_ssl = strcmp(scheme, "https") == 0;
+		} else {
+			options.use_ssl = false;
+		}
 #endif
 
 		id = toolkit_id;
@@ -842,7 +847,9 @@ void create_basic_password(char *username, char *password) {
 	char *salt_digits = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./";
 	int len, i;
 
+#ifndef HAVE_ARC4RANDOM
 	srand((unsigned)time(NULL));
+#endif
 	len = strlen(salt_digits);
 
 	if (password == NULL) {

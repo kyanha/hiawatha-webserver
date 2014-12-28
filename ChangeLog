@@ -1,3 +1,15 @@
+hiawatha (9.9) stable; urgency=low
+
+  * HTTPAuthToCGI option added.
+  * BanByCGI option added.
+  * PolarSSL updated to version 1.3.9.
+  * Improved SSL ciphersuite selections.
+  * CAcertificates options added.
+  * Dropped support for SSL3.0.
+  * Small bugfixes and improvements.
+
+ -- Hugo Leisink <hugo@leisink.net>  Sun, 7 Dec 2014 12:15:57 +0100
+
 hiawatha (9.8) stable; urgency=low
 
   * Added support for websockets. WebSocket option added.

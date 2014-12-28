@@ -106,8 +106,10 @@ char *version_string = "Hiawatha v"VERSION
 /* Create all logfiles with the right ownership and accessrights
  */
 void create_logfile(char *logfile, mode_t mode, uid_t uid, gid_t gid) {
-	if (create_file(logfile, mode, uid, gid) != 0) {
-		fprintf(stderr, "Error creating logfile %s or changing its protection or ownership.\n", logfile);
+	if (logfile != NULL) {
+		if (create_file(logfile, mode, uid, gid) != 0) {
+			fprintf(stderr, "Error creating logfile %s or changing its protection or ownership.\n", logfile);
+		}
 	}
 }
 
@@ -115,12 +117,8 @@ void create_logfiles(t_config *config) {
 	t_host *host;
 
 	create_logfile(config->system_logfile, LOG_PERM, config->server_uid, config->server_gid);
-	if (config->garbage_logfile != NULL) {
-		create_logfile(config->garbage_logfile, LOG_PERM, config->server_uid, config->server_gid);
-	}
-	if (config->exploit_logfile != NULL) {
-		create_logfile(config->exploit_logfile, LOG_PERM, config->server_uid, config->server_gid);
-	}
+	create_logfile(config->garbage_logfile, LOG_PERM, config->server_uid, config->server_gid);
+	create_logfile(config->exploit_logfile, LOG_PERM, config->server_uid, config->server_gid);
 #ifdef ENABLE_DEBUG
 	create_logfile(config->debug_logfile, LOG_PERM, config->server_uid, config->server_gid);
 #endif
@@ -130,6 +128,7 @@ void create_logfiles(t_config *config) {
 		if (host->access_fileptr != NULL) {
 			fflush(host->access_fileptr);
 		}
+
 		create_logfile(host->access_logfile, LOG_PERM, config->server_uid, config->server_gid);
 		create_logfile(host->error_logfile, LOG_PERM, config->server_uid, config->server_gid);
 		host = host->next;
@@ -617,9 +616,9 @@ int run_server(t_settings *settings) {
 
 #ifdef ENABLE_SSL
 #ifdef ENABLE_DEBUG
-	if (init_ssl_module(config->debug_logfile) == -1) {
+	if (init_ssl_module(config->ca_certificates, config->debug_logfile) == -1) {
 #else
-	if (init_ssl_module() == -1) {
+	if (init_ssl_module(config->ca_certificates) == -1) {
 #endif
 		return -1;
 	}
@@ -906,7 +905,11 @@ int run_server(t_settings *settings) {
 #ifdef HAVE_ACCF
 	binding = config->binding;
 	while (binding != NULL) {
-		if (binding->enable_accf && (binding->use_ssl == false)) {
+		if (binding->enable_accf
+#ifdef ENABLE_SSL
+			&& (binding->use_ssl == false)
+#endif
+		) {
 			bzero(&afa, sizeof(afa));
 			strcpy(afa.af_name, "httpready");
 			if (setsockopt(binding->socket, SOL_SOCKET, SO_ACCEPTFILTER, &afa, sizeof(afa)) == -1) {
@@ -1047,8 +1050,10 @@ int run_server(t_settings *settings) {
 						} else if (number_of_admins >= MAX_TOMAHAWK_CONNECTIONS) {
 							if ((admin_fp = fdopen(admin_socket, "r+")) != NULL) {
 								fprintf(admin_fp, "Maximum number of admin connections reached.\n\n");
+								fclose(admin_fp);
+							} else {
+								close(admin_socket);
 							}
-							fclose(admin_fp);
 						} else if (add_admin(admin_socket) == -1) {
 							close(admin_socket);
 						}

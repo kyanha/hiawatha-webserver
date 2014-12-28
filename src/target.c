@@ -29,6 +29,7 @@
 #include <sys/socket.h>
 #include "global.h"
 #include "alternative.h"
+#include "client.h"
 #include "libstr.h"
 #include "libfs.h"
 #include "target.h"
@@ -470,7 +471,7 @@ static int extract_http_code(char *data) {
 /* Run a CGI program and send output to the client.
  */
 int execute_cgi(t_session *session) {
-	int retval = 200, result, handle, len, header_length;
+	int retval = 200, result, handle, len, header_length, value;
 	char *end_of_header, *str_begin, *str_end, *code, c, *str;
 	bool in_body = false, send_in_chunks = true, wrap_cgi, check_file_exists;
 	t_cgi_result cgi_result;
@@ -833,6 +834,44 @@ int execute_cgi(t_session *session) {
 									session->keep_alive = false;
 								}
 
+							}
+
+							/* Search for X-Hiawatha-Ban
+							 */
+							if (session->host->ban_by_cgi) {
+								if (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny) {
+									if ((str_begin = find_cgi_header(cgi_info.input_buffer, header_length, "X-Hiawatha-Ban:")) != NULL) {
+										str_begin += 15;
+										while (*str_begin == ' ') {
+											str_begin++;
+										}
+
+										str_end = str_begin;
+										while ((*str_end != '\r') && (*str_end != '\0')) {
+											str_end++;
+										}
+
+										if (*str_end == '\r') {
+											*str_end = '\0';
+											value = str_to_int(str_begin);
+											*str_end = '\r';
+
+											if (value > 0) {
+												if ((session->host->ban_by_cgi_max > -1) && (value > session->host->ban_by_cgi_max)) {
+													value = session->host->ban_by_cgi_max;
+												}
+
+												ban_ip(&(session->ip_address), value, session->config->kick_on_ban);
+												log_system(session, "Client banned for %d seconds by CGI %s", value, session->file_on_disk);
+#ifdef ENABLE_MONITOR
+												if (session->config->monitor_enabled) {
+													monitor_count_ban(session);
+												}
+#endif
+											}
+										}
+									}
+								}
 							}
 
 #ifdef ENABLE_MONITOR
@@ -1513,11 +1552,15 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	t_rproxy_webserver webserver;
 	t_rproxy_result rproxy_result;
 	char buffer[RPROXY_BUFFER_SIZE + 1], *end_of_header, *str, *eol;
+	char *reverse_proxy, ip_address[MAX_IP_STR_LEN + 1];
 	int bytes_read, bytes_in_buffer = 0, result = 200, code, poll_result, send_result, delta;
 	int content_length = -1, content_read = 0, chunk_size = 0, chunk_left = 0, header_length;
 	bool header_read = false, keep_reading = true, keep_alive, chunked_transfer = false, send_in_chunks = false;
 	struct pollfd poll_data;
 	time_t deadline;
+#ifdef ENABLE_SSL
+	char *hostname;
+#endif
 #ifdef ENABLE_CACHE
 	t_cached_object *cached_object;
 	char *cache_buffer = NULL;
@@ -1618,6 +1661,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 		webserver.socket = session->rproxy_socket;
 #ifdef ENABLE_SSL
 		webserver.use_ssl = session->rproxy_use_ssl;
+
 		if (webserver.use_ssl) {
 			memcpy(&(webserver.ssl), &(session->rproxy_ssl), sizeof(ssl_context));
 		}
@@ -1626,13 +1670,17 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 		/* Connect to webserver
 		 */
 		if ((webserver.socket = connect_to_server(&(rproxy->ip_addr), rproxy->port)) == -1) {
+			log_error(session, "error connecting to reverse proxy");
 			return 503;
 		}
 
 #ifdef ENABLE_SSL
 		webserver.use_ssl = rproxy->use_ssl;
+
 		if (webserver.use_ssl) {
-			if (ssl_connect(&(webserver.ssl), &(webserver.socket), rproxy->hostname) == SSL_HANDSHAKE_ERROR) {
+			hostname = rproxy->hostname != NULL ? rproxy->hostname : session->hostname;
+			if (ssl_connect(&(webserver.ssl), &(webserver.socket), hostname) == SSL_HANDSHAKE_ERROR) {
+				log_error(session, "SSL handshake error with reverse proxy");
 				close(webserver.socket);
 				return 503;
 			}
@@ -1668,7 +1716,13 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 					result = -1;
 					keep_reading = false;
 					keep_alive = false;
-					log_string(session->host->error_logfile, "Reverse proxy connection error for %s", rproxy->hostname);
+					if (rproxy->hostname == NULL) {
+						ip_to_str(&(rproxy->ip_addr), ip_address, MAX_IP_STR_LEN);
+						reverse_proxy = ip_address;
+					} else {
+						reverse_proxy = rproxy->hostname;
+					}
+					log_string(session->host->error_logfile, "Reverse proxy connection error for %s", reverse_proxy);
 				}
 				break;
 			case 0:
@@ -1676,7 +1730,13 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 					result = 504;
 					keep_reading = false;
 					keep_alive = false;
-					log_string(session->host->error_logfile, "Reverse proxy timeout for %s", rproxy->hostname);
+					if (rproxy->hostname == NULL) {
+						ip_to_str(&(rproxy->ip_addr), ip_address, MAX_IP_STR_LEN);
+						reverse_proxy = ip_address;
+					} else {
+						reverse_proxy = rproxy->hostname;
+					}
+					log_string(session->host->error_logfile, "Reverse proxy timeout for %s", reverse_proxy);
 				}
 				break;
 			default:
@@ -1697,7 +1757,13 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 							result = -1;
 							keep_reading = false;
 							keep_alive = false;
-							log_string(session->host->error_logfile, "Reverse proxy read error for %s", rproxy->hostname);
+							if (rproxy->hostname == NULL) {
+								ip_to_str(&(rproxy->ip_addr), ip_address, MAX_IP_STR_LEN);
+								reverse_proxy = ip_address;
+							} else {
+								reverse_proxy = rproxy->hostname;
+							}
+							log_string(session->host->error_logfile, "Reverse proxy read error for %s", reverse_proxy);
 						}
 						break;
 					case 0:
@@ -1973,7 +2039,7 @@ int forward_to_websocket(t_session *session) {
 
 	ws = session->host->websockets;
 	while (ws != NULL) {
-		if (in_charlist(session->uri, &(ws->path))) {
+		if (matches_charlist(session->uri, &(ws->path))) {
 			break;
 		} else if (in_charlist("*", &(ws->path))) {
 			break;
@@ -1986,12 +2052,14 @@ int forward_to_websocket(t_session *session) {
 	}
 
 	if ((ws_socket = connect_to_server(&(ws->ip_address), ws->port)) == -1) {
+		log_error(session, "error connecting to websocket");
 		return -1;
 	}
 
 #ifdef ENABLE_SSL
 	if (ws->use_ssl) {
 		if (ssl_connect(&ws_ssl_context, &ws_socket, NULL) == SSL_HANDSHAKE_ERROR) {
+			log_error(session, "SSL handshake error with websocket");
 			close(ws_socket);
 			return -1;
 		}
@@ -2081,7 +2149,7 @@ int forward_to_websocket(t_session *session) {
 
 #ifdef ENABLE_SSL
 					if (session->binding->use_ssl) {
-						if (ssl_send(&(session->ssl_context), buffer, bytes_read) == -1) {
+						if (ssl_send_buffer(&(session->ssl_context), buffer, bytes_read) == -1) {
 							keep_reading = false;
 							result = -1;
 							break;
@@ -2120,7 +2188,7 @@ int forward_to_websocket(t_session *session) {
 
 #ifdef ENABLE_SSL
 					if (ws->use_ssl) {
-						if (ssl_send(&ws_ssl_context, buffer, bytes_read) == -1) {
+						if (ssl_send_buffer(&ws_ssl_context, buffer, bytes_read) == -1) {
 							keep_reading = false;
 							result = -1;
 							break;

@@ -281,6 +281,9 @@ typedef struct type_host {
 	t_charlist      fast_cgi;
 	t_deny_body     *deny_body;
 	bool            webdav_app;
+	bool            http_auth_to_cgi;
+	bool            ban_by_cgi;
+	int             ban_by_cgi_max;
 
 #ifdef ENABLE_MONITOR
 	t_monitor_host_stats *monitor_host_stats;
@@ -391,6 +394,7 @@ typedef struct type_config {
 #ifdef ENABLE_SSL
 	int           min_ssl_version;
 	int           dh_size;
+	x509_crt      *ca_certificates;
 #endif
 } t_config;
 

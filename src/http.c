@@ -116,8 +116,16 @@ int fetch_request(t_session *session) {
 	bool keep_reading = true, store_on_disk = false, chunked_request = false;
 
 	if (session->request_limit == false) {
-		deadline = session->time + NO_REQUEST_LIMIT_TIME;
-		max_request_size = NO_REQUEST_LIMIT_SIZE;
+		if (session->binding->time_for_request > NO_REQUEST_LIMIT_TIME) {
+			deadline = session->time + session->binding->time_for_request;
+		} else {
+			deadline = session->time + NO_REQUEST_LIMIT_TIME;
+		}
+		if (session->binding->max_request_size > NO_REQUEST_LIMIT_SIZE) {
+			max_request_size = session->binding->max_request_size;
+		} else {
+			max_request_size = NO_REQUEST_LIMIT_SIZE;
+		}
 	} else if (session->kept_alive == 0) {
 		deadline = session->time + session->binding->time_for_1st_request;
 		max_request_size = session->binding->max_request_size;

@@ -204,6 +204,10 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 		add_to_environment(fcgi_buffer, "REMOTE_USER", session->remote_user);
 	}
 
+	if (session->host->http_auth_to_cgi) {
+		http_header_to_environment(session, fcgi_buffer, "Authorization:", "HTTP_AUTHORIZATION");
+	}
+
 	/* Convert X-* HTTP headers to HTTP_* environment variables
 	 */
 	http_headers = session->http_headers;

@@ -74,8 +74,6 @@ for file in ${files}; do
 	cp /bin/${file} ${dir}/Hiawatha/bin
 done
 
-install_dir="C:\Program Files\Hiawatha"
-
 cp ../config/index.xslt ${dir}/Hiawatha/config
 cp ../config/error.xslt ${dir}/Hiawatha/config
 cp ../config/mimetype.conf ${dir}/Hiawatha/config

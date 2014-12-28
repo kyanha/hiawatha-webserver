@@ -53,19 +53,7 @@ typedef struct type_sni_list {
 	struct type_sni_list *next;
 } t_sni_list;
 
-static int ciphersuites_ssl30[] = {
-	TLS_RSA_WITH_RC4_128_MD5,
-	TLS_RSA_WITH_RC4_128_SHA,
-	TLS_RSA_WITH_AES_128_CBC_SHA,
-	TLS_RSA_WITH_AES_256_CBC_SHA,
-	TLS_RSA_WITH_CAMELLIA_128_CBC_SHA,
-	TLS_RSA_WITH_CAMELLIA_256_CBC_SHA,
-	0
-};
-
 static int ciphersuites_tls10[] = {
-	TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-	TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
 	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
 	TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
 	TLS_DHE_RSA_WITH_AES_256_CBC_SHA,
@@ -81,23 +69,23 @@ static int ciphersuites_tls10[] = {
 
 static int ciphersuites_tls12[] = {
 	TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 	TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384,
-	TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+	TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
 	TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_CBC_SHA384,
+	TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_CBC_SHA256,
 	TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 	TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384,
+	TLS_ECDHE_RSA_WITH_CAMELLIA_128_CBC_SHA256,
 	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,
-	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+	TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
 	TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
 	TLS_DHE_RSA_WITH_AES_256_CBC_SHA256,
 	TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256,
-	TLS_DHE_RSA_WITH_AES_256_CBC_SHA,
-	TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA,
 	TLS_RSA_WITH_AES_256_GCM_SHA384,
 	TLS_RSA_WITH_AES_256_CBC_SHA256,
 	TLS_RSA_WITH_CAMELLIA_256_CBC_SHA256,
-	TLS_RSA_WITH_AES_256_CBC_SHA,
-	TLS_RSA_WITH_CAMELLIA_256_CBC_SHA,
 	0
 };
 
@@ -183,15 +171,17 @@ static entropy_context entropy;
 #ifdef ENABLE_DEBUG
 static char *ssl_error_logfile;
 #endif
+static x509_crt *ca_certificates = NULL;
 
 /* Initialize SSL library
  */
 #ifdef ENABLE_DEBUG
-int init_ssl_module(char *logfile) {
+int init_ssl_module(x509_crt *ca_certs, char *logfile) {
 	ssl_error_logfile = logfile;
 #else
-int init_ssl_module(void) {
+int init_ssl_module(x509_crt *ca_certs) {
 #endif
+	ca_certificates = ca_certs;
 
 #if POLARSSL_VERSION_NUMBER >= 0x01030700
 	if (version_check_feature("POLARSSL_THREADING_PTHREAD") != 0) {
@@ -361,6 +351,27 @@ int ssl_load_ca_crl(char *file, x509_crl **ca_crl) {
 	return 0;
 }
 
+/* Load CA root certificates
+ */
+int ssl_load_ca_root_certs(char *source, x509_crt **ca_root_certs) {
+	if ((*ca_root_certs = (x509_crt*)malloc(sizeof(x509_crt))) == NULL) {
+		return -1;
+	}
+	x509_crt_init(*ca_root_certs);
+
+	if (is_directory(source)) {
+		if (x509_crt_parse_path(*ca_root_certs, source) != 0) {
+			return -1;
+		}
+	} else {
+		if (x509_crt_parse_file(*ca_root_certs, source) != 0) {
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
 /* Server Name Indication callback function
  */
 static int sni_callback(void *sad, ssl_context *context, const unsigned char *sni_hostname, size_t len) {
@@ -434,7 +445,6 @@ int ssl_accept(t_ssl_accept_data *sad) {
 	ssl_set_sni(sad->context, sni_callback, sad);
 	ssl_set_session_cache(sad->context, ssl_cache_get, &cache, ssl_cache_set, &cache);
 
-	ssl_set_ciphersuites_for_version(sad->context, ciphersuites_ssl30, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_0);
 	ssl_set_ciphersuites_for_version(sad->context, ciphersuites_tls10, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1);
 	ssl_set_ciphersuites_for_version(sad->context, ciphersuites_tls10, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_2);
 	ssl_set_ciphersuites_for_version(sad->context, ciphersuites_tls12, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_3);
@@ -590,7 +600,6 @@ void ssl_shutdown(void) {
 	ssl_cache_free(&cache);
 }
 
-#ifdef ENABLE_RPROXY
 int ssl_connect(ssl_context *ssl, int *sock, char *hostname) {
 #ifdef ENABLE_DEBUG
 	int no_thread_id = 0;
@@ -602,20 +611,26 @@ int ssl_connect(ssl_context *ssl, int *sock, char *hostname) {
 	}
 
 	ssl_set_endpoint(ssl, SSL_IS_CLIENT);
-	ssl_set_authmode(ssl, SSL_VERIFY_NONE);
 
+	if (ca_certificates == NULL) {
+		ssl_set_authmode(ssl, SSL_VERIFY_NONE);
+	} else {
+		ssl_set_authmode(ssl, SSL_VERIFY_REQUIRED);
+		ssl_set_ca_chain(ssl, ca_certificates, NULL, hostname);
+	}
+
+	ssl_set_min_version(ssl, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1);
+	ssl_set_renegotiation(ssl, SSL_RENEGOTIATION_DISABLED);
 	ssl_set_rng(ssl, ssl_random, &ctr_drbg);
+	ssl_set_bio(ssl, net_recv, sock, net_send, sock);
+
 #ifdef ENABLE_DEBUG
 	ssl_set_dbg(ssl, ssl_debug, &no_thread_id);
 #endif
-	ssl_set_bio(ssl, net_recv, sock, net_send, sock);
 
 	if (hostname != NULL) {
 		ssl_set_hostname(ssl, hostname);
 	}
-	ssl_set_ciphersuites_for_version(ssl, ciphersuites_tls10, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1);
-	ssl_set_ciphersuites_for_version(ssl, ciphersuites_tls10, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_2);
-	ssl_set_ciphersuites_for_version(ssl, ciphersuites_tls12, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_3);
 
 	if (ssl_handshake(ssl) != 0) {
 		return SSL_HANDSHAKE_ERROR;
@@ -624,7 +639,7 @@ int ssl_connect(ssl_context *ssl, int *sock, char *hostname) {
 	return SSL_HANDSHAKE_OKE;
 }
 
-int ssl_send_completely(ssl_context *ssl, const char *buffer, int size) {
+int ssl_send_buffer(ssl_context *ssl, const char *buffer, int size) {
 	int bytes_written, total_written = 0;
 
 	if (size <= 0) {
@@ -639,6 +654,5 @@ int ssl_send_completely(ssl_context *ssl, const char *buffer, int size) {
 
 	return total_written;
 }
-#endif
 
 #endif

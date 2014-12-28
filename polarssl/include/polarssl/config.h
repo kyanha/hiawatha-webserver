@@ -325,7 +325,7 @@
  *
  * Uncomment this macro to remove RC4 ciphersuites by default.
  */
-//#define POLARSSL_REMOVE_ARC4_CIPHERSUITES
+#define POLARSSL_REMOVE_ARC4_CIPHERSUITES
 
 /**
  * \def POLARSSL_ECP_XXXX_ENABLED
@@ -860,7 +860,7 @@
  *
  * Comment this macro to disable support for SSL 3.0
  */
-#define POLARSSL_SSL_PROTO_SSL3
+//#define POLARSSL_SSL_PROTO_SSL3
 
 /**
  * \def POLARSSL_SSL_PROTO_TLS1
@@ -1183,7 +1183,7 @@
  *      TLS_RSA_PSK_WITH_RC4_128_SHA
  *      TLS_PSK_WITH_RC4_128_SHA
  */
-#define POLARSSL_ARC4_C
+//#define POLARSSL_ARC4_C
 
 /**
  * \def POLARSSL_ASN1_PARSE_C
@@ -2113,7 +2113,7 @@
 
 /* MPI / BIGNUM options */
 //#define POLARSSL_MPI_WINDOW_SIZE            6 /**< Maximum windows size used. */
-//#define POLARSSL_MPI_MAX_SIZE             512 /**< Maximum number of bytes for usable MPIs. */
+//#define POLARSSL_MPI_MAX_SIZE            1024 /**< Maximum number of bytes for usable MPIs. */
 
 /* CTR_DRBG options */
 //#define CTR_DRBG_ENTROPY_LEN               48 /**< Amount of entropy used per seed by default (48 with SHA-512, 32 with SHA-256) */

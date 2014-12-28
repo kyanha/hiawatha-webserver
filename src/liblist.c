@@ -195,6 +195,26 @@ bool in_charlist(char *item, t_charlist *list) {
 	return false;
 }
 
+bool matches_charlist(char *item, t_charlist *list) {
+	int i;
+	size_t n;
+
+	if ((item == NULL) || (list == NULL)) {
+		return false;
+	}
+
+	n = strlen(item);
+
+	i = list->size;
+	while (i-- > 0) {
+		if (strncmp(*(list->item + i), item, n) == 0) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void remove_charlist(t_charlist *list) {
 	if (list != NULL) {
 		if (list->size > 0) {

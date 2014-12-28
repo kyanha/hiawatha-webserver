@@ -29,7 +29,7 @@
 
 #define ID_NOBODY             65534
 #define MAX_LENGTH_CONFIGLINE  1024
-#define MAX_CACHE_SIZE          100
+#define MAX_CACHE_SIZE         1024
 #define MAX_UPLOAD_SIZE        2047
 #define MONITOR_HOSTNAME  "monitor"
 
@@ -127,6 +127,9 @@ static t_host *new_host(void) {
 	host->ignore_dot_hiawatha = false;
 	host->deny_body           = NULL;
 	host->webdav_app          = false;
+	host->http_auth_to_cgi    = false;
+	host->ban_by_cgi          = false;
+	host->ban_by_cgi_max      = -1;
 #ifdef ENABLE_MONITOR
 	host->monitor_host_stats  = NULL;
 	host->monitor_host        = false;
@@ -369,6 +372,7 @@ t_config *default_config(void) {
 #ifdef ENABLE_SSL
 	config->min_ssl_version    = SSL_MINOR_VERSION_1;
 	config->dh_size            = 2048;
+	config->ca_certificates    = NULL;
 #endif
 	return config;
 }
@@ -473,7 +477,7 @@ static int parse_credentialfiles(char *line, t_auth_method *auth_method, char **
 	char *file, *group;
 
 	split_string(line, &line, &group, ',');
-	if (strcmp(line, "none") == 0) {
+	if (strcasecmp(line, "none") == 0) {
 		*pwdfile = NULL;
 	} else if (strcmp(line, "") == 0) {
 		if (group == NULL) {
@@ -782,6 +786,12 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		} else if ((config->ban_on_wrong_password = str_to_int(rest)) > 0) {
 			return true;
 		}
+#ifdef ENABLE_SSL
+	} else if (strcmp(key, "cacertificates") == 0) {
+		if (ssl_load_ca_root_certs(value, &(config->ca_certificates)) == 0) {
+			return true;
+		}
+#endif
 #ifdef ENABLE_CACHE
 	} else if (strcmp(key, "cachemaxfilesize") == 0) {
 		if ((config->cache_max_filesize = str_to_int(value)) != -1) {
@@ -899,7 +909,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		}
 #endif
 	} else if (strcmp(key, "maxurllength") == 0) {
-		if (strcmp(value, "none") == 0) {
+		if (strcasecmp(value, "none") == 0) {
 			config->max_url_length = 0;
 			return true;
 		} else if ((config->max_url_length = str_to_int(value)) >= 0) {
@@ -911,10 +921,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		}
 #ifdef ENABLE_SSL
 	} else if (strcmp(key, "minsslversion") == 0) {
-		if (strcasecmp(value, "ssl3.0") == 0) { 
-			config->min_ssl_version = SSL_MINOR_VERSION_0;
-			return true;
-		} else if (strcasecmp(value, "tls1.0") == 0) { 
+		if (strcasecmp(value, "tls1.0") == 0) { 
 			config->min_ssl_version = SSL_MINOR_VERSION_1;
 			return true;
 		} else if (strcasecmp(value, "tls1.1") == 0) { 
@@ -1008,7 +1015,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			}
 		}
 	} else if (strcmp(key, "serverstring") == 0) {
-		if ((strcmp(value, "none") == 0) || (strcmp(value, "null") == 0)) {
+		if ((strcasecmp(value, "none") == 0) || (strcasecmp(value, "null") == 0)) {
 			config->server_string = NULL;
 			return true;
 		} else if (strlen(value) < 128) {
@@ -1284,21 +1291,26 @@ static bool host_setting(char *key, char *value, t_host *host) {
 #endif
 
 	if (strcmp(key, "accesslogfile") == 0) {
-		split_string(value, &value, &rest, ',');
-		if (*value == '/') {
-			if ((host->access_logfile = strdup(value)) != NULL) {
-				if (rest != NULL) {
-					if (strcasecmp(rest, "daily") == 0) {
-						host->rotate_access_log = daily;
-					} else if (strcasecmp(rest, "weekly") == 0) {
-						host->rotate_access_log = weekly;
-					} else if (strcasecmp(rest, "monthly") == 0) {
-						host->rotate_access_log = monthly;
-					} else {
-						return false;
+		if (strcasecmp(value, "none") == 0) {
+			host->access_logfile = NULL;
+			return true;
+		} else {
+			split_string(value, &value, &rest, ',');
+			if (*value == '/') {
+				if ((host->access_logfile = strdup(value)) != NULL) {
+					if (rest != NULL) {
+						if (strcasecmp(rest, "daily") == 0) {
+							host->rotate_access_log = daily;
+						} else if (strcasecmp(rest, "weekly") == 0) {
+							host->rotate_access_log = weekly;
+						} else if (strcasecmp(rest, "monthly") == 0) {
+							host->rotate_access_log = monthly;
+						} else {
+							return false;
+						}
 					}
+					return true;
 				}
-				return true;
 			}
 		}
 	} else if (strcmp(key, "alias") == 0) {
@@ -1310,6 +1322,17 @@ static bool host_setting(char *key, char *value, t_host *host) {
 	} else if (strcmp(key, "allowdotfiles") == 0) {
 		if (parse_yesno(value, &(host->allow_dot_files)) == 0) {
 			return true;
+		}
+	} else if (strcmp(key, "banbycgi") == 0) {
+		split_string(value, &value, &rest, ',');
+		if (parse_yesno(value, &(host->ban_by_cgi)) == 0) {
+			if (rest != NULL) {
+				if ((host->ban_by_cgi_max = str_to_int(rest)) > 0) {
+					return true;
+				}
+			} else {
+				return true;
+			}
 		}
 	} else if (strcmp(key, "customheader") == 0) {
 		if (parse_keyvalue(value, &(host->custom_headers), ":") != -1) {
@@ -1375,6 +1398,10 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		}
 #endif
 		if (parse_charlist(value, &(host->hostname)) == 0) {
+			return true;
+		}
+	} else if (strcmp(key, "httpauthtocgi") == 0) {
+		if (parse_yesno(value, &(host->http_auth_to_cgi)) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "ignoredothiawatha") == 0) {

@@ -79,6 +79,7 @@ void init_charlist(t_charlist *list);
 int  parse_charlist(char *value, t_charlist *list);
 void copy_charlist(t_charlist *dest, t_charlist *src);
 bool in_charlist(char *item, t_charlist *list);
+bool matches_charlist(char *item, t_charlist *list);
 void remove_charlist(t_charlist *list);
 
 t_accesslist *parse_accesslist(char *line, bool pwd_allowed, t_accesslist *list);

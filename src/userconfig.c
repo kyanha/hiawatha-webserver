@@ -46,7 +46,7 @@ int parse_userid(char *userid, uid_t *uid) {
 }
 
 static gid_t parse_groupid(char *groupid, gid_t *gid) {
-	struct passwd *pwd;
+	struct group *grp;
 	int id;
 
 	if (groupid == NULL) {
@@ -54,10 +54,10 @@ static gid_t parse_groupid(char *groupid, gid_t *gid) {
 	}
 
 	if ((id = str_to_int(groupid)) == -1) {
-		if ((pwd = getpwnam(groupid)) == NULL) {
+		if ((grp = getgrnam(groupid)) == NULL) {
 			return -1;
 		}
-		*gid = pwd->pw_gid;
+		*gid = grp->gr_gid;
 	} else {
 		*gid = id;
 	}

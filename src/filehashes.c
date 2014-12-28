@@ -123,7 +123,7 @@ static t_file_hash *search_file(char *filename, t_file_hash *file_hashes) {
 bool file_hash_match(char *filename, t_file_hash *file_hashes) {
 	t_file_hash *file_hash;
 	unsigned char bin_hash[SHA_HASH_SIZE];
-	char hex_hash[FILE_HASH_SIZE];
+	char hex_hash[FILE_HASH_SIZE + 1];
 
 	if ((file_hash = search_file(filename, file_hashes)) == NULL) {
 		return false;
@@ -144,7 +144,7 @@ int print_file_hashes(char *directory) {
 	DIR *dp;
 	struct dirent *fileinfo;
 	unsigned char bin_hash[SHA_HASH_SIZE];
-	char hex_hash[FILE_HASH_SIZE], *file;
+	char hex_hash[FILE_HASH_SIZE + 1], *file;
 	int result = -1;
 
 	if ((dp = opendir(directory)) == NULL) {

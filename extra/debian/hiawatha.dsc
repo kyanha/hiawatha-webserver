@@ -4,7 +4,7 @@ Binary: hiawatha
 Architecture: any
 Version: <VERSION>
 Maintainer: Hugo Leisink <hugo@leisink.net>
-Homepage: http://www.hiawatha-webserver.org/
+Homepage: https://www.hiawatha-webserver.org/
 Standards-Version: 3.6.2
 Build-Depends:<DEPENDS>
 Package-List:

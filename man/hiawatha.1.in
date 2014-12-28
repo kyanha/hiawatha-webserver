@@ -121,6 +121,11 @@ Number of seconds to ban an IP in case of <number> wrong passwords for HTTP auth
 .br
 Default = -:0, Example: BanOnWrongPassword = 3:120
 .TP
+.B CAcertificates = <file|directory>
+Load CA root certificates which Hiawatha uses for validation when acting as a client, which it does for the reverse proxy and the websockets. If not set, SSL connections that Hiawatha makes are not secure.
+.br
+Example: CAcertificates = /etc/ssl/certs/ca-certificates.crt
+.TP
 .B CacheRProxyExtensions = <extension>[, <extension>, ...]
 Enable the internal cache for reverse proxy requests for these extensions.
 .br
@@ -130,7 +135,7 @@ Example: CacheRProxyExtensions = css, gif, html, jpg, js, png, txt
 (requires that Hiawatha was not compiled with -DENABLE_CACHE=off or -DENABLE_RPROXY=off)
 .TP
 .B CacheSize = <size in megabytes>
-Size of Hiawatha's internal file cache. Maximum is 100 (megabytes).
+Size of Hiawatha's internal file cache. Maximum is 1024 (megabytes).
 .br
 Default = 10, example: CacheSize = 25
 .br
@@ -230,7 +235,7 @@ The location of the mimetype configuration file. It the path is omitted, Hiawath
 .br
 Default = mimetype.conf, example: MimetypeConfig = /etc/mime.types
 .TP
-.B MinSSLversion = SSL3.0|TLS1.0|TLS1.1|TLS1.2
+.B MinSSLversion = TLS1.0|TLS1.1|TLS1.2
 Specify the minimum SSL version Hiawatha accepts for HTTPS connections.
 .br
 Default = TLS1.0, Example: MinSSLversion = TLS1.1
@@ -425,8 +430,8 @@ Define which IPs have access to the website. If an IP does not match an entry in
 .br
 Example: AccessList = deny 10.0.0.13, allow 10.0.0.0/24, deny all
 .TP
-.B AccessLogfile = <filename with full path>[,daily|monthly|weekly]
-Logfile for the HTTP requests. Hiawatha can rotate them on a daily, weekly or monthly basis.
+.B AccessLogfile = <filename with full path>[,daily|monthly|weekly]|none
+Logfile for the HTTP requests. Hiawatha can rotate them on a daily, weekly or monthly basis. Use 'none' to disable the access log.
 .br
 Default = @LOG_DIR@/access.log, example: AccessLogfile = /var/log/hiawatha.acc, weekly
 .TP
@@ -455,13 +460,18 @@ The files that are created via PUT will have the file permissions set to <filemo
 .br
 Default = 640, example: AlterMode = 664
 .TP
+.B BanByCGI = yes|no[, <max value>]
+Allow a CGI application to ban a client via a 'X-Hiawatha-Ban: <value>' CGI header. The value is the amount of seconds to ban the client.
+.br
+Default = no, example: BanByCGI = yes
+.TP
 .B CustomHeader = <key>: <value>
 Set a custom HTTP header for every response.
 .br
 Example: CustomHeader = Access-Control-Allow-Origin: *
 .TP
 .B DenyBody = <regular expression>
-If the request body matches the regular expression, return a 403 Forbidden.
+If the request body matches the case insensitive regular expression, return a 403 Forbidden.
 .br
 Example: DenyBody = ^.*%3Cscript.*%3C%2Fscript%3E.*$
 .TP
@@ -512,6 +522,11 @@ Default = no, example: FollowSymlinks = yes
 Name(s) of the host that Hiawatha will be serving. May start with a wildcard, except the first hostname (a valid name is required in case of a 301 error). Hostname is a required field.
 .br
 Example: Hostname = www.my-domain.com, *.my-domain.com, www.some-alias.com
+.TP
+.B HTTPAuthToCGI = yes|no
+Place the HTTP Authorization header in the CGI's HTTP_AUTHORIZATION environment variable.
+.br
+Default = no, example: HTTPAuthToCGI = yes
 .TP
 .B IgnoreDotHiawatha = yes|no
 Specify if Hiawatha should ignore .hiawatha files or not.
@@ -584,7 +599,7 @@ Default = no,31536000, example: RequireSSL = yes,2678400
 (requires that Hiawatha was not compiled with -DENABLE_SSL=off)
 .TP
 .B ReverseProxy [!]<pattern> http[s]://<hostname>[:<port>][/<path>] [<timeout>] [keep-alive]
-Forward the request with URLs that match the regular expression <pattern> to another webserver, where <path> is placed before the original URL. Note that the reverse proxy selection comes before the URL toolkit handling. When <hostname> is an IP address, the value of the Host HTTP header is unchanged. Otherwise, it is replaced with the value of <hostname>. The connection is closed after <timeout> seconds, which is set to 5 seconds by default. By default, Hiawatha doesn't use keep-alive connections to the final webserver. You can enable this by adding 'keep-alive' to the configuration line.
+Forward the request with URLs that match the regular expression <pattern> to another webserver, where <path> is placed before the original URL. Note that the reverse proxy selection comes before the URL toolkit handling. When <hostname> is an IP address, the value of the Host HTTP header is unchanged. Otherwise, it is replaced with the value of <hostname>. The connection is closed after <timeout> seconds, which is set to 5 seconds by default. By default, Hiawatha doesn't use keep-alive connections to the final webserver. You can enable this by adding 'keep-alive' to the configuration line. See also CAcertificates.
 .br
 Example: ReverseProxy ^/icons http://resources.lan/images
 .TP
@@ -675,7 +690,7 @@ Rootdirectory for this virtual host.
 Example: WebsiteRoot = /home/webmaster/website
 .TP
 .B WebSocket = ws[s]://<IP address>:<port> <request uri>[,...] [connection timeout]
-This setting will make Hiawatha forward the connection to a websocket for every request matching the <request uri>. A wildcard request URI will forward every request for this host. The connection timeout is in minutes and the default is 10.
+This setting will make Hiawatha forward the connection to a websocket for every request where the URL starts with <request uri>. A wildcard request URI will forward every request for this host. The connection timeout is in minutes and the default is 10. See also CAcertificates.
 .br
 Example: WebSocket = ws://127.0.0.1:5000 /chat 30
 .TP
@@ -801,7 +816,7 @@ Ban, Call, DenyAccess, Exit, Expire, Goto, Redirect, Return, Rewrite, Skip or Us
 .br
 Use MatchCI to perform case insensitive URL matching. A negative pattern (leading exclamation mark) can't be used with the redirect and rewrite action.
 .TP
-.B Method <request method> <action>
+.B Method [!]<request method> <action>
 .br
 Perform an action when the request method equals <request method>, where <action> can be one of the following:
 .br

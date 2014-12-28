@@ -48,9 +48,9 @@ typedef struct {
 } t_ssl_accept_data;
 
 #ifdef ENABLE_DEBUG
-int  init_ssl_module(char *logfile);
+int  init_ssl_module(x509_crt *ca_certs, char *logfile);
 #else
-int  init_ssl_module(void);
+int  init_ssl_module(x509_crt *ca_certs);
 #endif
 #if POLARSSL_VERSION_NUMBER >= 0x01020000
 int  ssl_register_sni(t_charlist *hostname, pk_context *private_key, x509_crt *certificate,
@@ -59,6 +59,7 @@ int  ssl_register_sni(t_charlist *hostname, pk_context *private_key, x509_crt *c
 int  ssl_load_key_cert(char *file, pk_context **private_key, x509_crt **certificate);
 int  ssl_load_ca_cert(char *file, x509_crt **ca_certificate);
 int  ssl_load_ca_crl(char *file, x509_crl **ca_crl);
+int  ssl_load_ca_root_certs(char *source, x509_crt **ca_root_certs);
 int  ssl_accept(t_ssl_accept_data *ssl_accept_data);
 int  ssl_pending(ssl_context *ssl);
 int  ssl_receive(ssl_context *ssl, char *buffer, unsigned int maxlength);
@@ -69,10 +70,8 @@ char *ssl_version_string(ssl_context *context);
 char *ssl_cipher_string(ssl_context *context);
 void ssl_close(ssl_context *ssl);
 void ssl_shutdown(void);
-#ifdef ENABLE_RPROXY
 int  ssl_connect(ssl_context *ssl, int *sock, char *hostname);
-int  ssl_send_completely(ssl_context *ssl, const char *buffer, int size);
-#endif
+int  ssl_send_buffer(ssl_context *ssl, const char *buffer, int size);
 
 #endif
 

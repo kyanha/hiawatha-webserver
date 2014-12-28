@@ -400,7 +400,14 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		
 		if (split_string(value, &value, &rest, ' ') == -1) {
 			return false;
-		} else if ((new_rule->parameter = strdup(value)) == NULL) {
+		}
+
+		if (*value == '!') {
+			new_rule->neg_match = true;
+			value++;
+		}
+
+		if ((new_rule->parameter = strdup(value)) == NULL) {
 			return false;
 		}
 
@@ -665,6 +672,9 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 				 */
 				if (strcmp(options->method, rule->parameter) == 0) {
 					condition_met = true;
+				}
+				if (rule->neg_match) {
+					condition_met = (condition_met == false);
 				}
 				break;
 			case tc_request_uri:

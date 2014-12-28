@@ -216,20 +216,23 @@ int split_configline(const char *str, char **key, char **value) {
 
 	while (**value != '\0') {
 		if ((**value == ' ') || (**value == '=')) {
-			if (**value == '=') eq++;
+			if (**value == '=') {
+				eq++;
+			}
 			**value = '\0';
+
 			do {
 				(*value)++;
-				if (**value == '=') eq++;
+				if (**value == '=') {
+					eq++;
+				}
 			} while ((**value == ' ') || (**value == '='));
 
-			if (eq > 1) return -1;
-			return 0;
+			return (eq > 1) ? -1 : 0;
 		}
+
 		(*value)++;
 	}
-
-	value = NULL;
 
 	return -1;
 }

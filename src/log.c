@@ -225,7 +225,9 @@ void log_request(t_session *session) {
 	time_t t;
 	struct tm s;
 
-	if (ip_allowed(&(session->ip_address), session->config->logfile_mask) == deny) {
+	if (session->host->access_logfile == NULL) {
+		return;
+	} else if (ip_allowed(&(session->ip_address), session->config->logfile_mask) == deny) {
 		return;
 	}
 
@@ -438,7 +440,7 @@ void log_unban(char *logfile, t_ip_addr *ip_address, unsigned long connect_attem
 	ip_to_str(ip_address, str, IP_ADDRESS_SIZE);
 	strcat(str, "|");
 	print_timestamp(str + strlen(str));
-	fprintf(fp, "%sUnbanned (%ld connect attempts during ban)"EOL, str, connect_attempts);
+	fprintf(fp, "%sUnbanned (%lu connect attempts during ban)"EOL, str, connect_attempts);
 	fclose(fp);
 }
 
@@ -661,7 +663,9 @@ void rotate_access_logfiles(t_config *config, time_t now) {
 
 	host = config->first_host;
 	while (host != NULL) {
-		if (host->rotate_access_log == daily) {
+		if (host->access_logfile == NULL) {
+			result = 0;
+		} else if (host->rotate_access_log == daily) {
 			result = rotate_access_logfile(host, timestamp);
 		} else if ((host->rotate_access_log == weekly) && (s.tm_wday == 1)) {
 			result = rotate_access_logfile(host, timestamp);

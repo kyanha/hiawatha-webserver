@@ -263,6 +263,14 @@ int create_file(char *file, mode_t mode, uid_t UNUSED(uid), gid_t UNUSED(gid)) {
 	struct stat status;
 	int fd;
 
+	if (file == NULL) {
+		return -1;
+	}
+
+	if (strncmp(file, "/dev/", 5) == 0) {
+		return 0;
+	}
+
 	if (stat(file, &status) == -1) {
 		if (errno != ENOENT) {
 			return -1;

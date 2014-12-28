@@ -6,6 +6,7 @@
 # Provides:          hiawatha httpd httpd-cgi
 # Required-Start:    $syslog $network $remote_fs
 # Required-Stop:     $syslog $network $remote_fs
+# Should-Start:      $named
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: Hiawatha webserver

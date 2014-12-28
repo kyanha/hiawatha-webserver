@@ -286,7 +286,7 @@ void init_rproxy_result(t_rproxy_result *result) {
 static int send_buffer_to_webserver(t_rproxy_webserver *webserver, const char *buffer, int size) {
 #ifdef ENABLE_SSL
 	if (webserver->use_ssl) {
-		return ssl_send_completely(&(webserver->ssl), buffer, size);
+		return ssl_send_buffer(&(webserver->ssl), buffer, size);
 	} else
 #endif
 		return write_buffer(webserver->socket, buffer, size);
