@@ -48,6 +48,7 @@ typedef struct type_session {
 	int             client_socket;
 	t_binding       *binding;
 	bool            socket_open;
+	bool            via_trusted_proxy;
 	bool            parsing_oke;
 	bool            keep_alive;
 	int             kept_alive;
@@ -161,5 +162,6 @@ int  init_sqli_detection(void);
 int  prevent_sqli(t_session *session);
 int  prevent_csrf(t_session *session);
 void close_socket(t_session *session);
+int  handle_connection_not_allowed(t_session *session, int connections);
 
 #endif

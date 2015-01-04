@@ -612,7 +612,7 @@ int show_index(t_session *session) {
 
 	/* Start XML
 	 */
-	if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>\n<index>") == -1) {
+	if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<index>") == -1) {
 		free(text_xml);
 		remove_filelist(filelist);
 		return -1;
@@ -647,8 +647,6 @@ int show_index(t_session *session) {
 	/* Loop through files
 	 */
 	while (file != NULL) {
-		utf8_decode(file->name);
-
 		if (file->is_dir && root_dir) {
 			if (strcmp(file->name, "..") == 0) {
 				file = file->next;
@@ -895,7 +893,7 @@ int show_http_code_body(t_session *session) {
 
 	/* Start XML
 	 */
-	if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>\n<error>") == -1) {
+	if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<error>") == -1) {
 		free(text_xml);
 		return -1;
 	}

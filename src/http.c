@@ -777,6 +777,7 @@ const char *http_error(int code) {
 		{441, "SQL Injection Detected"},
 		{442, "Cross-Site Scripting Detected"},
 		{443, "Cross-Site Request Forgery Detected"},
+		{444, "Banned Due To Misconduct"},
 
 		/* Server error
 		 */

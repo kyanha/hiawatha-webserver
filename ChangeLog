@@ -1,3 +1,15 @@
+hiawatha (9.10) stable; urgency=low
+
+  * Support for banning bad clients who connect via a proxy.
+  * UrlToolkit option Do added. Changed how Call and Skip should be called.
+  * General UrlToolkit improvements. See config/toolkit.conf for syntax.
+  * Hiawatha now prefers reverse proxies with a scheme matching the one of
+    the client connection. See config/toolkit.conf for syntax.
+  * Hiawatha will now first process UrlToolkit rules before using ReverseProxy.
+  * Small bugfixes and improvements.
+
+ -- Hugo Leisink <hugo@leisink.net>  Sat,  3 Jan 2015 19:09:11 +0100
+
 hiawatha (9.9) stable; urgency=low
 
   * HTTPAuthToCGI option added.
@@ -8,7 +20,7 @@ hiawatha (9.9) stable; urgency=low
   * Dropped support for SSL3.0.
   * Small bugfixes and improvements.
 
- -- Hugo Leisink <hugo@leisink.net>  Sun, 7 Dec 2014 12:15:57 +0100
+ -- Hugo Leisink <hugo@leisink.net>  Sun,  7 Dec 2014 12:15:57 +0100
 
 hiawatha (9.8) stable; urgency=low
 

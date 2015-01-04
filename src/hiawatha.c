@@ -466,9 +466,11 @@ int accept_connection(t_binding *binding, t_config *config) {
 	}
 #endif
 
+	if (in_iplist(config->hide_proxy, &(session->ip_address))) {
+		session->via_trusted_proxy = true;
+	}
+
 	if (session->request_limit == false) {
-		conns_per_ip = config->total_connections;
-	} else if (in_iplist(config->hide_proxy, &(session->ip_address))) {
 		conns_per_ip = config->total_connections;
 	} else {
 		conns_per_ip = config->connections_per_ip;
@@ -476,7 +478,7 @@ int accept_connection(t_binding *binding, t_config *config) {
 
 	kick_client = true;
 
-	if ((total_conns = connection_allowed(&(session->ip_address), conns_per_ip, config->total_connections)) >= 0) {
+	if ((total_conns = connection_allowed(&(session->ip_address), session->via_trusted_proxy, conns_per_ip, config->total_connections)) >= 0) {
 		if (total_conns < (config->total_connections >> 2)) {
 			optval = 1;
 			if (setsockopt(session->client_socket, IPPROTO_TCP, TCP_NODELAY, (void*)&optval, sizeof(int)) == -1) {
@@ -503,30 +505,8 @@ int accept_connection(t_binding *binding, t_config *config) {
 		if (start_worker(session) == 0) {
 			kick_client = false;
 		}
-	} else switch (total_conns) {
-		case ca_TOOMUCH_PERIP:
-			log_system(session, "Maximum number of connections for IP address reached");
-			if ((config->ban_on_max_per_ip > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
-				log_system(session, "Client banned because of too many simultaneous connections");
-				ban_ip(&(session->ip_address), config->ban_on_max_per_ip, config->kick_on_ban);
-#ifdef ENABLE_MONITOR
-				if (config->monitor_enabled) {
-					monitor_count_ban(session);
-				}
-#endif
-			}
-			break;
-		case ca_TOOMUCH_TOTAL:
-			log_system(session, "Maximum number of total connections reached");
-			break;
-		case ca_BANNED:
-			if (config->reban_during_ban && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
-				reban_ip(&(session->ip_address));
-			}
-#ifdef ENABLE_TOMAHAWK
-			increment_counter(COUNTER_DENY);
-#endif
-			break;
+	} else {
+		handle_connection_not_allowed(session, total_conns);
 	}
 
 	if (kick_client) {

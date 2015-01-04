@@ -643,12 +643,15 @@ int add_header(t_http_header **headers, char *env_key, char *header_key) {
 
 void check_url_toolkit(char *config_dir, char **toolkit_id) {
 	t_line *config = NULL;
-	char input[MAX_INPUT_SIZE + 1], **id, *url, current_dir[MAX_PATH], *scheme;
+	char input[MAX_INPUT_SIZE + 1], **id, *url, current_dir[MAX_PATH];
 	t_url_toolkit *url_toolkit, *toolkit = NULL, *new_toolkit;
 	t_toolkit_options options;
 	t_http_header *http_headers;
 	bool in_rule_section = false;
 	int result = 0;
+#ifdef ENABLE_SSL
+	char *scheme;
+#endif
 
 	if (quiet == false) {
 		printf("Using %s\n", config_dir);

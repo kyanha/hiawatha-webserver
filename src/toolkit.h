@@ -30,14 +30,14 @@
 #define IU_ISFILE        1
 #define IU_ISDIR         2
 
-typedef enum { tc_none, tc_match, tc_header, tc_request_uri, tc_method
+typedef enum { tc_none, tc_header, tc_match, tc_method, tc_request_uri
 #ifdef ENABLE_SSL
                , tc_use_ssl
 #endif
 			   } t_toolkit_condition;
-typedef enum { to_none, to_rewrite, to_sub, to_expire, to_skip, to_deny_access,
-               to_redirect, to_fastcgi, to_ban, to_replace } t_toolkit_operation;
-typedef enum { tf_continue, tf_return, tf_exit } t_toolkit_flow;
+typedef enum { to_none, to_ban, to_deny_access, to_expire, to_fastcgi, to_redirect, 
+			   to_rewrite, to_skip, to_sub, to_use } t_toolkit_operation;
+typedef enum { tf_continue, tf_exit, tf_return } t_toolkit_flow;
 
 typedef struct type_toolkit_rule {
 	t_toolkit_condition condition;

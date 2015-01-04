@@ -34,7 +34,6 @@ int  split_configline(const char *str, char **key, char **value);
 bool valid_uri(char *uri, bool allow_dot_files);
 int  url_encode(char *str, char **encoded);
 void url_decode(char *str);
-void utf8_decode(char *str);
 bool forbidden_chars_present(char *str);
 int  str_replace(char *src, char *from, char *to, char **dst);
 bool min_strlen(char *str, int n);

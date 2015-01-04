@@ -103,7 +103,7 @@ static t_host *new_host(void) {
 	host->script_alias        = NULL;
 #ifdef ENABLE_SSL
 	host->require_ssl         = false;
-	host->hsts_time           = "31536000"; /* A year in seconds */
+	host->hsts_time           = NULL;
 	host->key_cert_file       = NULL;
 	host->ca_cert_file        = NULL;
 	host->ca_crl_file         = NULL;
@@ -1224,10 +1224,10 @@ static bool user_setting(char *key, char *value, t_host *host, t_tempdata **temp
 			if ((time = str_to_int(rest)) < 0) {
 				return false;
 			}
-			if (time == 0) {
-				host->hsts_time = NULL;
-			} else if ((host->hsts_time = strdup(rest)) == NULL) {
-				return false;
+			if (time > 0) {
+				if ((host->hsts_time = strdup(rest)) == NULL) {
+					return false;
+				}
 			}
 		}
 		return true;

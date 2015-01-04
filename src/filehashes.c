@@ -25,7 +25,7 @@
 #include "polarssl/sha256.h"
 #include "memdbg.h"
 
-void sha2_bin2hex(unsigned char bin[SHA_HASH_SIZE], char hex[FILE_HASH_SIZE + 1]) {
+static void sha2_bin2hex(unsigned char bin[SHA_HASH_SIZE], char hex[FILE_HASH_SIZE + 1]) {
 	int i;
 
 	for (i = 0; i < SHA_HASH_SIZE; i++) {
@@ -144,7 +144,7 @@ int print_file_hashes(char *directory) {
 	DIR *dp;
 	struct dirent *fileinfo;
 	unsigned char bin_hash[SHA_HASH_SIZE];
-	char hex_hash[FILE_HASH_SIZE + 1], *file;
+	char hex_hash[FILE_HASH_SIZE + 1], *file = NULL;
 	int result = -1;
 
 	if ((dp = opendir(directory)) == NULL) {

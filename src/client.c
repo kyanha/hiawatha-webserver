@@ -255,7 +255,7 @@ int remove_client(t_session *session, bool free_session) {
 
 /* Check whether to allow or deny a new connection.
  */
-int connection_allowed(t_ip_addr *ip, int maxperip, int maxtotal) {
+int connection_allowed(t_ip_addr *ip, bool ip_of_proxy, int max_per_ip, int max_total) {
 	t_banned *ban;
 	int perip = 1, total = 1, i;
 	t_client *client;
@@ -263,29 +263,31 @@ int connection_allowed(t_ip_addr *ip, int maxperip, int maxtotal) {
 
 	now = time(NULL);
 
-	/* Check bans
-	 */
-	pthread_mutex_lock(&ban_mutex);
+	if (ip_of_proxy == false) {
+		/* Check for ban
+		 */
+		pthread_mutex_lock(&ban_mutex);
 
-	ban = banlist;
-	while (ban != NULL) {
-		if (same_ip(&(ban->ip), ip)) {
-			/* Ban expired?
-			 */
-			if (now >= ban->deadline) {
-				break;
+		ban = banlist;
+		while (ban != NULL) {
+			if (same_ip(&(ban->ip), ip)) {
+				/* Ban expired?
+				 */
+				if (now >= ban->deadline) {
+					break;
+				}
+
+				ban->connect_attempts++;
+				pthread_mutex_unlock(&ban_mutex);
+				return ca_BANNED;
 			}
-
-			ban->connect_attempts++;
-			pthread_mutex_unlock(&ban_mutex);
-			return ca_BANNED;
+			ban = ban->next;
 		}
-		ban = ban->next;
+
+		pthread_mutex_unlock(&ban_mutex);
 	}
 
-	pthread_mutex_unlock(&ban_mutex);
-
-	/* Check max connections
+	/* Check maximum connections
 	 */
 	for (i = 0; i < 256; i++) {
 		pthread_mutex_lock(&client_mutex[i]);
@@ -306,9 +308,9 @@ int connection_allowed(t_ip_addr *ip, int maxperip, int maxtotal) {
 		pthread_mutex_unlock(&client_mutex[i]);
 	}
 
-	if (perip > maxperip) {
+	if ((perip > max_per_ip) && (ip_of_proxy == false)) {
 		return ca_TOOMUCH_PERIP;
-	} else if (total > maxtotal) {
+	} else if (total > max_total) {
 		return ca_TOOMUCH_TOTAL;
 	} else {
 		return total;

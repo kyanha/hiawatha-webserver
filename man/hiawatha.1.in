@@ -599,7 +599,7 @@ Default = no,31536000, example: RequireSSL = yes,2678400
 (requires that Hiawatha was not compiled with -DENABLE_SSL=off)
 .TP
 .B ReverseProxy [!]<pattern> http[s]://<hostname>[:<port>][/<path>] [<timeout>] [keep-alive]
-Forward the request with URLs that match the regular expression <pattern> to another webserver, where <path> is placed before the original URL. Note that the reverse proxy selection comes before the URL toolkit handling. When <hostname> is an IP address, the value of the Host HTTP header is unchanged. Otherwise, it is replaced with the value of <hostname>. The connection is closed after <timeout> seconds, which is set to 5 seconds by default. By default, Hiawatha doesn't use keep-alive connections to the final webserver. You can enable this by adding 'keep-alive' to the configuration line. See also CAcertificates.
+Forward the request with URLs that match the regular expression <pattern> to another webserver, where <path> is placed before the original URL. Note that the reverse proxy selection comes before the URL toolkit handling. When <hostname> is an IP address, the value of the Host HTTP header is unchanged. Otherwise, it is replaced with the value of <hostname>. The connection is closed after <timeout> seconds, which is set to 5 seconds by default. By default, Hiawatha doesn't use keep-alive connections to the final webserver. You can enable this by adding 'keep-alive' to the configuration line. When specifying multiple reverse proxies for one (virtual) host, Hiawatha prefers reverse proxies with a scheme (HTTP/HTTPS) matching the one of the client connection. See also CAcertificates.
 .br
 Example: ReverseProxy ^/icons http://resources.lan/images
 .TP
@@ -795,16 +795,18 @@ Default = 15, example: SessionTimeout = 30
 .SH URL TOOLKIT
 How to use the URL toolkit is explained in this chapter. To use URL toolkits, Hiawatha should not have been compiled with -DENABLE_TOOLKIT=off. The main toolkit commands are:
 .TP
-.B Call <toolkit_id>
-Execute toolkit section <toolkit_id> and continue in the current section.
+.B Do <action>
+Perform an action, where <action> can be one of the following:
 .br
-Example: Call other_rule_set
+Ban, Call, DenyAccess, Exit, Goto, Return, Skip or Use.
+.br
+Example: Do Call other_rule_set
 .TP
 .B Header <key> [!]<pattern> <action>
 .br
 Perform an action when the HTTP header <key> matches the regular expresion <pattern>, where <action> can be one of the following:
 .br
-Call, DenyAccess, Exit, Goto, Redirect, Return, Skip and Use.
+Ban, Call, DenyAccess, Exit, Goto, Return, Skip or Use.
 .br
 A negative pattern (leading exclamation mark) can't be used with the redirect action. The <key> can be * to test every HTTP header.
 .TP
@@ -820,12 +822,14 @@ Use MatchCI to perform case insensitive URL matching. A negative pattern (leadin
 .br
 Perform an action when the request method equals <request method>, where <action> can be one of the following:
 .br
-Call, DenyAccess, Exit, Goto, Redirect, Return, Skip or Use
+Call, DenyAccess, Exit, Goto, Return, Skip or Use
 .br
 Example: Method POST Return
 .TP
-.B RequestURI exists|isfile|isdir Return|Exit
-If the requested URL exists on disk, don't continue with the URL toolkit.
+.B RequestURI exists|isfile|isdir <action>
+Perform an action if the requested URL exists on disk, where <action> can be one of the following:
+.br
+Call, Return Exit or Skip.
 .br
 Example: RequestURI isfile Return
 .TP
@@ -833,11 +837,6 @@ Example: RequestURI isfile Return
 The toolkit ID can be used to bind toolkit rules to a virtual host. See also UseToolkit.
 .br
 Example: ToolkitId = my_toolkit
-.TP
-.B Skip <number>
-Skip the next following <number> lines (ToolkitId excluded).
-.br
-Example: Skip 2
 .TP
 .B UseSSL <action>
 .br
@@ -854,7 +853,7 @@ Ban the client for <seconds> seconds.
 .TP
 .B Call <toolkit_id>
 .br
-Execute toolkit section <toolkit_id> and continue in the current section.
+Execute toolkit section <toolkit_id> and continue in the current section afterwards.
 .TP
 .B DenyAccess
 .br

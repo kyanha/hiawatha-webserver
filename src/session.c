@@ -21,6 +21,7 @@
 #include <sys/socket.h>
 #include "global.h"
 #include "alternative.h"
+#include "client.h"
 #include "libstr.h"
 #include "liblist.h"
 #include "session.h"
@@ -139,6 +140,7 @@ void init_session(t_session *session) {
 	clear_session(session);
 
 	session->socket_open = false;
+	session->via_trusted_proxy = false;
 	session->flooding_timer = session->time;
 
 #ifdef ENABLE_RPROXY
@@ -805,4 +807,34 @@ void close_socket(t_session *session) {
 		close(session->client_socket);
 		session->socket_open = false;
 	}
+}
+
+int handle_connection_not_allowed(t_session *session, int connections) {
+	switch (connections) {
+		case ca_TOOMUCH_PERIP:
+			log_system(session, "Maximum number of connections for IP address reached");
+			if ((session->config->ban_on_max_per_ip > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
+				log_system(session, "Client banned because of too many simultaneous connections");
+				ban_ip(&(session->ip_address), session->config->ban_on_max_per_ip, session->config->kick_on_ban);
+#ifdef ENABLE_MONITOR
+				if (session->config->monitor_enabled) {
+					monitor_count_ban(session);
+				}
+#endif
+			}
+			return 444;
+		case ca_TOOMUCH_TOTAL:
+			log_system(session, "Maximum number of total connections reached");
+			return 503;
+		case ca_BANNED:
+			if (session->config->reban_during_ban && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
+				reban_ip(&(session->ip_address));
+			}
+#ifdef ENABLE_TOMAHAWK
+			increment_counter(COUNTER_DENY);
+#endif
+			return 444;
+	}
+
+	return 500;
 }

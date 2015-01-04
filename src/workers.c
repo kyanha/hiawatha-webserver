@@ -307,7 +307,7 @@ static t_access allow_client(t_session *session) {
 /* Serve the client that connected to the webserver
  */
 static int serve_client(t_session *session) {
-	int result, length, auth_result;
+	int result, length, auth_result, conns_per_ip, total_conns;
 	char *qmark, chr, *header;
 	t_host *host_record;
 	t_access access;
@@ -345,10 +345,21 @@ static int serve_client(t_session *session) {
 
 	/* Hide reverse proxies
 	 */
-	if (in_iplist(session->config->hide_proxy, &(session->ip_address))) {
+	if (session->via_trusted_proxy) {
 		if (last_forwarded_ip(session->http_headers, &ip_addr) == 0) {
 			if (reposition_client(session, &ip_addr) != -1) {
 				copy_ip(&(session->ip_address), &ip_addr);
+
+				if (session->request_limit == false) {
+					conns_per_ip = session->config->total_connections;
+				} else {
+					conns_per_ip = session->config->connections_per_ip;
+				}
+
+				if ((total_conns = connection_allowed(&ip_addr, false, conns_per_ip, session->config->total_connections)) < 0) {
+					session->keep_alive = false;
+					return handle_connection_not_allowed(session, total_conns);
+				}
 			}
 		}
 	}
@@ -513,105 +524,6 @@ static int serve_client(t_session *session) {
 		}
 	}
 
-#ifdef ENABLE_RPROXY
-	/* Reverse proxy
-	 */
-	rproxy = session->host->rproxy;
-	while (rproxy != NULL) {
-		if (rproxy_match(rproxy, session->request_uri)) {
-			if (rproxy_loop_detected(session->http_headers)) {
-				return 508;
-			}
-
-			if ((qmark = strchr(session->uri, '?')) != NULL) {
-				*qmark = '\0';
-				session->vars = qmark + 1;
-			}
-
-			if (validate_url(session) == false) {
-				return -1;
-			}
-
-			if ((session->vars != NULL) && (session->host->secure_url)) {
-				if (forbidden_chars_present(session->vars)) {
-					log_error(session, "URL contains forbidden characters");
-					return 403;
-				}
-			}
-
-			if (duplicate_host(session) == false) {
-				log_error(session, "duplicate_host() error");
-				return 500;
-			}
-
-			if ((result = uri_to_path(session)) != 200) {
-				return result;
-			}
-
-			if (session->host->ignore_dot_hiawatha == false) {
-				if (load_user_config(session) == -1) {
-					return 500;
-				}
-			}
-
-			if ((result = copy_directory_settings(session)) != 200) {
-				return result;
-			}
-
-			switch (access = allow_client(session)) {
-				case deny:
-					log_error(session, fb_accesslist);
-					return 403;
-				case allow:
-					break;
-				case pwd:
-				case unspecified:
-					if ((auth_result = http_authentication_result(session, access == unspecified)) != 200) {
-						return auth_result;
-					}
-			}
-
-			/* Prevent SQL injection
-			 */
-			if (session->host->prevent_sqli) {
-				result = prevent_sqli(session);
-				if (result == 1) {
-					session->error_cause = ec_SQL_INJECTION;
-				}
-				if (result != 0) {
-					return -1;
-				}
-			}
-
-			/* Prevent Cross-site Scripting
-			 */
-			if (session->host->prevent_xss != p_no) {
-				if (prevent_xss(session) > 0) {
-					if (session->host->prevent_xss == p_block) {
-						session->error_cause = ec_XSS;
-						return -1;
-					}
-				}
-			}
-
-			/* Prevent Cross-site Request Forgery
-			 */
-			if (session->host->prevent_csrf != p_no) {
-				if (prevent_csrf(session) > 0) {
-					if (session->host->prevent_csrf == p_block) {
-						session->error_cause = ec_CSRF;
-						return -1;
-					}
-				}
-			}
-
-			return proxy_request(session, rproxy);
-		}
-
-		rproxy = rproxy->next;
-	}
-#endif
-
 	/* Actions based on request method
 	 */
 	switch (session->request_method) {
@@ -679,6 +591,7 @@ static int serve_client(t_session *session) {
 			}
 
 			session->toolkit_fastcgi = toolkit_options.fastcgi_server;
+
 			if (toolkit_options.new_url != NULL) {
 				if (register_tempdata(&(session->tempdata), toolkit_options.new_url, tc_data) == -1) {
 					free(toolkit_options.new_url);
@@ -745,6 +658,69 @@ static int serve_client(t_session *session) {
 	if ((result = copy_directory_settings(session)) != 200) {
 		return result;
 	}
+
+#ifdef ENABLE_RPROXY
+	/* Reverse proxy
+	 */
+	if ((rproxy = find_rproxy(session->host->rproxy, session->request_uri
+#ifdef ENABLE_SSL
+			, session->binding->use_ssl
+#endif
+			)) != NULL) {
+		if (rproxy_loop_detected(session->http_headers)) {
+			return 508;
+		}
+
+		switch (access = allow_client(session)) {
+			case deny:
+				log_error(session, fb_accesslist);
+				return 403;
+			case allow:
+				break;
+			case pwd:
+			case unspecified:
+				if ((auth_result = http_authentication_result(session, access == unspecified)) != 200) {
+					return auth_result;
+				}
+		}
+
+		/* Prevent SQL injection
+		 */
+		if (session->host->prevent_sqli) {
+			result = prevent_sqli(session);
+			if (result == 1) {
+				session->error_cause = ec_SQL_INJECTION;
+			}
+			if (result != 0) {
+				return -1;
+			}
+		}
+
+		/* Prevent Cross-site Scripting
+		 */
+		if (session->host->prevent_xss != p_no) {
+			if (prevent_xss(session) > 0) {
+				if (session->host->prevent_xss == p_block) {
+					session->error_cause = ec_XSS;
+					return -1;
+				}
+			}
+		}
+
+		/* Prevent Cross-site Request Forgery
+		 */
+		if (session->host->prevent_csrf != p_no) {
+			if (prevent_csrf(session) > 0) {
+				if (session->host->prevent_csrf == p_block) {
+					session->error_cause = ec_CSRF;
+					return -1;
+				}
+			}
+		}
+
+		return proxy_request(session, rproxy);
+	}
+#endif
 
 	switch (access = allow_client(session)) {
 		case deny:
@@ -955,7 +931,8 @@ static void handle_request_result(t_session *session, int result) {
 				}
 #endif
 			}
-			session->return_code = 441;
+			//session->return_code = 441;
+			session->return_code = 404;
 			send_code(session);
 			log_request(session);
 			break;

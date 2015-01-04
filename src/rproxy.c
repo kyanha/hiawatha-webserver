@@ -251,12 +251,40 @@ t_rproxy *rproxy_setting(char *line) {
 
 /* Does URL match with proxy match pattern?
  */
-bool rproxy_match(t_rproxy *rproxy, char *uri) {
-	if ((rproxy == NULL) || (uri == NULL)) {
+t_rproxy *find_rproxy(t_rproxy *rproxy_list, char *uri
+#ifdef ENABLE_SSL
+		, bool use_ssl
+#endif
+		) {
+	t_rproxy *rproxy;
+
+	if ((rproxy_list == NULL) || (uri == NULL)) {
 		return false;
 	}
 
-	return (regexec(&(rproxy->pattern), uri, 0, NULL, 0) != REG_NOMATCH) != rproxy->neg_match;
+#ifdef ENABLE_SSL
+	rproxy = rproxy_list;
+	while (rproxy != NULL) {
+		if (rproxy->use_ssl == use_ssl) {
+			if ((regexec(&(rproxy->pattern), uri, 0, NULL, 0) != REG_NOMATCH) != rproxy->neg_match) {
+				return rproxy;
+			}
+		}
+
+		rproxy = rproxy->next;
+	}
+#endif
+
+	rproxy = rproxy_list;
+	while (rproxy != NULL) {
+		if ((regexec(&(rproxy->pattern), uri, 0, NULL, 0) != REG_NOMATCH) != rproxy->neg_match) {
+			return rproxy;
+		}
+
+		rproxy = rproxy->next;
+	}
+
+	return NULL;
 }
 
 /* Detect reverse proxy loop

@@ -78,7 +78,11 @@ typedef struct {
 
 int init_rproxy_module(void);
 t_rproxy *rproxy_setting(char *line);
-bool rproxy_match(t_rproxy *rproxy, char *uri);
+t_rproxy *find_rproxy(t_rproxy *rproxy_list, char *uri
+#ifdef ENABLE_SSL
+	, bool use_ssl
+#endif
+	);
 bool rproxy_loop_detected(t_http_header *http_headers);
 void init_rproxy_result(t_rproxy_result *result);
 int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *options,

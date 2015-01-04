@@ -242,7 +242,7 @@ static bool parse_parameters(t_toolkit_rule *new_rule, char *value, char **opera
 	} else if (strcasecmp(value, "use") == 0) {
 		/* Use
 		 */
-		new_rule->operation = to_replace;
+		new_rule->operation = to_use;
 		new_rule->flow = tf_exit;
 
 		if (valid_uri(rest, false) == false) {
@@ -275,12 +275,20 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 	char *rest;
 	int cflags;
 	size_t len;
-	char *header_operations[] = {"call", "denyaccess", "exit", "goto", "redirect", "return", "skip", "use", NULL};
-	char *match_operations[] = {"ban", "call", "denyaccess", "exit", "expire", "goto", "redirect", "return", "rewrite", "skip", "usefastcgi", NULL};
-	char *method_operations[] = {"call", "denyaccess", "exit", "goto", "redirect", "return", "skip", "use", NULL};
-	char *requesturi_operations[] = {"exit", "return", NULL};
+	char *do_operations[] = {
+		"ban", "call", "denyaccess", "exit", "goto", "return", "skip", "use", NULL};
+	char *header_operations[] = {
+		"ban", "call", "denyaccess", "exit", "goto", "return", "skip", "use", NULL};
+	char *match_operations[] = {
+		"ban", "call", "denyaccess", "exit", "expire", "goto", "redirect", "return",
+		"rewrite", "skip", "usefastcgi", NULL};
+	char *method_operations[] = {
+		"call", "denyaccess", "exit", "goto", "return", "skip", "use", NULL};
+	char *requesturi_operations[] = {
+		"call", "exit", "return", "skip", NULL};
 #ifdef ENABLE_SSL
-	char *usessl_operations[] = {"call", "exit", "goto", "return", "skip", NULL};
+	char *usessl_operations[] = {
+		"call", "exit", "goto", "return", "skip", NULL};
 #endif
 
 	if ((key == NULL) || (value == NULL) || (toolkit == NULL)) {
@@ -320,12 +328,10 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		key = "match";
 	}
 
-	if (strcmp(key, "call") == 0) {
-		/* Call
+	if (strcmp(key, "do") == 0) {
+		/* Do
 		 */
-		new_rule->operation = to_sub;
-
-		if ((new_rule->parameter = strdup(value)) == NULL) {
+		if (parse_parameters(new_rule, value, do_operations) == false) {
 			return false;
 		}
 	} else if (strcmp(key, "header") == 0) {
@@ -434,14 +440,6 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		}
 
 		if (parse_parameters(new_rule, rest, requesturi_operations) == false) {
-			return false;
-		}
-	} else if (strcmp(key, "skip") == 0) {
-		/* Skip
-		 */
-		new_rule->operation = to_skip;
-
-		if ((new_rule->value = str_to_int(value)) < 1) {
 			return false;
 		}
 #ifdef ENABLE_SSL
@@ -737,6 +735,49 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 				/* None
 				 */
 				break;
+			case to_ban:
+				/* Ban client
+				 */
+				options->ban = rule->value;
+				break;
+			case to_deny_access:
+				/* Deny access
+				 */
+				return UT_DENY_ACCESS;
+			case to_expire:
+				/* Send Expire HTTP header
+				 */
+				options->expire = rule->value;
+				options->caco_private = rule->caco_private;
+				break;
+			case to_fastcgi:
+				/* Use FastCGI server
+				 */
+				options->fastcgi_server = rule->parameter;
+				break;
+			case to_redirect:
+				/* Redirect client
+				 */
+				if (rule->neg_match) {
+					if ((options->new_url = strdup(rule->parameter)) == NULL) {
+						return UT_ERROR;
+					}
+				} else if (do_rewrite(url, &(rule->pattern), pmatch, rule->parameter, &(options->new_url), rule->match_loop) == -1) {
+					if (options->new_url != NULL) {
+						free(options->new_url);
+						options->new_url = NULL;
+					}
+					return UT_ERROR;
+				}
+				if (options->new_url != NULL) {
+					if (url_replaced) {
+						free(url);
+					}
+					return UT_REDIRECT;
+				} else if (url_replaced) {
+					options->new_url = url;
+				}
+				break;
 			case to_rewrite:
 				/* Rewrite
 				 */
@@ -760,6 +801,11 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 				} else if (url_replaced) {
 					options->new_url = url;
 				}
+				break;
+			case to_skip:
+				/* Skip
+				 */
+				skip = rule->value;
 				break;
 			case to_sub:
 				/* Subroutine
@@ -791,55 +837,7 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 					return result;
 				}
 				break;
-			case to_expire:
-				/* Send Expire HTTP header
-				 */
-				options->expire = rule->value;
-				options->caco_private = rule->caco_private;
-				break;
-			case to_skip:
-				/* Skip
-				 */
-				skip = rule->value;
-				break;
-			case to_deny_access:
-				/* Deny access
-				 */
-				return UT_DENY_ACCESS;
-			case to_redirect:
-				/* Redirect client
-				 */
-				if (rule->neg_match) {
-					if ((options->new_url = strdup(rule->parameter)) == NULL) {
-						return UT_ERROR;
-					}
-				} else if (do_rewrite(url, &(rule->pattern), pmatch, rule->parameter, &(options->new_url), rule->match_loop) == -1) {
-					if (options->new_url != NULL) {
-						free(options->new_url);
-						options->new_url = NULL;
-					}
-					return UT_ERROR;
-				}
-				if (options->new_url != NULL) {
-					if (url_replaced) {
-						free(url);
-					}
-					return UT_REDIRECT;
-				} else if (url_replaced) {
-					options->new_url = url;
-				}
-				break;
-			case to_fastcgi:
-				/* Use FastCGI server
-				 */
-				options->fastcgi_server = rule->parameter;
-				break;
-			case to_ban:
-				/* Ban client
-				 */
-				options->ban = rule->value;
-				break;
-			case to_replace:
+			case to_use:
 				/* Replace URL
 				 */
 				if (url_replaced) {
