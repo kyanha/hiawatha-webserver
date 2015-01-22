@@ -36,11 +36,15 @@
 #include "xslt.h"
 #include "monitor.h"
 #include "memdbg.h"
+#include "challenge.h"
 
 extern char *hs_conlen;
 char *fb_filesystem      = "access denied via filesystem";
 char *fb_accesslist      = "access denied via accesslist";
 char *unknown_host       = "(unknown)";
+#ifdef ENABLE_CHALLENGE
+volatile bool challenge_client_mode = false;
+#endif
 
 #ifdef ENABLE_THREAD_POOL
 typedef struct type_thread_pool {
@@ -307,7 +311,7 @@ static t_access allow_client(t_session *session) {
 /* Serve the client that connected to the webserver
  */
 static int serve_client(t_session *session) {
-	int result, length, auth_result, conns_per_ip, total_conns;
+	int result, length, auth_result, connections_per_ip, total_connections = -1;
 	char *qmark, chr, *header;
 	t_host *host_record;
 	t_access access;
@@ -322,7 +326,7 @@ static int serve_client(t_session *session) {
 	t_toolkit_options toolkit_options;
 #endif
 #ifdef ENABLE_RPROXY
-	t_rproxy *rproxy;
+	t_rproxy *rproxy = NULL;
 #endif
 
 #ifdef ENABLE_DEBUG
@@ -351,22 +355,22 @@ static int serve_client(t_session *session) {
 				copy_ip(&(session->ip_address), &ip_addr);
 
 				if (session->request_limit == false) {
-					conns_per_ip = session->config->total_connections;
+					connections_per_ip = session->config->total_connections;
 				} else {
-					conns_per_ip = session->config->connections_per_ip;
+					connections_per_ip = session->config->connections_per_ip;
 				}
 
-				if ((total_conns = connection_allowed(&ip_addr, false, conns_per_ip, session->config->total_connections)) < 0) {
+				if ((total_connections = connection_allowed(&ip_addr, false, connections_per_ip, session->config->total_connections)) < 0) {
 					session->keep_alive = false;
-					return handle_connection_not_allowed(session, total_conns);
+					return handle_connection_not_allowed(session, total_connections);
 				}
 			}
 		}
 	}
 
+#ifdef ENABLE_RPROXY
 	/* SSH tunneling
 	 */
-#ifdef ENABLE_RPROXY
 	if (session->request_method == CONNECT) {
 		if (in_iplist(session->config->tunnel_ssh, &(session->ip_address)) == false) {
 			return 405;
@@ -396,6 +400,48 @@ static int serve_client(t_session *session) {
 		session->keep_alive = false;
 
 		return 200;
+	}
+#endif
+
+#ifdef ENABLE_CHALLENGE
+	/* Challenge client
+	 */
+	if (session->config->challenge_threshold >= 0) {
+		if (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny) {
+			if (total_connections == -1) {
+				total_connections = count_registered_connections();
+			}
+
+			if (challenge_client_mode == false) {
+				if (total_connections >= session->config->challenge_threshold) {
+					challenge_client_mode = true;
+					log_system(session, "ChallengeClient mode activated");
+				}
+			} else {
+				if (total_connections < 0.9 * session->config->challenge_threshold) {
+					challenge_client_mode = false;
+					log_system(session, "ChallengeClient mode deactivated");
+				}
+			}
+
+			if (challenge_client_mode) {
+				if ((result = challenge_client(session)) != 0) {
+					if ((result != 200) && (session->config->challenge_ban > 0)) {
+						ban_ip(&(session->ip_address), session->config->challenge_ban, session->config->kick_on_ban);
+						log_system(session, "Client banned due to challenge failure");
+#ifdef ENABLE_MONITOR
+						if (session->config->monitor_enabled) {
+							monitor_count_ban(session);
+						}
+#endif
+					} else if (result == 403) {
+						session->keep_alive = false;
+					}
+
+					return result;
+				}
+			}
+		}
 	}
 #endif
 
@@ -464,6 +510,7 @@ static int serve_client(t_session *session) {
 				if ((session->config->ban_on_denied_body > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
 					ban_ip(&(session->ip_address), session->config->ban_on_denied_body, session->config->kick_on_ban);
 					log_system(session, "Client banned because of denied body");
+					session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 					if (session->config->monitor_enabled) {
 						monitor_count_ban(session);
@@ -524,8 +571,17 @@ static int serve_client(t_session *session) {
 		}
 	}
 
+#ifdef ENABLE_RPROXY
+	rproxy = find_rproxy(session->host->rproxy, session->request_uri
+#ifdef ENABLE_SSL
+		, session->binding->use_ssl
+#endif
+		);
+
 	/* Actions based on request method
 	 */
+	if (rproxy == NULL)
+#endif
 	switch (session->request_method) {
 		case TRACE:
 			if (session->binding->enable_trace == false) {
@@ -561,6 +617,10 @@ static int serve_client(t_session *session) {
 		}
 	}
 
+	if (total_connections == -1) {
+		total_connections = count_registered_connections();
+	}
+
 	/* URL toolkit
 	 */
 	init_toolkit_options(&toolkit_options);
@@ -569,55 +629,60 @@ static int serve_client(t_session *session) {
 	toolkit_options.url_toolkit = session->config->url_toolkit;
 	toolkit_options.allow_dot_files = session->host->allow_dot_files;
 	toolkit_options.http_headers = session->http_headers;
+	toolkit_options.total_connections = total_connections;
+	toolkit_options.log_request = true;
 #ifdef ENABLE_SSL
 	toolkit_options.use_ssl = session->binding->use_ssl;
 #endif
 
-	if (((session->request_method != PUT) && (session->request_method != DELETE)) || session->host->webdav_app) {
-		for (i = 0; i < session->host->toolkit_rules.size; i++) {
-			if ((result = use_toolkit(session->uri, session->host->toolkit_rules.item[i], &toolkit_options)) == UT_ERROR) {
+	for (i = 0; i < session->host->toolkit_rules.size; i++) {
+		if ((result = use_toolkit(session->uri, session->host->toolkit_rules.item[i], &toolkit_options)) == UT_ERROR) {
+			return 500;
+		}
+
+		if (toolkit_options.log_request == false) {
+			session->log_request = false;
+		}
+
+		if ((toolkit_options.ban > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
+			ban_ip(&(session->ip_address), toolkit_options.ban, session->config->kick_on_ban);
+			log_system(session, "Client banned because of URL match in UrlToolkit rule");
+			session->keep_alive = false;
+#ifdef ENABLE_MONITOR
+			if (session->config->monitor_enabled) {
+				monitor_count_ban(session);
+			}
+#endif
+			return 403;
+		}
+
+		session->toolkit_fastcgi = toolkit_options.fastcgi_server;
+
+		if (toolkit_options.new_url != NULL) {
+			if (register_tempdata(&(session->tempdata), toolkit_options.new_url, tc_data) == -1) {
+				free(toolkit_options.new_url);
+				log_error(session, "error registering temporary data");
 				return 500;
 			}
+			session->uri = toolkit_options.new_url;
+		}
 
-			if ((toolkit_options.ban > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
-				ban_ip(&(session->ip_address), toolkit_options.ban, session->config->kick_on_ban);
-				log_system(session, "Client banned because of URL match in UrlToolkit rule");
-#ifdef ENABLE_MONITOR
-				if (session->config->monitor_enabled) {
-					monitor_count_ban(session);
-				}
-#endif
-				return 403;
+		if (result == UT_REDIRECT) {
+			if ((session->location = strdup(toolkit_options.new_url)) == NULL) {
+				return -1;
 			}
+			session->cause_of_301 = location;
+			return 301;
+		}
 
-			session->toolkit_fastcgi = toolkit_options.fastcgi_server;
+		if (result == UT_DENY_ACCESS) {
+			log_error(session, "access denied via URL toolkit rule");
+			return 403;
+		}
 
-			if (toolkit_options.new_url != NULL) {
-				if (register_tempdata(&(session->tempdata), toolkit_options.new_url, tc_data) == -1) {
-					free(toolkit_options.new_url);
-					log_error(session, "error registering temporary data");
-					return 500;
-				}
-				session->uri = toolkit_options.new_url;
-			}
-
-			if (result == UT_REDIRECT) {
-				if ((session->location = strdup(toolkit_options.new_url)) == NULL) {
-					return -1;
-				}
-				session->cause_of_301 = location;
-				return 301;
-			}
-
-			if (result == UT_DENY_ACCESS) {
-				log_error(session, "access denied via URL toolkit rule");
-				return 403;
-			}
-
-			if (toolkit_options.expire > -1) {
-				session->expires = toolkit_options.expire;
-				session->caco_private = toolkit_options.caco_private;
-			}
+		if (toolkit_options.expire > -1) {
+			session->expires = toolkit_options.expire;
+			session->caco_private = toolkit_options.caco_private;
 		}
 	}
 #endif
@@ -643,30 +708,10 @@ static int serve_client(t_session *session) {
 		return -1;
 	}
 
-	if ((result = uri_to_path(session)) != 200) {
-		return result;
-	}
-
-	/* Load configfile from directories
-	 */
-	if (session->host->ignore_dot_hiawatha == false) {
-		if (load_user_config(session) == -1) {
-			return 500;
-		}
-	}
-
-	if ((result = copy_directory_settings(session)) != 200) {
-		return result;
-	}
-
 #ifdef ENABLE_RPROXY
 	/* Reverse proxy
 	 */
-	if ((rproxy = find_rproxy(session->host->rproxy, session->request_uri
-#ifdef ENABLE_SSL
-			, session->binding->use_ssl
-#endif
-			)) != NULL) {
+	if (rproxy != NULL) {
 		if (rproxy_loop_detected(session->http_headers)) {
 			return 508;
 		}
@@ -721,6 +766,22 @@ static int serve_client(t_session *session) {
 		return proxy_request(session, rproxy);
 	}
 #endif
+
+	if ((result = uri_to_path(session)) != 200) {
+		return result;
+	}
+
+	/* Load configfile from directories
+	 */
+	if (session->host->ignore_dot_hiawatha == false) {
+		if (load_user_config(session) == -1) {
+			return 500;
+		}
+	}
+
+	if ((result = copy_directory_settings(session)) != 200) {
+		return result;
+	}
 
 	switch (access = allow_client(session)) {
 		case deny:
@@ -863,6 +924,7 @@ static void handle_timeout(t_session *session) {
 	if ((session->config->ban_on_timeout > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
 		ban_ip(&(session->ip_address), session->config->ban_on_timeout, session->config->kick_on_ban);
 		log_system(session, "Client banned because of connection timeout");
+		session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 		if (session->config->monitor_enabled) {
 			monitor_count_ban(session);
@@ -890,6 +952,7 @@ static void handle_request_result(t_session *session, int result) {
 			if ((session->config->ban_on_max_request_size > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
 				ban_ip(&(session->ip_address), session->config->ban_on_max_request_size, session->config->kick_on_ban);
 				log_system(session, "Client banned because of sending a too large request");
+				session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
 					monitor_count_ban(session);
@@ -915,7 +978,9 @@ static void handle_request_result(t_session *session, int result) {
 			}
 			break;
 		case ec_SOCKET_WRITE_ERROR:
-			log_request(session);
+			if (session->log_request) {
+				log_request(session);
+			}
 			break;
 		case ec_FORCE_QUIT:
 			log_system(session, "Client kicked");
@@ -925,6 +990,7 @@ static void handle_request_result(t_session *session, int result) {
 				ban_ip(&(session->ip_address), session->config->ban_on_sqli, session->config->kick_on_ban);
 				hostname = (session->hostname != NULL) ? session->hostname : unknown_host;
 				log_system(session, "Client banned because of SQL injection on %s", hostname);
+				session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
 					monitor_count_ban(session);
@@ -934,23 +1000,30 @@ static void handle_request_result(t_session *session, int result) {
 			//session->return_code = 441;
 			session->return_code = 404;
 			send_code(session);
-			log_request(session);
+			if (session->log_request) {
+				log_request(session);
+			}
 			break;
 		case ec_XSS:
 			session->return_code = 442;
 			send_code(session);
-			log_request(session);
+			if (session->log_request) {
+				log_request(session);
+			}
 			break;
 		case ec_CSRF:
 			session->return_code = 443;
 			send_code(session);
-			log_request(session);
+			if (session->log_request) {
+				log_request(session);
+			}
 			break;
 		case ec_INVALID_URL:
 			if ((session->config->ban_on_invalid_url > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
 				ban_ip(&(session->ip_address), session->config->ban_on_invalid_url, session->config->kick_on_ban);
 				hostname = (session->hostname != NULL) ? session->hostname : unknown_host;
 				log_system(session, "Client banned because of invalid URL on %s", hostname);
+				session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
 					monitor_count_ban(session);
@@ -1005,6 +1078,7 @@ static void handle_request_result(t_session *session, int result) {
 			if ((session->config->ban_on_garbage > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
 				ban_ip(&(session->ip_address), session->config->ban_on_garbage, session->config->kick_on_ban);
 				log_system(session, "Client banned because of sending garbage");
+				session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
 					monitor_count_ban(session);
@@ -1049,7 +1123,9 @@ static void handle_request_result(t_session *session, int result) {
 	}
 
 	if ((result > 0) && (result != 400)) {
-		log_request(session);
+		if (session->log_request) {
+			log_request(session);
+		}
 	} else {
 		session->keep_alive = false;
 	}

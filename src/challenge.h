@@ -9,27 +9,15 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _FILEHASHES_H
-#define _FILEHASHES_H
+#ifndef _CHALLENGE_H
+#define _CHALLENGE_H
 
 #include "global.h"
 
-#ifdef ENABLE_FILEHASHES
+#ifdef ENABLE_CHALLENGE
 
-#define SHA_HASH_SIZE 32
-#define FILE_HASH_SIZE SHA_HASH_SIZE * 2
-
-typedef struct type_file_hash {
-	char *filename;
-	size_t filename_len;
-	unsigned char hash[SHA_HASH_SIZE + 1];
-
-	struct type_file_hash *next;
-} t_file_hash;
-
-t_file_hash *read_file_hashes(char *hashes_file);
-bool file_hash_match(char *filename, t_file_hash *file_hash);
-int print_file_hashes(char *directory);
+int init_challenge_module(char *challenge_secret);
+int challenge_client(t_session *session);
 
 #endif
 

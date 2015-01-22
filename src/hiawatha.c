@@ -51,6 +51,7 @@
 #include "xslt.h"
 #include "monitor.h"
 #include "memdbg.h"
+#include "challenge.h"
 
 #define rs_NONE                  0
 #define rs_QUIT_SERVER           1
@@ -394,7 +395,7 @@ int accept_connection(t_binding *binding, t_config *config) {
 #ifdef ENABLE_IPV6
 	struct sockaddr_in6 caddr6;
 #endif
-	int                 total_conns, optval, conns_per_ip;
+	int                 optval, connections_per_ip, total_connections;
 	struct timeval      timer;
 #ifdef ENABLE_DEBUG
 	static int          thread_id = 1;
@@ -471,15 +472,15 @@ int accept_connection(t_binding *binding, t_config *config) {
 	}
 
 	if (session->request_limit == false) {
-		conns_per_ip = config->total_connections;
+		connections_per_ip = config->total_connections;
 	} else {
-		conns_per_ip = config->connections_per_ip;
+		connections_per_ip = config->connections_per_ip;
 	}
 
 	kick_client = true;
 
-	if ((total_conns = connection_allowed(&(session->ip_address), session->via_trusted_proxy, conns_per_ip, config->total_connections)) >= 0) {
-		if (total_conns < (config->total_connections >> 2)) {
+	if ((total_connections = connection_allowed(&(session->ip_address), session->via_trusted_proxy, connections_per_ip, config->total_connections)) >= 0) {
+		if (total_connections < (config->total_connections >> 2)) {
 			optval = 1;
 			if (setsockopt(session->client_socket, IPPROTO_TCP, TCP_NODELAY, (void*)&optval, sizeof(int)) == -1) {
 				close(session->client_socket);
@@ -506,7 +507,7 @@ int accept_connection(t_binding *binding, t_config *config) {
 			kick_client = false;
 		}
 	} else {
-		handle_connection_not_allowed(session, total_conns);
+		handle_connection_not_allowed(session, total_connections);
 	}
 
 	if (kick_client) {
@@ -880,6 +881,12 @@ int run_server(t_settings *settings) {
 #endif
 #ifdef ENABLE_DEBUG
 	init_memdbg();
+#endif
+#ifdef ENABLE_CHALLENGE
+	if (init_challenge_module(config->challenge_secret) == -1) {
+		fprintf(stderr, "Error initializing ChallengeClient module.\n");
+		return -1;
+	}
 #endif
 
 #ifdef HAVE_ACCF

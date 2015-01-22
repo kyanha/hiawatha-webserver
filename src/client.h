@@ -30,6 +30,7 @@ int  mark_client_for_removal(t_session *session, int delay);
 void check_remove_deadlines(t_config *config, time_t now);
 int  remove_client(t_session *session, bool free_session);
 int  connection_allowed(t_ip_addr *ip, bool ip_of_proxy, int max_per_ip, int max_total);
+int  count_registered_connections(void);
 int  disconnect_clients(t_config *config);
 bool client_is_flooding(t_session *session);
 void check_flooding(t_config *config);
@@ -49,7 +50,6 @@ void close_client_sockets_for_cgi_run(void);
 
 #ifdef ENABLE_TOMAHAWK
 void print_client_list(FILE *fp);
-int  number_of_clients(void);
 void print_ban_list(FILE *fp);
 int  number_of_bans(void);
 #endif

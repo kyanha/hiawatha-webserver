@@ -317,6 +317,29 @@ int connection_allowed(t_ip_addr *ip, bool ip_of_proxy, int max_per_ip, int max_
 	}
 }
 
+/* Return the number of total connections
+ */
+int count_registered_connections(void) {
+	int i, total = 0;
+	t_client *client;
+
+	for (i = 0; i < 256; i++) {
+		pthread_mutex_lock(&client_mutex[i]);
+
+		client = client_list[i];
+		while (client != NULL) {
+			if (client->remove_deadline == TIMER_OFF) {
+				total++;
+			}
+			client = client->next;
+		}
+
+		pthread_mutex_unlock(&client_mutex[i]);
+	}
+
+	return total;
+}
+
 /* Disconnect all connected clients.
  */
 int disconnect_clients(t_config *config) {
@@ -721,25 +744,6 @@ void print_client_list(FILE *fp) {
 	}
 
 	fprintf(fp, "  Total: %d clients\n", count);
-}
-
-int number_of_clients(void) {
-	int result = 0, i;
-	t_client *client;
-
-	for (i = 0; i < 256; i++) {
-		pthread_mutex_lock(&client_mutex[i]);
-
-		client = client_list[i];
-		while (client != NULL) {
-			result++;
-			client = client->next;
-		}
-
-		pthread_mutex_unlock(&client_mutex[i]);
-	}
-
-	return result;
 }
 
 /* Print the list of banned IP addresses.

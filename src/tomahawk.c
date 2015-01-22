@@ -230,7 +230,7 @@ static void show_status(FILE *fp) {
 #ifdef ENABLE_CACHE
 	fprintf(fp, "  Size of cache     : %9.1f kB\n", ((float)size_of_cache()) / KILOBYTE);
 #endif
-	fprintf(fp, "  Number of clients : %7d\n", number_of_clients());
+	fprintf(fp, "  Number of clients : %7d\n", count_registered_connections());
 	fprintf(fp, "  Number of bans    : %7d\n\n", number_of_bans());
 
 	fprintf(fp, "  Clients served    : %7lu\n", counters[COUNTER_CLIENT]);

@@ -30,13 +30,13 @@
 #define IU_ISFILE        1
 #define IU_ISDIR         2
 
-typedef enum { tc_none, tc_header, tc_match, tc_method, tc_request_uri
+typedef enum { tc_none, tc_header, tc_match, tc_method, tc_request_uri, tc_total_connections
 #ifdef ENABLE_SSL
                , tc_use_ssl
 #endif
-			   } t_toolkit_condition;
-typedef enum { to_none, to_ban, to_deny_access, to_expire, to_fastcgi, to_redirect, 
-			   to_rewrite, to_skip, to_sub, to_use } t_toolkit_operation;
+               } t_toolkit_condition;
+typedef enum { to_none, to_ban, to_deny_access, to_expire, to_fastcgi, to_omit_request_log,
+               to_redirect, to_rewrite, to_skip, to_sub, to_use } t_toolkit_operation;
 typedef enum { tf_continue, tf_exit, tf_return } t_toolkit_flow;
 
 typedef struct type_toolkit_rule {
@@ -72,6 +72,8 @@ typedef struct type_toolkit_options {
 	int  ban;
 	int  expire;
 	bool caco_private;
+	int  total_connections;
+	bool log_request;
 #ifdef ENABLE_SSL
 	bool use_ssl;
 #endif

@@ -72,7 +72,7 @@ Anonymize IP addresses before writing them to the access and error logfiles or s
 Default = no, example: AnonymizeIP = yes
 .TP
 .B BanlistMask = (allow|deny) <ip-address>[/netmask][, (allow|deny) <ip-address>[/netmask], ...]
-Prevent IPs from getting banned in case of bad behaviour. By default, all IPs can be banned. IPs that are denied from the banlist will not be banned.
+Prevent IPs from getting banned in case of bad behaviour. By default, all IPs can be banned. IPs that are 'denied' in the banlist will not be banned.
 .br
 Example: BanlistMask = allow 192.168.1.2, deny 192.168.0.0/16
 .TP
@@ -156,14 +156,19 @@ Default extension of a CGI program.
 Example: CGIextension = cgi
 .TP
 .B CGIhandler = <CGI handler>:<extension>[, <extension>, ...]
-Specify the handler for a CGI extension. A handler is an executable which will 'run' the CGI script.
+Specify the handler for a CGI extension. A handler is an executable which will run the CGI script.
 .br
-Example: CGIhandler = /usr/bin/php4-cgi:php,php4
+Example: CGIhandler = /usr/bin/php5-cgi:php,php5
 .TP
 .B CGIwrapper = <CGI wrapper>
 Specify the wrapper for CGI processes. A secure CGI wrapper is included in the Hiawatha package (see cgi-wrapper(1) for more information).
 .br
 Default = @CMAKE_INSTALL_FULL_SBINDIR@/cgi-wrapper, example: CGIwrapper = /bin/cgi-wrapper
+.TP
+.B ChallengeClient = <threshold>, (httpheader|javascript), <ban-time>[, <secret>]
+Challenge the client to verify that it's a real web browser and not an HTTP bot. When the total amount of connections reaches <threshold>, Hiawatha sends a response to the first request in a connection which will make the client resend the request, but now with a cookie. The cookie can be set via a HTTP Set-Cookie header or a Javascript. Further requests are only accepted when the client sends this cookie. Otherwise, the client is banned for <ban-time> seconds. This feature can be used to reduce the effects of a DDoS attack. The <secret> can be a random string of up to 20 characters (the rest is ignored) and is used to generate the cookie. When not set, Hiawatha will generate a random secret.
+.br
+Example: ChallengeClient = 200, httpheader, 60
 .TP
 .B ConnectionsPerIP = <number>
 Maximum number of simultaneous connections per IP address.
@@ -191,7 +196,7 @@ Logfile for all misformed HTTP requests.
 Example: GarbageLogfile = @LOG_DIR@/garbage.log
 .TP
 .B HideProxy = <ip-address>[/netmask][, <ip-address>[/netmask], ...]
-A request sent from the supplied IP address will be searched for a X-Forwarded-For header. When found, the last IP address in that field will be used as the client IP address. Make sure you only allow trusted reverse proxies in this IP list. This option does not affect the ConnectionsPerIP setting.
+A request sent from the supplied IP address will be searched for a X-Forwarded-For header. When found, the last IP address in that field will be used as the client IP address. Make sure you only allow trusted reverse proxies in this IP list.
 .br
 Example: HideProxy = 192.168.10.20
 .TP
@@ -271,11 +276,11 @@ The number of seconds Hiawatha will remember the IP address of the connection an
 Default = 0, example: ReconnectDelay = 3
 .TP
 .B RequestLimitMask = (allow|deny) <ip-address>[/netmask][, (allow|deny) <ip-address>[/netmask], ...]
-Define for which clients the ConnectionsPerIP, MaxRequestSize and TimeForRequest setting should not be used. If an IP is allowed or not listed, the settings will be used.
+Define for which clients the ConnectionsPerIP, MaxRequestSize and TimeForRequest setting should not be used. If an IP is allowed or not listed, the mentioned settings will be used.
 .br
 Example: RequestLimitMask = deny 192.168.0.1
 .TP
-.B ServerId = <userid>|<userid>:<groupid>[,<groupid>, ...]
+.B ServerId = <userid>|<userid>:<groupid>[, <groupid>, ...]
 The userid and groupid(s) the server will change to. If only a userid is specified, the groupid(s) will be looked up in /etc/passwd and /etc/group. The userid en groupid of user root are not allowed here. The userid or groupid can also be a name.
 .br
 Default = 65534:65534, example: ServerId = www-data
@@ -461,7 +466,7 @@ The files that are created via PUT will have the file permissions set to <filemo
 Default = 640, example: AlterMode = 664
 .TP
 .B BanByCGI = yes|no[, <max value>]
-Allow a CGI application to ban a client via a 'X-Hiawatha-Ban: <value>' CGI header. The value is the amount of seconds to ban the client.
+Allow a CGI application to ban a client via a 'X-Hiawatha-Ban: <value>' CGI header. The value is the maximum amount of seconds a CGI application is allowed to ban a client.
 .br
 Default = no, example: BanByCGI = yes
 .TP
@@ -548,7 +553,7 @@ If the requested file has no extension, treat it as if the extension was equal t
 .br
 Example: NoExtensionAs = cgi
 .TP
-.B PasswordFile = ((Basic|Digest):<passwordfile>)|none[,<groupfile>]
+.B PasswordFile = ((Basic|Digest):<passwordfile>)|none[, <groupfile>]
 When this option is set, HTTP authentication is enabled. Use the full path to the password file when that password file should also be used for sub-directories. Entries for the password file can be created via the wigwam(1) tool. The realm for Digest HTTP authentication must be equal to the text set via LoginMessage.
 .br
 The <groupfile> contains the groupnames followed by the names of the users that are a member of that group. The format of the lines in the groupfile is:
@@ -713,7 +718,7 @@ Run a program when a client requests a static resource. This does not include CG
 .br
 Example: RunOnDownload = /var/www/log_download
 .TP
-.B UploadSpeed = <speed>,<maximum number of connections>
+.B UploadSpeed = <speed>, <maximum number of connections>
 Set the uploadspeed in kB/s for all the files in the directory regardless of the extension or mimetype. The uploadspeed per connection will be divided by the number of connections.
 .br
 Example: UploadSpeed = 20,4
@@ -798,7 +803,7 @@ How to use the URL toolkit is explained in this chapter. To use URL toolkits, Hi
 .B Do <action>
 Perform an action, where <action> can be one of the following:
 .br
-Ban, Call, DenyAccess, Exit, Goto, Return, Skip or Use.
+Ban, Call, DenyAccess, Exit, Goto, OmitRequestLog, Return, Skip or Use.
 .br
 Example: Do Call other_rule_set
 .TP
@@ -806,9 +811,9 @@ Example: Do Call other_rule_set
 .br
 Perform an action when the HTTP header <key> matches the regular expresion <pattern>, where <action> can be one of the following:
 .br
-Ban, Call, DenyAccess, Exit, Goto, Return, Skip or Use.
+Ban, Call, DenyAccess, Exit, Goto, OmitRequestLog, Return, Skip or Use.
 .br
-A negative pattern (leading exclamation mark) can't be used with the redirect action. The <key> can be * to test every HTTP header.
+A negative pattern (leading exclamation mark) can't be used with the redirect action. The <key> can be * to test every HTTP header. Note that the wildcard means 'any header', not 'every header'.
 .TP
 .B Match [!]<pattern> <action>
 .br
@@ -829,7 +834,7 @@ Example: Method POST Return
 .B RequestURI exists|isfile|isdir <action>
 Perform an action if the requested URL exists on disk, where <action> can be one of the following:
 .br
-Call, Return Exit or Skip.
+Call, Return, Exit or Skip.
 .br
 Example: RequestURI isfile Return
 .TP
@@ -837,6 +842,13 @@ Example: RequestURI isfile Return
 The toolkit ID can be used to bind toolkit rules to a virtual host. See also UseToolkit.
 .br
 Example: ToolkitId = my_toolkit
+.TP
+.B TotalConnections <value> <action>
+Perform an action if the total amount of connections is equal to or higher than <value>, where <action> can be one of the following:
+.br
+Call, Goto, OmitRequestLog, Redirect or Skip
+.br
+Example: TotalConnections 1000 Call CheckUserAgent
 .TP
 .B UseSSL <action>
 .br
@@ -871,6 +883,10 @@ Adds an Expires HTTP header with current timestamp + <time>. The public/private 
 .br
 Execute <toolkit_id> and terminate the current URL rewriting process.
 .TP
+.B OmitRequestLog
+.br
+Don't log the current request in the file specified by AccessLogfile.
+.TP
 .B Redirect <url>
 .br
 Redirect (301) the browser to the specified URL and terminate toolkit processing.
@@ -902,7 +918,7 @@ Replace the current URL with <url> and terminate toolkit processing.
 Use FastCGI server with id <fcgi_id> and terminate toolkit processing.
 
 .TP
-The original URL is stored in the environment variable SCRIPT_URL. Before using URL toolkit rules, use the tool 'wigwam' to verify the result of your rules (see wigwam(1) for more information).
+The original URL is stored in the environment variable REQUEST_URI. Before using URL toolkit rules, use the tool 'wigwam' to verify the result of your rules (see wigwam(1) for more information).
 
 .TP
 .B Example:
@@ -910,31 +926,22 @@ VirtualHost {
 .br
 	...
 .br
-	UseToolkit = my_toolkit
+	UseToolkit = clean_url
 .br
 }
 .br
 
 UrlToolkit {
 .br
-	ToolkitId = fix_PHP
+	ToolkitId = clean_url
 .br
-	Match ^/index.php4(.*) DenyAccess
+	Match ^/(css|images|js)(/|$) Return
 .br
-	Match ^/index.php5(.*) Rewrite /index.php$1
+	RequestURI exists Return
 .br
-}
+	Match ^/.*\\?(.*) Rewrite /index.php?$1
 .br
-
-UrlToolkit {
-.br
-	ToolkitId = my_toolkit
-.br
-	Call fix_PHP
-.br
-	RequestURI isfile Return
-.br
-	Match ^/(.*) Rewrite /index.php?page=$1
+	Match ^/.* Rewrite /index.php
 .br
 }
 
@@ -1039,7 +1046,7 @@ Clear the internal cache (requires that Hiawatha was not compiled with -DENABLE_
 
 
 .SH SEE ALSO
-cgi-wrapper(1), newroot(1), ssi-cgi(1), wigwam(1)
+cgi-wrapper(1), ssi-cgi(1), wigwam(1)
 
 
 .SH AUTHOR

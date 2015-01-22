@@ -17,16 +17,21 @@
 /* Hiawatha modules
  */
 #cmakedefine ENABLE_CACHE ${ENABLE_CACHE}
-#cmakedefine ENABLE_DEBUG ${ENABLE_DEBUG}
 #cmakedefine ENABLE_IPV6 ${ENABLE_IPV6}
 #cmakedefine ENABLE_LOADCHECK ${ENABLE_LOADCHECK}
 #cmakedefine ENABLE_MONITOR ${ENABLE_MONITOR}
 #cmakedefine ENABLE_RPROXY ${ENABLE_RPROXY}
 #cmakedefine ENABLE_SSL ${ENABLE_SSL}
-#define ENABLE_THREAD_POOL ON
 #cmakedefine ENABLE_TOMAHAWK ${ENABLE_TOMAHAWK}
 #cmakedefine ENABLE_TOOLKIT ${ENABLE_TOOLKIT}
 #cmakedefine ENABLE_XSLT ${ENABLE_XSLT}
+
+/* Other Hiawatha features
+ */
+#define ENABLE_CHALLENGE ON
+/* #define ENABLE_DEBUG ON */
+#define ENABLE_FILEHASHES ON
+#define ENABLE_THREAD_POOL ON
 
 /* Includes
  */

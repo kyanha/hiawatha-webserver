@@ -104,6 +104,7 @@ static void clear_session(t_session *session) {
 	session->return_code = 200;
 	session->error_cause = ec_NONE;
 	session->error_code = -1;
+	session->log_request = true;
 	session->tempdata = NULL;
 	session->uploaded_file = NULL;
 	session->uploaded_size = 0;
@@ -359,6 +360,7 @@ bool is_volatile_object(t_session *session) {
 	return false;
 }
 
+#ifdef ENABLE_TOOLKIT
 int load_user_root_config(t_session *session) {
 	char *conffile;
 	int result;
@@ -379,6 +381,7 @@ int load_user_root_config(t_session *session) {
 
 	return result;
 }
+#endif
 
 /* Load configfile from directories
  */
@@ -434,6 +437,10 @@ int copy_directory_settings(t_session *session) {
 	size_t path_length;
 	t_directory *dir;
 	bool match;
+
+	if (session->file_on_disk == NULL) {
+		return 500;
+	}
 
 	dir = session->config->directory;
 	while (dir != NULL) {
@@ -594,7 +601,7 @@ int prevent_xss(t_session *session) {
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
 					monitor_count_exploit(session);
-					monitor_event("XSS attempt for %s", session->file_on_disk);
+					monitor_event("XSS attempt for %s/%s", session->host->hostname.item[0], session->uri);
 				}
 #endif
 				logged = true;
@@ -678,7 +685,7 @@ static int prevent_sqli_str(t_session *session, char *str, int length) {
 #ifdef ENABLE_MONITOR
 			if (session->config->monitor_enabled) {
 				monitor_count_exploit(session);
-				monitor_event("SQLi attempt for %s", session->file_on_disk);
+				monitor_event("SQLi attempt for %s/%s", session->host->hostname.item[0], session->uri);
 			}
 #endif
 
@@ -789,7 +796,7 @@ int prevent_csrf(t_session *session) {
 #ifdef ENABLE_MONITOR
 	if (session->config->monitor_enabled) {
 		monitor_count_exploit(session);
-		monitor_event("CSRF attempt for %s via %s", session->file_on_disk, csrf_url);
+		monitor_event("CSRF attempt for %s/%s via %s", session->host->hostname.item[0], session->uri, csrf_url);
 	}
 #endif
 

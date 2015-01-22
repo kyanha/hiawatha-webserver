@@ -13,11 +13,6 @@
 
 #ifdef ENABLE_SSL
 
-#define SSL_DEBUG_LEVEL          6
-#define TIMESTAMP_SIZE          40
-#define SNI_MAX_HOSTNAME_LEN   128
-#define HS_TIMEOUT_CERT_SELECT  15
-
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,6 +37,11 @@
 #endif
 #endif
 #include "memdbg.h"
+
+#define SSL_DEBUG_LEVEL          6
+#define TIMESTAMP_SIZE          40
+#define SNI_MAX_HOSTNAME_LEN   128
+#define HS_TIMEOUT_CERT_SELECT  15
 
 typedef struct type_sni_list {
 	t_charlist *hostname;

@@ -121,6 +121,7 @@ int send_file(t_session *session) {
 		}
 	}
 
+#ifdef ENABLE_FILEHASHES
 	/* File hashes
 	 */
 	if (session->host->file_hashes != NULL) {
@@ -136,6 +137,7 @@ int send_file(t_session *session) {
 			return 403;
 		}
 	}
+#endif
 
 	/* Symlink check
 	 */
@@ -534,6 +536,7 @@ int execute_cgi(t_session *session) {
 			close(handle);
 		}
 
+#ifdef ENABLE_FILEHASHES
 		/* File hashes
 		 */
 		if (session->host->file_hashes != NULL) {
@@ -548,6 +551,7 @@ int execute_cgi(t_session *session) {
 				return 403;
 			}
 		}
+#endif
 	}
 
 	if (session->host->execute_cgi == false) {

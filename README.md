@@ -23,7 +23,6 @@ Use the following commands to compile and install Hiawatha. This will install Hi
 The following options for cmake are available. Default value is in uppercase.
 
 	-DENABLE_CACHE=ON|off              Enable internal cache support.
-	-DENABLE_DEBUG=on|OFF              Enable debug information (for development only).
 	-DENABLE_IPV6=ON|off               Enable IPv6 support.
 	-DENABLE_MONITOR=on|OFF            Enable support for the Hiawatha Monitor.
 	-DENABLE_RPROXY=ON|off             Enable reverse proxy support.

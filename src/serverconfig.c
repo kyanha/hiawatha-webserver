@@ -134,7 +134,9 @@ static t_host *new_host(void) {
 	host->monitor_host_stats  = NULL;
 	host->monitor_host        = false;
 #endif
+#ifdef ENABLE_FILEHASHES
 	host->file_hashes         = NULL;
+#endif
 	host->websockets          = NULL;
 
 	host->next                = NULL;
@@ -340,6 +342,12 @@ t_config *default_config(void) {
 	config->work_directory     = WORK_DIR;
 	config->upload_directory   = NULL;
 	config->upload_directory_len = 0;
+
+#ifdef ENABLE_CHALLENGE
+	config->challenge_threshold = -1;
+	config->challenge_secret   = NULL;
+#endif
+
 #ifdef ENABLE_TOOLKIT
 	config->url_toolkit        = NULL;
 #endif
@@ -841,6 +849,34 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		if ((config->cgi_wrapper = strdup(value)) != NULL) {
 			return true;
 		}
+#ifdef ENABLE_CHALLENGE
+	} else if (strcmp(key, "challengeclient") == 0) {
+		if (split_string(value, &value, &rest, ',') != 0) {
+			return false;
+		} else if ((config->challenge_threshold = str_to_int(value)) == -1) {
+			return false;
+		}
+
+		if (split_string(rest, &value, &rest, ',') == -1) {
+			return false;
+		} else if (strcmp(value, "httpheader") == 0) {
+			config->challenge_mode = cm_httpheader;
+		} else if (strcmp(value, "javascript") == 0) {
+			config->challenge_mode = cm_javascript;
+		} else {
+			return false;
+		}
+
+		split_string(rest, &value, &rest, ',');
+		if ((config->challenge_ban = str_to_int(value)) >= 0) {
+			if (rest != NULL) {
+				if ((config->challenge_secret = strdup(rest)) == NULL) {
+					return false;
+				}
+			}
+			return true;
+		}
+#endif
 	} else if (strcmp(key, "connectionsperip") == 0) {
 		if ((config->connections_per_ip = str_to_int(value)) != -1) {
 			return true;
@@ -994,7 +1030,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			return true;
 		}
 	} else if (strcmp(key, "reconnectdelay") == 0) {
-		if ((config->reconnect_delay = str_to_int(value)) > 0) {
+		if ((config->reconnect_delay = str_to_int(value)) >= 0) {
 			return true;
 		}
 	} else if (strcmp(key, "requestlimitmask") == 0) {
@@ -1378,10 +1414,12 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		if (parse_yesno(value, &(host->execute_cgi)) == 0) {
 			return true;
 		}
+#ifdef ENABLE_FILEHASHES
 	} else if (strcmp(key, "filehashes") == 0) {
 		if ((host->file_hashes = read_file_hashes(value)) != NULL) {
 			return true;
 		}
+#endif
 	} else if (strcmp(key, "followsymlinks") == 0) {
 		if (parse_yesno(value, &(host->follow_symlinks)) == 0) {
 			return true;

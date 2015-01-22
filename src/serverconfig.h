@@ -47,6 +47,9 @@ typedef enum { p_no, p_yes, p_block } t_prevent;
 typedef enum { windows, cygwin } t_platform;
 #endif
 typedef enum { only_root_config, ignore_root_config, non_root_config } t_user_config_mode;
+#ifdef ENABLE_CHALLENGE
+typedef enum { cm_httpheader, cm_javascript } t_challenge_mode;
+#endif
 
 #ifdef ENABLE_MONITOR
 typedef struct type_monitor_srv_stats {
@@ -289,7 +292,9 @@ typedef struct type_host {
 	t_monitor_host_stats *monitor_host_stats;
 	bool            monitor_host;
 #endif
+#ifdef ENABLE_FILEHASHES
 	t_file_hash     *file_hashes;
+#endif
 	t_websocket     *websockets;
 
 	struct type_host *next;
@@ -368,6 +373,13 @@ typedef struct type_config {
 	char          *work_directory;
 	char          *upload_directory;
 	size_t        upload_directory_len;
+
+#ifdef ENABLE_CHALLENGE
+	int           challenge_threshold;
+	t_challenge_mode challenge_mode;
+	int           challenge_ban;
+	char          *challenge_secret;
+#endif
 
 #ifdef ENABLE_LOADCHECK
 	double        max_server_load;

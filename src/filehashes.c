@@ -10,6 +10,9 @@
  */
 
 #include "config.h"
+
+#ifdef ENABLE_FILEHASHES
+
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,7 +24,6 @@
 #include "libstr.h"
 #include "libfs.h"
 #include "filehashes.h"
-#include "polarssl/version.h"
 #include "polarssl/sha256.h"
 #include "memdbg.h"
 
@@ -193,3 +195,5 @@ hash_fail:
 
 	return result;
 }
+
+#endif

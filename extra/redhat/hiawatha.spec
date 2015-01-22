@@ -12,7 +12,7 @@ BuildRequires:  make,gcc,glibc-devel,libxml2-devel,libxslt-devel
 Requires:       libxml2,libxslt
 
 %description
-Hiawatha is an advanced and secure webserver for Unix with the three key features: security, easy-to-use and lightweight.
+Hiawatha is a webserver with the three key attributes: secure, easy-to-use, and lightweight.
 
 %prep
 %setup -q

@@ -1,11 +1,18 @@
 # Hiawatha main configuration file
 #
 
+# VARIABLES
+# With 'set', you can declare a variable. Make sure the name of the
+# variable doesn't conflict with any of the configuration options. The 
+# variables are case-sensitive and cannot be redeclared.
+#
+#set LOCALHOST = 127.0.0.0/8
+
 
 # GENERAL SETTINGS
 #
 #ServerId = www-data
-ConnectionsTotal = 250
+ConnectionsTotal = 1000
 ConnectionsPerIP = 25
 SystemLogfile = @LOG_DIR@/system.log
 GarbageLogfile = @LOG_DIR@/garbage.log

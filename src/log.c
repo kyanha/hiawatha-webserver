@@ -403,7 +403,7 @@ void log_garbage(t_session *session) {
  */
 void log_exploit_attempt(t_session *session, char *type, char *data) {
 	FILE *fp;
-	char str[TIMESTAMP_SIZE + IP_ADDRESS_SIZE], *host, *uri, *unknown = "unknown";
+	char str[TIMESTAMP_SIZE + IP_ADDRESS_SIZE], *host, *uri, *unknown = "<unknown>";
 
 	if ((session->config->exploit_logfile == NULL) || (type == NULL)) {
 		return;
@@ -412,7 +412,7 @@ void log_exploit_attempt(t_session *session, char *type, char *data) {
 	}
 
 	host = (session->host->hostname.size > 0) ? session->host->hostname.item[0] : unknown;
-	uri = (session->uri != NULL) ? session->uri : unknown;
+	uri = (session->request_uri != NULL) ? session->request_uri : unknown;
 
 	ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
 	strcat(str, "|");

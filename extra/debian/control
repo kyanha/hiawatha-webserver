@@ -13,4 +13,4 @@ Suggests: php5-fpm
 Conflicts:
 Provides: httpd, httpd-cgi
 Description: Advanced and secure webserver for Unix
- Hiawatha is a webserver with the three key features: security, easy-to-use and lightweight.
+ Hiawatha is a webserver with the three key attributes: secure, easy-to-use, and lightweight.

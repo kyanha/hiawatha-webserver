@@ -13,6 +13,7 @@ set(hiawatha_src
 	src/alternative.c
 	src/cache.c
 	src/cgi.c
+	src/challenge.c
 	src/client.c
 	src/envir.c
 	src/filehashes.c

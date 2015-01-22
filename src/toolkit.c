@@ -105,6 +105,10 @@ static bool parse_parameters(t_toolkit_rule *new_rule, char *value, char **opera
 		 */
 		new_rule->operation = to_deny_access;
 		new_rule->flow = tf_exit;
+	} else if (strcasecmp(value, "omitrequestlog") == 0) {
+		/* Omit request log
+		 */
+		new_rule->operation = to_omit_request_log;
 	} else if (strcasecmp(value, "exit") == 0) {
 		/* Exit
 		 */
@@ -276,16 +280,20 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 	int cflags;
 	size_t len;
 	char *do_operations[] = {
-		"ban", "call", "denyaccess", "exit", "goto", "return", "skip", "use", NULL};
+		"ban", "call", "denyaccess", "exit", "goto", "return", "omitrequestlog",
+		"skip", "use", NULL};
 	char *header_operations[] = {
-		"ban", "call", "denyaccess", "exit", "goto", "return", "skip", "use", NULL};
+		"ban", "call", "denyaccess", "exit", "goto", "return", "omitrequestlog",
+		"skip", "use", NULL};
 	char *match_operations[] = {
-		"ban", "call", "denyaccess", "exit", "expire", "goto", "redirect", "return",
-		"rewrite", "skip", "usefastcgi", NULL};
+		"ban", "call", "denyaccess", "exit", "expire", "goto", "redirect",
+		"return", "rewrite", "skip", "usefastcgi", NULL};
 	char *method_operations[] = {
 		"call", "denyaccess", "exit", "goto", "return", "skip", "use", NULL};
 	char *requesturi_operations[] = {
 		"call", "exit", "return", "skip", NULL};
+	char *total_connections_operations[] = {
+		"call", "goto", "omitrequestlog", "redirect", "skip", NULL};
 #ifdef ENABLE_SSL
 	char *usessl_operations[] = {
 		"call", "exit", "goto", "return", "skip", NULL};
@@ -442,6 +450,22 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		if (parse_parameters(new_rule, rest, requesturi_operations) == false) {
 			return false;
 		}
+	} else if (strcmp(key, "totalconnections") == 0) {
+		/* TotalConnections
+		 */
+		new_rule->condition = tc_total_connections;
+
+		if (split_string(value, &value, &rest, ' ') == -1) {
+			return false;
+		}
+
+		if ((new_rule->value = str_to_int(value)) == -1) {
+			return false;
+		}
+
+		if (parse_parameters(new_rule, rest, total_connections_operations) == false) {
+			return false;
+		}
 #ifdef ENABLE_SSL
 	} else if (strcmp(key, "usessl") == 0) {
 		/* UseSSL
@@ -576,12 +600,14 @@ void init_toolkit_options(t_toolkit_options *options) {
 	options->fastcgi_server = NULL;
 	options->ban = 0;
 	options->expire = -1;
-	options->url_toolkit = NULL;
-	options->allow_dot_files = false;
-	options->http_headers = NULL;
+	options->caco_private = false;
+	options->total_connections = 0;
 #ifdef ENABLE_SSL
 	options->use_ssl = false;
 #endif
+	options->allow_dot_files = false;
+	options->url_toolkit = NULL;
+	options->http_headers = NULL;
 }
 
 int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
@@ -712,6 +738,11 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 
 				free(file);
 				break;
+			case tc_total_connections:
+				/* Total connections reached?
+				 */
+				condition_met = options->total_connections >= rule->value;
+				break;
 #ifdef ENABLE_SSL
 			case tc_use_ssl:
 				/* Client connections uses SSL?
@@ -744,6 +775,11 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 				/* Deny access
 				 */
 				return UT_DENY_ACCESS;
+			case to_omit_request_log:
+				/* Omit requeest log
+				 */
+				options->log_request = false;
+				break;
 			case to_expire:
 				/* Send Expire HTTP header
 				 */

@@ -86,6 +86,7 @@ typedef struct type_session {
 	off_t           bytes_sent;
 	int             return_code;
 	int             error_code;
+	bool            log_request;
 	t_tempdata      *tempdata;
 	char            *uploaded_file;
 	long            uploaded_size;
@@ -155,7 +156,6 @@ bool is_volatile_object(t_session *session);
 int  load_user_root_config(t_session *session);
 int  load_user_config(t_session *session);
 int  copy_directory_settings(t_session *session);
-bool client_is_rejected_bot(t_session *session);
 int  remove_port_from_hostname(t_session *session);
 int  prevent_xss(t_session *session);
 int  init_sqli_detection(void);

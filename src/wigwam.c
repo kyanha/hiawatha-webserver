@@ -912,7 +912,10 @@ void show_help(char *wigwam) {
 
 int main(int argc, char *argv[]) {
 	int i, errors_found = 0;
-	char *config_dir = CONFIG_DIR, *password, cwd[1024];
+	char *config_dir = CONFIG_DIR, *password;
+#ifdef ENABLE_FILEHASHES
+	char cwd[1024];
+#endif
 
 	for (i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "-b") == 0) {
@@ -951,6 +954,7 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[i], "-h") == 0) {
 			show_help(argv[0]);
 			return EXIT_SUCCESS;
+#ifdef ENABLE_FILEHASHES
 		} else if (strcmp(argv[i], "-s") == 0) {
 			if (getcwd(cwd, 1024) == NULL) {
 				fprintf(stderr, "Error getting current directory.\n");
@@ -959,6 +963,7 @@ int main(int argc, char *argv[]) {
 			cwd[1023] = '\0';
 			print_file_hashes(cwd);
 			return EXIT_SUCCESS;
+#endif
 #ifdef ENABLE_TOOLKIT
 		} else if (strcmp(argv[i], "-t") == 0) {
 			check_url_toolkit(config_dir, argv + i + 1);
