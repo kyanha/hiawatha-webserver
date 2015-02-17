@@ -1683,7 +1683,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 
 		if (webserver.use_ssl) {
 			hostname = rproxy->hostname != NULL ? rproxy->hostname : session->hostname;
-			if (ssl_connect(&(webserver.ssl), &(webserver.socket), hostname) == SSL_HANDSHAKE_ERROR) {
+			if (ssl_connect(&(webserver.ssl), &(webserver.socket), hostname) != SSL_HANDSHAKE_OKE) {
 				log_error(session, "SSL handshake error with reverse proxy");
 				close(webserver.socket);
 				return 503;
@@ -2062,7 +2062,7 @@ int forward_to_websocket(t_session *session) {
 
 #ifdef ENABLE_SSL
 	if (ws->use_ssl) {
-		if (ssl_connect(&ws_ssl_context, &ws_socket, NULL) == SSL_HANDSHAKE_ERROR) {
+		if (ssl_connect(&ws_ssl_context, &ws_socket, NULL) != SSL_HANDSHAKE_OKE) {
 			log_error(session, "SSL handshake error with websocket");
 			close(ws_socket);
 			return -1;

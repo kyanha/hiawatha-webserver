@@ -26,11 +26,11 @@ The following options for cmake are available. Default value is in uppercase.
 	-DENABLE_IPV6=ON|off               Enable IPv6 support.
 	-DENABLE_MONITOR=on|OFF            Enable support for the Hiawatha Monitor.
 	-DENABLE_RPROXY=ON|off             Enable reverse proxy support.
-	-DENABLE_SSL=ON|off                Enable SSL (PolarSSL) support.
+	-DENABLE_SSL=ON|off                Enable SSL (mbed TLS) support.
 	-DENABLE_TOMAHAWK=on|OFF           Enable Tomahawk, the Hiawatha command shell.
 	-DENABLE_TOOLKIT=ON|off            Enable the URL Toolkit.
 	-DENABLE_XSLT=ON|off               Enable XSLT support.
-	-DUSE_SYSTEM_POLARSSL=on|OFF       Compile Hiawatha against the system's PolarSSL library (>=1.3.0).
+	-DUSE_SYSTEM_MBEDTLS=on|OFF        Compile Hiawatha against the system's mbed TLS library (>=1.3.10).
 
 The following path settings are available for cmake.
 
@@ -38,7 +38,7 @@ The following path settings are available for cmake.
 	-DCMAKE_INSTALL_BINDIR=<path>      Location of the ssi-cgi binary.
 	-DCMAKE_INSTALL_SBINDIR=<path>     Location of the other Hiawatha binaries.
 	-DCMAKE_INSTALL_SYSCONFDIR=<path>  The configuration files will be installed in <path>/hiawatha.
-	-DCMAKE_INSTALL_LIBDIR=<path>      The PolarSSL shared library will be installed in <path>/hiawatha.
+	-DCMAKE_INSTALL_LIBDIR=<path>      The mbed TLS shared library will be installed in <path>/hiawatha.
 	-DCMAKE_INSTALL_MANDIR=<path>      Manual pages will be installed in <path>/man1.
 	-DCONFIG_DIR=<path>                Location of the Hiawatha configuration files.
 	-DLOG_DIR=<path>                   Log directory used in the default hiawatha.conf.

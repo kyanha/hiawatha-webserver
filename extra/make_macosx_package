@@ -1,6 +1,6 @@
 #!/bin/sh
 
-if [ ! -f /mach_kernel ]; then
+if [ ! -d /Applications ]; then
 	echo "MacOS X required."
 	exit
 fi
@@ -47,8 +47,6 @@ make
 strip cgi-wrapper hiawatha ssi-cgi wigwam
 make install DESTDIR=`pwd`/root
 sed "s/#ServerId = www-data/ServerId = _www/" config/hiawatha.conf > root/usr/local/etc/hiawatha/hiawatha.conf
-mkdir -p root/Library/PreferencePanes
-cp -r ../extra/macosx/HiawathaWebserver.prefPane root/Library/PreferencePanes
 mkdir -p root/Library/LaunchDaemons
 cp ../extra/macosx/org.hiawatha-webserver.httpd.plist root/Library/LaunchDaemons
 

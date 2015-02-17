@@ -32,6 +32,8 @@ int init_memdbg(void) {
 		return -1;
 	}
 
+	fprintf(stderr, "Hiawatha v%s MemDbg module activated.\n", VERSION);
+
 	return 0;
 }
 

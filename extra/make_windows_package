@@ -66,7 +66,7 @@ mkdir ${dir}/wwwroot
 cp hiawatha.exe ${dir}/Hiawatha/bin
 cp ssi-cgi.exe ${dir}/Hiawatha/bin
 cp wigwam.exe ${dir}/Hiawatha/bin
-cp polarssl/library/cygpolarssl-*.dll ${dir}/Hiawatha/bin
+cp mbedtls/library/cygmbedtls-*.dll ${dir}/Hiawatha/bin
 strip ${dir}/Hiawatha/bin/*.exe
 
 files="cygcrypt-0.dll cyggcc_s-1.dll cygrunsrv.exe cygiconv-2.dll cygwin1.dll cygxml2-2.dll cygxslt-1.dll cygz.dll cyglzma-5.dll"

@@ -29,6 +29,7 @@
 #include "polarssl/dhm.h"
 #include "polarssl/ssl_cache.h"
 #include "polarssl/error.h"
+#include "polarssl/version.h"
 #ifdef ENABLE_SSL
 #include "polarssl/ssl.h"
 #include "polarssl/x509.h"
@@ -182,10 +183,17 @@ int init_ssl_module(x509_crt *ca_certs, char *logfile) {
 int init_ssl_module(x509_crt *ca_certs) {
 #endif
 	ca_certificates = ca_certs;
+	char version[10];
+
+	if (version_get_number() < 0x01030A00) {
+		version_get_string(version);
+		fprintf(stderr, "This Hiawatha installation requires mbed TLS v1.3.10 and you have v%s.", version);
+		return -1;
+	}
 
 #if POLARSSL_VERSION_NUMBER >= 0x01030700
 	if (version_check_feature("POLARSSL_THREADING_PTHREAD") != 0) {
-		fprintf(stderr, "PolarSSL was compiled without the required POLARSSL_THREADING_PTHREAD compiler flag.\n");
+		fprintf(stderr, "mbed TLS was compiled without the required POLARSSL_THREADING_PTHREAD compiler flag.\n");
 		return -1;
 	}
 
@@ -250,7 +258,7 @@ static void ssl_debug(void *thread_id, int level, const char *str) {
 		return;
 	}
 
-	log_string(ssl_error_logfile, "PolarSSL (%d): %s", *(int*)thread_id, str);
+	log_string(ssl_error_logfile, "mbed TLS (%d): %s", *(int*)thread_id, str);
 }
 #endif
 
@@ -466,20 +474,19 @@ int ssl_accept(t_ssl_accept_data *sad) {
 	result = SSL_HANDSHAKE_OKE;
 	while ((handshake = ssl_handshake(sad->context)) != 0) {
 		if (handshake == POLARSSL_ERR_SSL_BAD_HS_PROTOCOL_VERSION) {
+			ssl_free(sad->context);
 			result = SSL_HANDSHAKE_NO_MATCH;
 			break;
 		}
 
 		if ((handshake != POLARSSL_ERR_NET_WANT_READ) && (handshake != POLARSSL_ERR_NET_WANT_WRITE)) {
 			ssl_free(sad->context);
-			sad->context = NULL;
 			result = SSL_HANDSHAKE_ERROR;
 			break;
 		}
 
 		if (time(NULL) - start_time >= sad->timeout) {
 			ssl_free(sad->context);
-			sad->context = NULL;
 			result = SSL_HANDSHAKE_TIMEOUT;
 			break;
 		}
@@ -633,6 +640,7 @@ int ssl_connect(ssl_context *ssl, int *sock, char *hostname) {
 	}
 
 	if (ssl_handshake(ssl) != 0) {
+		ssl_free(ssl);
 		return SSL_HANDSHAKE_ERROR;
 	}
 

@@ -694,15 +694,21 @@ static int serve_client(t_session *session) {
 		session->vars = qmark + 1;
 	}
 
-	url_decode(session->uri);
-	session->uri_len = strlen(session->uri);
+#ifdef ENABLE_RPROXY
+	if (rproxy == NULL) {
+#endif
+		url_decode(session->uri);
+		session->uri_len = strlen(session->uri);
 
-	if ((session->vars != NULL) && (session->host->secure_url)) {
-		if (forbidden_chars_present(session->vars)) {
-			log_error(session, "URL contains forbidden characters");
-			return 403;
+		if ((session->vars != NULL) && (session->host->secure_url)) {
+			if (forbidden_chars_present(session->vars)) {
+				log_error(session, "URL contains forbidden characters");
+				return 403;
+			}
 		}
+#ifdef ENABLE_RPROXY
 	}
+#endif
 
 	if (validate_url(session) == false) {
 		return -1;
@@ -1160,6 +1166,8 @@ static void connection_handler(t_session *session) {
 		session->current_task = "ssl accept";
 #endif
 		switch (ssl_accept(&sad)) {
+			case -1:
+				break;
 			case SSL_HANDSHAKE_NO_MATCH:
 				log_system(session, "No cypher overlap during SSL handshake.");
 				break;

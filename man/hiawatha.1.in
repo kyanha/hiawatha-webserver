@@ -241,7 +241,7 @@ The location of the mimetype configuration file. It the path is omitted, Hiawath
 Default = mimetype.conf, example: MimetypeConfig = /etc/mime.types
 .TP
 .B MinSSLversion = TLS1.0|TLS1.1|TLS1.2
-Specify the minimum SSL version Hiawatha accepts for HTTPS connections.
+Specify the minimum TLS version Hiawatha accepts for HTTPS connections.
 .br
 Default = TLS1.0, Example: MinSSLversion = TLS1.1
 .br
@@ -598,7 +598,7 @@ Example: RequiredGroup = webadmins,staff
 .B RequireSSL = yes|no[,HSTS time]
 Specify that a domain must be visited with a SSL connection. If it is visited via HTTP, Hiawatha will send a redirect (301) with a HTTPS URL. The HSTS time is the max-age value of the Strict-Transport-Security HTTP header.
 .br
-Default = no,31536000, example: RequireSSL = yes,2678400
+Default = no, example: RequireSSL = yes,2678400
 .br
 
 (requires that Hiawatha was not compiled with -DENABLE_SSL=off)

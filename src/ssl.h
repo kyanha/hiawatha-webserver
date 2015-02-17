@@ -27,11 +27,6 @@
 #define SSL_HANDSHAKE_TIMEOUT  -2
 #define SSL_HANDSHAKE_NO_MATCH -3
 
-#if POLARSSL_VERSION_NUMBER < 0x01030000
-#define x509_crt x509_cert
-#define pk_context rsa_context
-#endif
-
 typedef struct {
 	ssl_context *context;
 	int         *client_fd;
