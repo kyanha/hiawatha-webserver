@@ -26,7 +26,6 @@
 #include "liblist.h"
 #include "session.h"
 #include "log.h"
-#include "ssl.h"
 #include "monitor.h"
 #include "tomahawk.h"
 #include "memdbg.h"
@@ -39,7 +38,7 @@ static const struct {
 	{"'\\s*(and|or|xor|&&|\\|\\|)\\s*('|[0-9]|`?[a-z\\._-]+`?\\s*=|[a-z]+\\s*\\()"},
 	{"'\\s*like\\s*['a-z]"},
 	{"'\\s*(not\\s+)?in\\s*\\(\\s*['0-9]"},
-	{"select\\s+`?(\\*|[a-z0-9_,]*)`?\\s+from\\s+`?[a-z0-9_\\.]*"},
+	{"select\\s+`?(\\*|[a-z0-9_\\,]*)`?\\s+from\\s+`?[a-z0-9_\\.]*"},
 	{"update\\s+`?[a-z0-9_\\.]*`?\\s+set\\s+"},
 	{"delete\\s+from\\s+`?[a-z0-9_\\.]*`?"},
 	{NULL}
@@ -207,9 +206,9 @@ void reset_session(t_session *session) {
 void destroy_session(t_session *session) {
 #ifdef ENABLE_RPROXY
 	if (session->rproxy_kept_alive) {
-#ifdef ENABLE_SSL
-		if (session->rproxy_use_ssl) {
-			ssl_close(&(session->rproxy_ssl));
+#ifdef ENABLE_TLS
+		if (session->rproxy_use_tls) {
+			tls_close(&(session->rproxy_ssl));
 		}
 #endif
 		close(session->rproxy_socket);
@@ -259,6 +258,8 @@ void determine_request_method(t_session *session) {
 	} else if (strncmp(session->request, "UNLOCK ", 7) == 0) {
 		session->request_method = unsupported;
 	} else if (strncmp(session->request, "REPORT ", 7) == 0) {
+		session->request_method = unsupported;
+	} else if (strncmp(session->request, "PATCH ", 5) == 0) {
 		session->request_method = unsupported;
 	}
 }
@@ -600,7 +601,7 @@ int prevent_xss(t_session *session) {
 #endif
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
-					monitor_count_exploit(session);
+					monitor_count_exploit_attempt(session);
 					monitor_event("XSS attempt for %s/%s", session->host->hostname.item[0], session->uri);
 				}
 #endif
@@ -684,7 +685,7 @@ static int prevent_sqli_str(t_session *session, char *str, int length) {
 #endif
 #ifdef ENABLE_MONITOR
 			if (session->config->monitor_enabled) {
-				monitor_count_exploit(session);
+				monitor_count_exploit_attempt(session);
 				monitor_event("SQLi attempt for %s/%s", session->host->hostname.item[0], session->uri);
 			}
 #endif
@@ -795,7 +796,7 @@ int prevent_csrf(t_session *session) {
 #endif
 #ifdef ENABLE_MONITOR
 	if (session->config->monitor_enabled) {
-		monitor_count_exploit(session);
+		monitor_count_exploit_attempt(session);
 		monitor_event("CSRF attempt for %s/%s via %s", session->host->hostname.item[0], session->uri, csrf_url);
 	}
 #endif
@@ -805,9 +806,9 @@ int prevent_csrf(t_session *session) {
 
 void close_socket(t_session *session) {
 	if (session->socket_open) {
-#ifdef ENABLE_SSL
-		if (session->binding->use_ssl) {
-			ssl_close(&(session->ssl_context));
+#ifdef ENABLE_TLS
+		if (session->binding->use_tls) {
+			tls_close(&(session->tls_context));
 		}
 #endif
 		fsync(session->client_socket);

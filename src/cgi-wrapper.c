@@ -323,10 +323,11 @@ int main(int argc, char *argv[]) {
 	}
 
 	if ((var = getenv(cgiwrap_userdir)) != NULL) {
-		if ((user_directory = (char*)malloc(strlen(var) + 3)) == NULL) {
+		len = strlen(var) + 3;
+		if ((user_directory = (char*)malloc(len)) == NULL) {
 			print_code(500);
 		}
-		sprintf(user_directory, "/%s/", var);
+		snprintf(user_directory, len, "/%s/", var);
 	} else {
 		user_directory = "/public_html/";
 	}

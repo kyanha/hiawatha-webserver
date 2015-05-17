@@ -1,3 +1,17 @@
+hiawatha (9.13) stable; urgency=low
+
+  * Renamed SSLcertFile to TLScertFile.
+  * Renamed RequireSSL to RequireTLS.
+  * Renamed SSL_* CGI environment variables to TLS_*.
+  * Renamed UrlToolkit option UseSSL to UseTLS.
+  * Replaced MinSSLversion by MinTLSversion.
+  * LogTimeouts option added.
+  * Added 'skip directories' parameter to reverse proxy.
+  * Failed logins sent to Hiawatha Monitor.
+  * Small bugfix and improvements.
+
+ -- Hugo Leisink <hugo@leisink.net>  Sun, 10 May 2015 09:47:41 +0200
+
 hiawatha (9.12) stable; urgency=medium
 
   * PolarSSL 1.3.9 upgraded to mbed TLS 1.3.10.

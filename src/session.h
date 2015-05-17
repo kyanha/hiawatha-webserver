@@ -13,8 +13,8 @@
 #define _SESSION_H
 
 #include <time.h>
-#ifdef ENABLE_SSL
-#include "ssl.h"
+#ifdef ENABLE_TLS
+#include "tls.h"
 #endif
 #include "ip.h"
 #include "liblist.h"
@@ -37,7 +37,7 @@
 
 typedef enum { no_cgi, binary, script, fastcgi } t_cgi_type;
 typedef enum { unknown, GET, POST, HEAD, TRACE, PUT, DELETE, CONNECT, WHEN, unsupported } t_req_method;
-typedef enum { missing_slash, require_ssl, location, enforce_first_hostname } t_cause_of_301;
+typedef enum { missing_slash, require_tls, location, enforce_first_hostname } t_cause_of_301;
 
 typedef struct type_session {
 	t_config        *config;
@@ -112,11 +112,11 @@ typedef struct type_session {
 	 */
 	time_t          flooding_timer;
 
-	/* SSL
+	/* TLS
 	 */
-#ifdef ENABLE_SSL
-	ssl_context     ssl_context;
-	ssl_session     ssl_session;
+#ifdef ENABLE_TLS
+	ssl_context     tls_context;
+	ssl_session     tls_session;
 #endif
 
 	/* Output buffer
@@ -136,8 +136,8 @@ typedef struct type_session {
 	t_ip_addr       rproxy_addr;
 	int             rproxy_port;
 	int             rproxy_socket;
-#ifdef ENABLE_SSL
-	bool            rproxy_use_ssl;
+#ifdef ENABLE_TLS
+	bool            rproxy_use_tls;
 	ssl_context     rproxy_ssl;
 #endif
 #endif

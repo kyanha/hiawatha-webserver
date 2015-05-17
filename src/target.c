@@ -129,7 +129,7 @@ int send_file(t_session *session) {
 			log_file_error(session, session->file_on_disk, "invalid file hash");
 #ifdef ENABLE_MONITOR
 			if (session->config->monitor_enabled) {
-				monitor_count_exploit(session);
+				monitor_count_exploit_attempt(session);
 				monitor_event("Invalid file hash for %s", session->file_on_disk);
 			}
 #endif
@@ -544,7 +544,7 @@ int execute_cgi(t_session *session) {
 				log_file_error(session, session->file_on_disk, "invalid file hash");
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
-					monitor_count_exploit(session);
+					monitor_count_exploit_attempt(session);
 					monitor_event("Invalid file hash for %s", session->file_on_disk);
 				}
 #endif
@@ -822,7 +822,7 @@ int execute_cgi(t_session *session) {
 							header_length = end_of_header + 4 - cgi_info.input_buffer;
 
 							if (session->throttle == 0) {
-								if ((str_begin = strncasestr(cgi_info.input_buffer, hs_contyp, header_length)) != NULL) {
+								if ((str_begin = find_cgi_header(cgi_info.input_buffer, header_length, hs_contyp)) != NULL) {
 									if ((str_end = strchr(str_begin, '\r')) != NULL) {
 										str_begin += 14;
 										c = *str_end;
@@ -895,7 +895,15 @@ int execute_cgi(t_session *session) {
 
 								if (session->config->monitor_enabled) {
 									*event_end = '\0';
-									monitor_event("%s", event_value);
+									if (strcmp(event_value, "exploit_attempt") == 0) {
+										monitor_count_exploit_attempt(session);
+										log_exploit_attempt(session, "reported by CGI", NULL);
+									} else if (strcmp(event_value, "failed_login") == 0) {
+										monitor_count_failed_login(session);
+										log_file_error(session, session->request_uri, "failed login");
+									} else {
+										monitor_event("%s", event_value);
+									}
 									*event_end = '\r';
 								}
 
@@ -935,7 +943,7 @@ int execute_cgi(t_session *session) {
 
 							if (find_cgi_header(cgi_info.input_buffer, header_length, "Location:") != NULL) {
 								session->return_code = 302;
-							} else if ((code = strncasestr(cgi_info.input_buffer, "Status:", header_length)) != NULL) {
+							} else if ((code = find_cgi_header(cgi_info.input_buffer, header_length, "Status:")) != NULL) {
 								result = extract_http_code(code + 7);
 
 								if ((result <= 0) || (result > 999)) {
@@ -964,7 +972,7 @@ int execute_cgi(t_session *session) {
 								break;
 							}
 
-							if ((strncasestr(cgi_info.input_buffer, hs_conlen, header_length) != NULL) || (session->keep_alive == false)) {
+							if ((find_cgi_header(cgi_info.input_buffer, header_length, hs_conlen) != NULL) || (session->keep_alive == false)) {
 								send_in_chunks = false;
 							} else if (send_buffer(session, hs_chunked, 28) == -1) {
 								retval = rs_DISCONNECT;
@@ -1490,7 +1498,7 @@ static int remove_header(char *buffer, char *header, int header_length, int size
 	char *pos;
 	size_t len;
 
-	if ((pos = strncasestr(buffer, header, header_length)) == NULL) {
+	if ((pos = find_cgi_header(buffer, header_length, header)) == NULL) {
 		return 0;
 	}
 
@@ -1562,7 +1570,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	bool header_read = false, keep_reading = true, keep_alive, chunked_transfer = false, send_in_chunks = false;
 	struct pollfd poll_data;
 	time_t deadline;
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 	char *hostname;
 #endif
 #ifdef ENABLE_CACHE
@@ -1623,8 +1631,8 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	options.content_length = session->content_length;
 	options.remote_user = session->remote_user;
 	options.uploaded_file = session->uploaded_file;
-#ifdef ENABLE_SSL
-	options.use_ssl = session->binding->use_ssl;
+#ifdef ENABLE_TLS
+	options.use_tls = session->binding->use_tls;
 #endif
 #ifdef ENABLE_CACHE
 	options.cache_extensions = &(session->config->cache_rproxy_extensions);
@@ -1633,9 +1641,9 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	init_rproxy_result(&rproxy_result);
 
 	if (session->rproxy_kept_alive && ((same_ip(&(session->rproxy_addr), &(rproxy->ip_addr)) == false) || (session->rproxy_port != rproxy->port))) {
-#ifdef ENABLE_SSL
-		if (session->rproxy_use_ssl) {
-			ssl_close(&(session->rproxy_ssl));
+#ifdef ENABLE_TLS
+		if (session->rproxy_use_tls) {
+			tls_close(&(session->rproxy_ssl));
 		}
 #endif
 		close(session->rproxy_socket);
@@ -1647,9 +1655,9 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	if (session->rproxy_kept_alive) {
 		if (recv(session->rproxy_socket, buffer, 1, MSG_DONTWAIT | MSG_PEEK) == -1) {
 			if (errno != EAGAIN) {
-#ifdef ENABLE_SSL
-				if (session->rproxy_use_ssl) {
-					ssl_close(&(session->rproxy_ssl));
+#ifdef ENABLE_TLS
+				if (session->rproxy_use_tls) {
+					tls_close(&(session->rproxy_ssl));
 				}
 #endif
 				close(session->rproxy_socket);
@@ -1663,11 +1671,11 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 		/* Use kept alive connection
 		 */
 		webserver.socket = session->rproxy_socket;
-#ifdef ENABLE_SSL
-		webserver.use_ssl = session->rproxy_use_ssl;
+#ifdef ENABLE_TLS
+		webserver.use_tls = session->rproxy_use_tls;
 
-		if (webserver.use_ssl) {
-			memcpy(&(webserver.ssl), &(session->rproxy_ssl), sizeof(ssl_context));
+		if (webserver.use_tls) {
+			memcpy(&(webserver.tls_context), &(session->rproxy_ssl), sizeof(ssl_context));
 		}
 #endif
 	} else {
@@ -1678,13 +1686,13 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 			return 503;
 		}
 
-#ifdef ENABLE_SSL
-		webserver.use_ssl = rproxy->use_ssl;
+#ifdef ENABLE_TLS
+		webserver.use_tls = rproxy->use_tls;
 
-		if (webserver.use_ssl) {
+		if (webserver.use_tls) {
 			hostname = rproxy->hostname != NULL ? rproxy->hostname : session->hostname;
-			if (ssl_connect(&(webserver.ssl), &(webserver.socket), hostname) != SSL_HANDSHAKE_OKE) {
-				log_error(session, "SSL handshake error with reverse proxy");
+			if (tls_connect(&(webserver.tls_context), &(webserver.socket), hostname) != TLS_HANDSHAKE_OKE) {
+				log_error(session, "TLS handshake error with reverse proxy");
 				close(webserver.socket);
 				return 503;
 			}
@@ -1707,8 +1715,8 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	poll_data.events = POLL_EVENT_BITS;
 
 	do {
-#ifdef ENABLE_SSL
-		poll_result = session->binding->use_ssl ? ssl_pending(&(session->ssl_context)) : 0;
+#ifdef ENABLE_TLS
+		poll_result = session->binding->use_tls ? tls_pending(&(session->tls_context)) : 0;
 
 		if (poll_result == 0)
 #endif
@@ -1745,9 +1753,9 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 				break;
 			default:
 				if (RPROXY_BUFFER_SIZE - bytes_in_buffer > 0) {
-#ifdef ENABLE_SSL
-					if (webserver.use_ssl) {
-						bytes_read = ssl_receive(&(webserver.ssl), buffer + bytes_in_buffer, RPROXY_BUFFER_SIZE - bytes_in_buffer);
+#ifdef ENABLE_TLS
+					if (webserver.use_tls) {
+						bytes_read = tls_receive(&(webserver.tls_context), buffer + bytes_in_buffer, RPROXY_BUFFER_SIZE - bytes_in_buffer);
 					} else
 #endif
 						bytes_read = read(webserver.socket, buffer + bytes_in_buffer, RPROXY_BUFFER_SIZE - bytes_in_buffer);
@@ -1815,7 +1823,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 								/* Check for close-connection
 								 */
 								if (session->keep_alive) {
-									if ((str = strncasestr(buffer, hs_conn, header_length)) != NULL) {
+									if ((str = find_cgi_header(buffer, header_length, hs_conn)) != NULL) {
 										str += 12;
 										if (strncmp(str, "close\r\n", 7) == 0) {
 											keep_alive = false;
@@ -1834,7 +1842,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 								} else if (keep_alive) {
 									/* Parse content length
 									 */
-									if ((str = strncasestr(buffer, hs_conlen, header_length)) != NULL) {
+									if ((str = find_cgi_header(buffer, header_length, hs_conlen)) != NULL) {
 										str += 16;
 										if ((eol = strchr(str, '\r')) != NULL) {
 											*eol = '\0';
@@ -1845,15 +1853,15 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 
 									/* Determine if is chunked transfer encoding
 									 */
-									if (strncasestr(buffer, hs_chunked, header_length) != NULL) {
+									if (find_cgi_header(buffer, header_length, hs_chunked) != NULL) {
 										chunked_transfer = true;
 										content_length = -1;
 										chunk_size = header_length;
 										chunk_left = chunk_size;
 									}
 								} else if (session->keep_alive &&
-								          (strncasestr(buffer, hs_conlen, header_length) == NULL) &&
-									      (strncasestr(buffer, hs_chunked, header_length) == NULL)) {
+								          (find_cgi_header(buffer, header_length, hs_conlen) == NULL) &&
+									      (find_cgi_header(buffer, header_length, hs_chunked) == NULL)) {
 									/* We need to forward result in chunks
 									 */
 									if (send_buffer(session, buffer, header_length - 2) == -1) {
@@ -1988,9 +1996,9 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	if (keep_alive == false) {
 		/* Close connection to webserver
 		 */
-#ifdef ENABLE_SSL
-		if (webserver.use_ssl) {
-			ssl_close(&(webserver.ssl));
+#ifdef ENABLE_TLS
+		if (webserver.use_tls) {
+			tls_close(&(webserver.tls_context));
 		}
 #endif
 		close(webserver.socket);
@@ -2000,10 +2008,10 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 		memcpy(&(session->rproxy_addr), &(rproxy->ip_addr), sizeof(t_ip_addr));
 		session->rproxy_port = rproxy->port;
 		session->rproxy_socket = webserver.socket;
-#ifdef ENABLE_SSL
-		session->rproxy_use_ssl = webserver.use_ssl;
-		if (session->rproxy_use_ssl) {
-			memcpy(&(session->rproxy_ssl), &(webserver.ssl), sizeof(ssl_context));
+#ifdef ENABLE_TLS
+		session->rproxy_use_tls = webserver.use_tls;
+		if (session->rproxy_use_tls) {
+			memcpy(&(session->rproxy_ssl), &(webserver.tls_context), sizeof(ssl_context));
 		}
 #endif
 	}
@@ -2037,8 +2045,8 @@ int forward_to_websocket(t_session *session) {
 	struct pollfd poll_data[2];
 	bool keep_reading = true;
 	char buffer[WS_BUFFER_SIZE];
-#ifdef ENABLE_SSL
-	ssl_context ws_ssl_context;
+#ifdef ENABLE_TLS
+	ssl_context ws_tls_context;
 #endif
 
 	ws = session->host->websockets;
@@ -2060,10 +2068,10 @@ int forward_to_websocket(t_session *session) {
 		return -1;
 	}
 
-#ifdef ENABLE_SSL
-	if (ws->use_ssl) {
-		if (ssl_connect(&ws_ssl_context, &ws_socket, NULL) != SSL_HANDSHAKE_OKE) {
-			log_error(session, "SSL handshake error with websocket");
+#ifdef ENABLE_TLS
+	if (ws->use_tls) {
+		if (tls_connect(&ws_tls_context, &ws_socket, NULL) != TLS_HANDSHAKE_OKE) {
+			log_error(session, "TLS handshake error with websocket");
 			close(ws_socket);
 			return -1;
 		}
@@ -2111,8 +2119,8 @@ int forward_to_websocket(t_session *session) {
 	/* Forward data
 	 */
 	do {
-#ifdef ENABLE_SSL
-		poll_result = session->binding->use_ssl ? ssl_pending(&(session->ssl_context)) : 0;
+#ifdef ENABLE_TLS
+		poll_result = session->binding->use_tls ? tls_pending(&(session->tls_context)) : 0;
 
 		if (poll_result == 0)
 #endif
@@ -2131,9 +2139,9 @@ int forward_to_websocket(t_session *session) {
 				/* Data from websocket to client
 				 */
 				if (poll_data[0].revents != 0) {
-#ifdef ENABLE_SSL
-					if (ws->use_ssl) {
-						if ((bytes_read = ssl_receive(&ws_ssl_context, buffer, WS_BUFFER_SIZE)) == -1) {
+#ifdef ENABLE_TLS
+					if (ws->use_tls) {
+						if ((bytes_read = tls_receive(&ws_tls_context, buffer, WS_BUFFER_SIZE)) == -1) {
 							keep_reading = false;
 							result = -1;
 							break;
@@ -2151,9 +2159,9 @@ int forward_to_websocket(t_session *session) {
 						break;
 					}
 
-#ifdef ENABLE_SSL
-					if (session->binding->use_ssl) {
-						if (ssl_send_buffer(&(session->ssl_context), buffer, bytes_read) == -1) {
+#ifdef ENABLE_TLS
+					if (session->binding->use_tls) {
+						if (tls_send_buffer(&(session->tls_context), buffer, bytes_read) == -1) {
 							keep_reading = false;
 							result = -1;
 							break;
@@ -2170,9 +2178,9 @@ int forward_to_websocket(t_session *session) {
 				/* Data from client to websocket
 				 */
 				if (poll_data[1].revents != 0) {
-#ifdef ENABLE_SSL
-					if (session->binding->use_ssl) {
-						if ((bytes_read = ssl_receive(&(session->ssl_context), buffer, WS_BUFFER_SIZE)) == -1) {
+#ifdef ENABLE_TLS
+					if (session->binding->use_tls) {
+						if ((bytes_read = tls_receive(&(session->tls_context), buffer, WS_BUFFER_SIZE)) == -1) {
 							keep_reading = false;
 							result = -1;
 							break;
@@ -2190,9 +2198,9 @@ int forward_to_websocket(t_session *session) {
 						break;
 					}
 
-#ifdef ENABLE_SSL
-					if (ws->use_ssl) {
-						if (ssl_send_buffer(&ws_ssl_context, buffer, bytes_read) == -1) {
+#ifdef ENABLE_TLS
+					if (ws->use_tls) {
+						if (tls_send_buffer(&ws_tls_context, buffer, bytes_read) == -1) {
 							keep_reading = false;
 							result = -1;
 							break;
@@ -2209,9 +2217,9 @@ int forward_to_websocket(t_session *session) {
 	} while (keep_reading);
 
 ws_error:
-#ifdef ENABLE_SSL
-	if (ws->use_ssl) {
-		ssl_close(&ws_ssl_context);
+#ifdef ENABLE_TLS
+	if (ws->use_tls) {
+		tls_close(&ws_tls_context);
 	}
 #endif
 	close(ws_socket);

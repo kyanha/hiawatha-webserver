@@ -23,6 +23,7 @@ void check_free(void *ptr);
 void clear_free(void *ptr, int size);
 void check_clear_free(void *ptr, int size);
 
+int  parse_yesno(char *yesno, bool *result);
 int  str_to_int(char *str);
 short hex_char_to_int(char c);
 int  hex_to_int(char *str);
@@ -41,6 +42,7 @@ int  header_to_variable(char *header, char *variable, int size);
 int  filesize2str(char *buffer, int len, off_t fsize);
 int  add_str(char **buffer, int *size, int extra_size, int *len, char *str);
 int  strpcmp(char *str, regex_t *regexp);
+int  strcmp_rtap(const char *s1, const char *s2);
 void md5_bin2hex(unsigned char bin[16], char hex[33]);
 bool hostname_match(char *hostname, char *pattern);
 bool extension_from_uri(char *line, char *extension, size_t size);

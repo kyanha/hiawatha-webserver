@@ -33,7 +33,7 @@ Binding {
 #	Interface = ::1
 #	MaxKeepAlive = 30
 #	TimeForRequest = 3,20
-#	SSLcertFile = hiawatha.pem
+#	TLScertFile = hiawatha.pem
 #}
 
 

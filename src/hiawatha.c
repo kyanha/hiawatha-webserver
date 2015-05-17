@@ -46,7 +46,7 @@
 #include "global.h"
 #include "httpauth.h"
 #include "tomahawk.h"
-#include "ssl.h"
+#include "tls.h"
 #include "cache.h"
 #include "xslt.h"
 #include "monitor.h"
@@ -90,8 +90,8 @@ char *version_string = "Hiawatha v"VERSION
 #ifdef ENABLE_RPROXY
 	", reverse proxy"
 #endif
-#ifdef ENABLE_SSL
-	", SSL ("POLARSSL_VERSION_STRING")"
+#ifdef ENABLE_TLS
+	", TLS ("POLARSSL_VERSION_STRING")"
 #endif
 #ifdef ENABLE_TOMAHAWK
 	", Tomahawk"
@@ -538,7 +538,7 @@ int change_uid_gid(t_config *config) {
 
 /* Run the Hiawatha webserver.
  */
-int run_server(t_settings *settings) {
+int run_webserver(t_settings *settings) {
 	int                number_of_bindings = 0;
 	pthread_attr_t     task_runner_attr;
 	pthread_t          task_runner_thread;
@@ -557,7 +557,7 @@ int run_server(t_settings *settings) {
 #ifndef CYGWIN
 	struct rlimit      resource_limit;
 #endif
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 	t_host             *host;
 #endif
 #ifdef HAVE_ACCF
@@ -595,11 +595,11 @@ int run_server(t_settings *settings) {
 		return -1;
 	}
 
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 #ifdef ENABLE_DEBUG
-	if (init_ssl_module(config->ca_certificates, config->debug_logfile) == -1) {
+	if (init_tls_module(config->ca_certificates, config->debug_logfile) == -1) {
 #else
-	if (init_ssl_module(config->ca_certificates) == -1) {
+	if (init_tls_module(config->ca_certificates) == -1) {
 #endif
 		return -1;
 	}
@@ -609,18 +609,18 @@ int run_server(t_settings *settings) {
 	 */
 	binding = config->binding;
 	while (binding != NULL) {
-#ifdef ENABLE_SSL
-		if (binding->use_ssl) {
-			if (ssl_load_key_cert(binding->key_cert_file, &(binding->private_key), &(binding->certificate)) != 0) {
+#ifdef ENABLE_TLS
+		if (binding->use_tls) {
+			if (tls_load_key_cert(binding->key_cert_file, &(binding->private_key), &(binding->certificate)) != 0) {
 				return -1;
 			}
 
 			if (binding->ca_cert_file != NULL) {
-				if (ssl_load_ca_cert(binding->ca_cert_file, &(binding->ca_certificate)) != 0) {
+				if (tls_load_ca_cert(binding->ca_cert_file, &(binding->ca_certificate)) != 0) {
 					return -1;
 				}
 				if (binding->ca_crl_file != NULL) {
-					if (ssl_load_ca_crl(binding->ca_crl_file, &(binding->ca_crl)) != 0) {
+					if (tls_load_ca_crl(binding->ca_crl_file, &(binding->ca_crl)) != 0) {
 						return -1;
 					}
 				}
@@ -640,22 +640,22 @@ int run_server(t_settings *settings) {
 	}
 #endif
 
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 	host = config->first_host;
 	while (host != NULL) {
 		/* Load private key and certificates for virtual hosts
 		 */
 		if (host->key_cert_file != NULL) {
-			if (ssl_load_key_cert(host->key_cert_file, &(host->private_key), &(host->certificate)) != 0) {
+			if (tls_load_key_cert(host->key_cert_file, &(host->private_key), &(host->certificate)) != 0) {
 				return -1;
 			}
 		}
 		if (host->ca_cert_file != NULL) {
-			if (ssl_load_ca_cert(host->ca_cert_file, &(host->ca_certificate)) != 0) {
+			if (tls_load_ca_cert(host->ca_cert_file, &(host->ca_certificate)) != 0) {
 				return -1;
 			}
 			if (host->ca_crl_file != NULL) {
-				if (ssl_load_ca_crl(host->ca_crl_file, &(host->ca_crl)) != 0) {
+				if (tls_load_ca_crl(host->ca_crl_file, &(host->ca_crl)) != 0) {
 					return -1;
 				}
 			}
@@ -664,7 +664,7 @@ int run_server(t_settings *settings) {
 		/* Initialize Server Name Indication
 		 */
 		if ((host->private_key != NULL) && (host->certificate != NULL)) {
-			if (ssl_register_sni(&(host->hostname), host->private_key, host->certificate,
+			if (tls_register_sni(&(host->hostname), host->private_key, host->certificate,
 			                     host->ca_certificate, host->ca_crl) == -1) {
 				return -1;
 			}
@@ -893,8 +893,8 @@ int run_server(t_settings *settings) {
 	binding = config->binding;
 	while (binding != NULL) {
 		if (binding->enable_accf
-#ifdef ENABLE_SSL
-			&& (binding->use_ssl == false)
+#ifdef ENABLE_TLS
+			&& (binding->use_tls == false)
 #endif
 		) {
 			bzero(&afa, sizeof(afa));
@@ -1133,7 +1133,7 @@ int main(int argc, char *argv[]) {
 
 	/* Run Hiawatha
 	 */
-	if (run_server(&settings) == -1) {
+	if (run_webserver(&settings) == -1) {
 		return EXIT_FAILURE;
 	}
 

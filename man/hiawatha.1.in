@@ -122,7 +122,7 @@ Number of seconds to ban an IP in case of <number> wrong passwords for HTTP auth
 Default = -:0, Example: BanOnWrongPassword = 3:120
 .TP
 .B CAcertificates = <file|directory>
-Load CA root certificates which Hiawatha uses for validation when acting as a client, which it does for the reverse proxy and the websockets. If not set, SSL connections that Hiawatha makes are not secure.
+Load CA root certificates which Hiawatha uses for validation when acting as a client, which it does for the reverse proxy and the websockets. If not set, TLS connections that Hiawatha makes are not secure.
 .br
 Example: CAcertificates = /etc/ssl/certs/ca-certificates.crt
 .TP
@@ -166,19 +166,19 @@ Specify the wrapper for CGI processes. A secure CGI wrapper is included in the H
 Default = @CMAKE_INSTALL_FULL_SBINDIR@/cgi-wrapper, example: CGIwrapper = /bin/cgi-wrapper
 .TP
 .B ChallengeClient = <threshold>, (httpheader|javascript), <ban-time>[, <secret>]
-Challenge the client to verify that it's a real web browser and not an HTTP bot. When the total amount of connections reaches <threshold>, Hiawatha sends a response to the first request in a connection which will make the client resend the request, but now with a cookie. The cookie can be set via a HTTP Set-Cookie header or a Javascript. Further requests are only accepted when the client sends this cookie. Otherwise, the client is banned for <ban-time> seconds. This feature can be used to reduce the effects of a DDoS attack. The <secret> can be a random string of up to 20 characters (the rest is ignored) and is used to generate the cookie. When not set, Hiawatha will generate a random secret.
+Challenge the client to verify that it's a real web browser and not an HTTP bot. When the total amount of connections reaches <threshold>, Hiawatha sends a response to the first request in a connection which will make the client resend the request, but now with a cookie. The cookie can be set via an HTTP Set-Cookie header or a Javascript. Further requests are only accepted when the client sends this cookie. Otherwise, the client is banned for <ban-time> seconds. This feature can be used to reduce the effects of a DDoS attack. The <secret> can be a random string of up to 20 characters (the rest is ignored) and is used to generate the cookie. When not set, Hiawatha will generate a random secret.
 .br
 Example: ChallengeClient = 200, httpheader, 60
 .TP
 .B ConnectionsPerIP = <number>
 Maximum number of simultaneous connections per IP address.
 .br
-Default = 10, example: ConnectionsPerIP = 5
+Default = 15, example: ConnectionsPerIP = 50
 .TP
 .B ConnectionsTotal = <number>
 Maximum number of simultaneous connections.
 .br
-Default = 100, example: ConnectionsTotal = 250
+Default = 150, example: ConnectionsTotal = 1000
 .TP
 .B DHsize = 1024|2048|4096
 Set the size of the Diffie-Hellman key.
@@ -225,6 +225,11 @@ Define the format of the logfile: hiawatha = Hiawatha's default format, common =
 .br
 Default = hiawatha, example: LogFormat = extended
 .TP
+.B LogTimeouts = yes|no
+Log connection timeouts in the system logfile.
+.br
+Default = yes, example: LogTimeouts = no
+.TP
 .B MaxServerLoad = <value>
 When the server has a load higher than <value>, Hiawatha will drop incoming connections. This options is only available under Linux.
 .br
@@ -240,16 +245,16 @@ The location of the mimetype configuration file. It the path is omitted, Hiawath
 .br
 Default = mimetype.conf, example: MimetypeConfig = /etc/mime.types
 .TP
-.B MinSSLversion = TLS1.0|TLS1.1|TLS1.2
+.B MinTLSversion = 1.0|1.1|1.2
 Specify the minimum TLS version Hiawatha accepts for HTTPS connections.
 .br
-Default = TLS1.0, Example: MinSSLversion = TLS1.1
+Default = 1.0, Example: MinTLSversion = 1.1
 .br
 
-(requires that Hiawatha was compiled with -DENABLE_SSL=on)
+(requires that Hiawatha was compiled with -DENABLE_TLS=on)
 .TP
 .B MonitorServer = <ip-address>
-Specify the IP address of the monitor server. This enables logging of statistical information. Use a X-Hiawatha-Monitor CGI header to log an event.
+Specify the IP address of the Hiawatha Monitor server. This enables logging of statistical information. Use a X-Hiawatha-Monitor CGI header to log an event. Use the value 'failed_login' to log a failed login or 'exploit_attempt' to log an exploit attempt.
 .br
 Example: MonitorServer = 192.168.1.2
 .TP
@@ -411,15 +416,15 @@ Use the CA certificates in this file to authenticate users. Users without a cert
 Example: RequiredCA = /etc/ssl/cacert.pem, /etc/ssl/cacrl.pem
 .br
 
-(requires that Hiawatha was not compiled with -DENABLE_SSL=off)
+(requires that Hiawatha was not compiled with -DENABLE_TLS=off)
 .TP
-.B SSLcertFile = <SSL private key and certificate file>
-Encrypt the connections of the current binding with the SSL private key and certificate in the specified file. Intermediate certificates also go in this file. Make sure the order matches the SSL chain order: host certificate first, CA certificate last.
+.B TLScertFile = <TLS private key and certificate file>
+Encrypt the connections of the current binding with the TLS private key and certificate in the specified file. Intermediate certificates also go in this file. Make sure the order matches the TLS chain order: host certificate first, CA certificate last.
 .br
-Example: SSLcertFile = my_domain.pem
+Example: TLScertFile = my_domain.pem
 .br
 
-(requires that Hiawatha was not compiled with -DENABLE_SSL=off)
+(requires that Hiawatha was not compiled with -DENABLE_TLS=off)
 .TP
 .B TimeForRequest = [<time1>, ]<time2>
 Maximum time in seconds for a client to send its HTTP request. time1 is for the first request, time2 is for the following requests (Keep-Alive time). If time2 is omitted, time1 is used for all requests.
@@ -543,11 +548,6 @@ Message that will be displayed in the login window in case of HTTP authenticatio
 .br
 Default = Private page, example: LoginMessage = Hugo's MP3 collection
 .TP
-.B MonitorRequests = yes|no
-Make information about every request for this host available for the Hiawatha Monitor.
-.br
-Default = no, example: MonitorRequests = yes
-.TP
 .B NoExtensionAs = <extension>
 If the requested file has no extension, treat it as if the extension was equal to <extension>.
 .br
@@ -595,18 +595,18 @@ The <groupname> is the name of the group a user must be a member of to have acce
 .br
 Example: RequiredGroup = webadmins,staff
 .TP
-.B RequireSSL = yes|no[,HSTS time]
-Specify that a domain must be visited with a SSL connection. If it is visited via HTTP, Hiawatha will send a redirect (301) with a HTTPS URL. The HSTS time is the max-age value of the Strict-Transport-Security HTTP header.
+.B RequireTLS = yes|no[,HSTS time]
+Specify that a domain must be visited with a TLS connection. If it is visited via HTTP, Hiawatha will send a redirect (301) with an HTTPS URL. The HSTS time is the max-age value of the Strict-Transport-Security HTTP header.
 .br
-Default = no, example: RequireSSL = yes,2678400
+Default = no, example: RequireTLS = yes,2678400
 .br
 
-(requires that Hiawatha was not compiled with -DENABLE_SSL=off)
+(requires that Hiawatha was not compiled with -DENABLE_TLS=off)
 .TP
-.B ReverseProxy [!]<pattern> http[s]://<hostname>[:<port>][/<path>] [<timeout>] [keep-alive]
-Forward the request with URLs that match the regular expression <pattern> to another webserver, where <path> is placed before the original URL. Note that the reverse proxy selection comes before the URL toolkit handling. When <hostname> is an IP address, the value of the Host HTTP header is unchanged. Otherwise, it is replaced with the value of <hostname>. The connection is closed after <timeout> seconds, which is set to 5 seconds by default. By default, Hiawatha doesn't use keep-alive connections to the final webserver. You can enable this by adding 'keep-alive' to the configuration line. When specifying multiple reverse proxies for one (virtual) host, Hiawatha prefers reverse proxies with a scheme (HTTP/HTTPS) matching the one of the client connection. See also CAcertificates.
+.B ReverseProxy [!]<pattern> [<skip directories>] http[s]://<hostname>[:<port>][/<path>] [<timeout>] [keep-alive]
+Forward the request with URLs that match the regular expression <pattern> to another webserver, where <path> is placed before the original URL. When <hostname> is an IP address, the value of the Host HTTP header is unchanged. Otherwise, it is replaced with the value of <hostname>. The optional <skip directories> is a number that indicates how many directories in the original URL should be skipped when sending it to the final webserver. The connection is closed after <timeout> seconds, which is set to 5 seconds by default. By default, Hiawatha doesn't use keep-alive connections to the final webserver. You can enable this by adding 'keep-alive' to the configuration line. When specifying multiple reverse proxies for one (virtual) host, Hiawatha prefers reverse proxies with a scheme (HTTP/HTTPS) matching the one of the client connection. See also CAcertificates.
 .br
-Example: ReverseProxy ^/icons http://resources.lan/images
+Example: ReverseProxy ^/icons/ 1 http://resources.lan/images
 .TP
 .B RunOnAlter = <path to program>
 Run a program after a client has sent a PUT or a DELETE request. Information about the request is placed in environment variables, just like CGI
@@ -631,8 +631,8 @@ Default = no, example: ShowIndex = /etc/hiawatha/index.xslt
 
 (requires that Hiawatha was not compiled with -DENABLE_XSLT=off)
 .TP
-.B SSLcertFile = ...
-Use this option inside a virtualhost block if you want to make use of the SNI capabilities of Hiawatha. See the SSLcertFile option in the BINDING CONFIGURATION chapter for more information.
+.B TLScertFile = <TLS private key and certificate file>
+Use this option inside a virtualhost block if you want to make use of the SNI capabilities of Hiawatha. See the TLScertFile option in the BINDING CONFIGURATION chapter for more information.
 .TP
 .B StartFile = <filename>
 The file which will be send to the browser when a directory is requested.
@@ -645,7 +645,7 @@ Maximum time in seconds for a CGI-process to finish its job.
 Default = 5, example: TimeForCGI = 15
 .TP
 .B TriggerOnCGIstatus = yes|no
-Print a HTTP error message or invoke the ErrorHandler when a CGI outputs a Status HTTP header line.
+Print an HTTP error message or invoke the ErrorHandler when a CGI outputs a Status HTTP header line.
 .br
 Default = no, example: TriggerOnCGIstatus = yes
 .TP
@@ -850,9 +850,9 @@ Call, Goto, OmitRequestLog, Redirect or Skip
 .br
 Example: TotalConnections 1000 Call CheckUserAgent
 .TP
-.B UseSSL <action>
+.B UseTLS <action>
 .br
-Perform an action when the client is connection via a SSL secured connection, where <action> can be one of the following:
+Perform an action when the client is connection via a TLS secured connection, where <action> can be one of the following:
 .br
 Call, Exit, Goto, Return or Skip.
 

@@ -29,7 +29,7 @@
 #define MAX_SUB_DEPTH  10
 #define MAX_MATCH_LOOP 20
 
-t_url_toolkit *find_toolkit(char *toolkit_id, t_url_toolkit *url_toolkit) {
+t_url_toolkit *select_toolkit(char *toolkit_id, t_url_toolkit *url_toolkit) {
 	if (toolkit_id == NULL) {
 		return NULL;
 	}
@@ -45,7 +45,7 @@ t_url_toolkit *find_toolkit(char *toolkit_id, t_url_toolkit *url_toolkit) {
 }
 
 static int replace(char *src, int ofs, int len, char *rep, char **dst) {
-	int len_rep;
+	size_t len_rep;
 
 	if ((src == NULL) || (rep == NULL) || (dst == NULL)) {
 		return -1;
@@ -61,6 +61,20 @@ static int replace(char *src, int ofs, int len, char *rep, char **dst) {
 	strcpy(*dst + ofs + len_rep, src + ofs + len);
 
 	return 0;
+}
+
+t_url_toolkit *new_url_toolkit(void) {
+	t_url_toolkit *url_toolkit;
+
+	if ((url_toolkit = (t_url_toolkit*)malloc(sizeof(t_url_toolkit))) == NULL) {
+		return NULL;
+	}
+
+	url_toolkit->toolkit_id = NULL;
+	url_toolkit->toolkit_rule = NULL;
+	url_toolkit->next = NULL;
+
+	return url_toolkit;
 }
 
 static bool parse_parameters(t_toolkit_rule *new_rule, char *value, char **operation) {
@@ -294,8 +308,8 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		"call", "exit", "return", "skip", NULL};
 	char *total_connections_operations[] = {
 		"call", "goto", "omitrequestlog", "redirect", "skip", NULL};
-#ifdef ENABLE_SSL
-	char *usessl_operations[] = {
+#ifdef ENABLE_TLS
+	char *usetls_operations[] = {
 		"call", "exit", "goto", "return", "skip", NULL};
 #endif
 
@@ -466,13 +480,13 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		if (parse_parameters(new_rule, rest, total_connections_operations) == false) {
 			return false;
 		}
-#ifdef ENABLE_SSL
-	} else if (strcmp(key, "usessl") == 0) {
-		/* UseSSL
+#ifdef ENABLE_TLS
+	} else if ((strcmp(key, "usetls") == 0) || (strcmp(key, "usessl") == 0)) {
+		/* UseTLS
 		 */
-		new_rule->condition = tc_use_ssl;
+		new_rule->condition = tc_use_tls;
 
-		if (parse_parameters(new_rule, value, usessl_operations) == false) {
+		if (parse_parameters(new_rule, value, usetls_operations) == false) {
 			return false;
 		}
 #endif
@@ -502,7 +516,7 @@ bool toolkit_rules_oke(t_url_toolkit *url_toolkit) {
 				if (rule->parameter == NULL) {
 					fprintf(stderr, "Missing parameter in toolkit rule '%s'.\n", toolkit->toolkit_id);
 					return false;
-				} else if (find_toolkit(rule->parameter, url_toolkit) == NULL) {
+				} else if (select_toolkit(rule->parameter, url_toolkit) == NULL) {
 					fprintf(stderr, "Unknown ToolkitID in Goto/Call in toolkit rule '%s'.\n", toolkit->toolkit_id);
 					return false;
 				}
@@ -545,8 +559,8 @@ static int do_rewrite(char *url, regex_t *regexp, regmatch_t *pmatch, char *rep,
 		c = repl;
 		while (*c != '\0') {
 			if (*c == '$') {
-				if ((*(c+1) >= '0') && (*(c+1) <= '9')) {
-					i = *(c+1) - 48;
+				if ((*(c + 1) >= '0') && (*(c + 1) <= '9')) {
+					i = *(c + 1) - '0';
 					if (pmatch[i].rm_so != -1) {
 						len = pmatch[i].rm_eo - pmatch[i].rm_so;
 						if ((sub = strdup(url + pmatch[i].rm_so)) == NULL) {
@@ -602,8 +616,8 @@ void init_toolkit_options(t_toolkit_options *options) {
 	options->expire = -1;
 	options->caco_private = false;
 	options->total_connections = 0;
-#ifdef ENABLE_SSL
-	options->use_ssl = false;
+#ifdef ENABLE_TLS
+	options->use_tls = false;
 #endif
 	options->allow_dot_files = false;
 	options->url_toolkit = NULL;
@@ -626,7 +640,7 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 
 	options->new_url = NULL;
 
-	if ((toolkit = find_toolkit(toolkit_id, options->url_toolkit)) == NULL) {
+	if ((toolkit = select_toolkit(toolkit_id, options->url_toolkit)) == NULL) {
 		return UT_ERROR;
 	}
 
@@ -743,11 +757,11 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 				 */
 				condition_met = options->total_connections >= rule->value;
 				break;
-#ifdef ENABLE_SSL
-			case tc_use_ssl:
-				/* Client connections uses SSL?
+#ifdef ENABLE_TLS
+			case tc_use_tls:
+				/* Client connections uses TLS?
 				 */
-				condition_met = options->use_ssl;
+				condition_met = options->use_tls;
 				break;
 #endif
 		}

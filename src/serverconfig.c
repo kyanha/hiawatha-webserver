@@ -21,7 +21,6 @@
 #include <netinet/in.h>
 #endif
 #include <regex.h>
-#include "ssl.h"
 #include "serverconfig.h"
 #include "libstr.h"
 #include "libfs.h"
@@ -101,8 +100,8 @@ static t_host *new_host(void) {
 	host->envir_str           = NULL;
 	host->alias               = NULL;
 	host->script_alias        = NULL;
-#ifdef ENABLE_SSL
-	host->require_ssl         = false;
+#ifdef ENABLE_TLS
+	host->require_tls         = false;
 	host->hsts_time           = NULL;
 	host->key_cert_file       = NULL;
 	host->ca_cert_file        = NULL;
@@ -115,6 +114,7 @@ static t_host *new_host(void) {
 #endif
 #ifdef ENABLE_RPROXY
 	host->rproxy              = NULL;
+	init_charlist(&(host->use_rproxy));
 #endif
 	host->prevent_sqli        = false;
 	host->prevent_xss         = false;
@@ -217,8 +217,8 @@ static t_binding *new_binding(void) {
 
 	binding->port                 = -1;
 	default_ipv4(&(binding->interface));
-#ifdef ENABLE_SSL
-	binding->use_ssl              = false;
+#ifdef ENABLE_TLS
+	binding->use_tls              = false;
 	binding->key_cert_file        = NULL;
 	binding->ca_cert_file         = NULL;
 	binding->ca_crl_file          = NULL;
@@ -247,24 +247,6 @@ static t_binding *new_binding(void) {
 	return binding;
 }
 
-#ifdef ENABLE_TOOLKIT
-t_url_toolkit *new_url_toolkit(void) {
-	t_url_toolkit *url_toolkit;
-
-	if ((url_toolkit = (t_url_toolkit*)malloc(sizeof(t_url_toolkit))) == NULL) {
-		perror("new_url_toolkit()");
-		exit(EXIT_FAILURE);
-	}
-
-	url_toolkit->toolkit_id = NULL;
-	url_toolkit->toolkit_rule = NULL;
-
-	url_toolkit->next = NULL;
-
-	return url_toolkit;
-}
-#endif
-
 t_config *default_config(void) {
 	t_config *config;
 
@@ -292,8 +274,8 @@ t_config *default_config(void) {
 #ifndef CYGWIN
 	config->set_rlimits        = true;
 #endif
-	config->total_connections  = 100;
-	config->connections_per_ip = 10;
+	config->total_connections  = 150;
+	config->connections_per_ip = 15;
 	config->socket_send_timeout = 3;
 	config->kill_timedout_cgi  = true;
 	config->wait_for_cgi       = true;
@@ -305,6 +287,7 @@ t_config *default_config(void) {
 	config->cgi_wrapper        = SBIN_DIR"/cgi-wrapper";
 	config->wrap_user_cgi      = false;
 	config->log_format         = hiawatha;
+	config->log_timeouts       = true;
 	config->rotate_access_logs = false;
 	config->anonymize_ip       = false;
 	config->user_directory     = "public_html";
@@ -377,8 +360,8 @@ t_config *default_config(void) {
 	config->monitor_directory  = WORK_DIR"/monitor";
 #endif
 
-#ifdef ENABLE_SSL
-	config->min_ssl_version    = SSL_MINOR_VERSION_1;
+#ifdef ENABLE_TLS
+	config->min_tls_version    = SSL_MINOR_VERSION_1;
 	config->dh_size            = 2048;
 	config->ca_certificates    = NULL;
 #endif
@@ -451,18 +434,6 @@ static int parse_mode(char *line, mode_t *mode) {
 		mod = (8 * mod) + (line[i] - '0');
 	}
 	*mode = mod;
-
-	return 0;
-}
-
-static int parse_yesno(char *yesno, bool *result) {
-	if ((strcmp(yesno, "no") == 0) || (strcmp(yesno, "false") == 0)) {
-		*result = false;
-	} else if ((strcmp(yesno, "yes") == 0) || (strcmp(yesno, "true") == 0)) {
-		*result = true;
-	} else {
-		return -1;
-	}
 
 	return 0;
 }
@@ -715,13 +686,13 @@ next_host:
 	}
 
 	if ((config->first_host->required_binding.size > 0)
-#ifdef ENABLE_SSL
-		|| (config->first_host->require_ssl == true)
+#ifdef ENABLE_TLS
+		|| (config->first_host->require_tls == true)
 #endif
 	) {
 		fprintf(stderr,
-#ifdef ENABLE_SSL
-			"RequireSSL and "
+#ifdef ENABLE_TLS
+			"RequireTLS and "
 #endif
 			"RequiredBinding not allowed outside VirtualHost section.\n");
 		return -1;
@@ -794,9 +765,9 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		} else if ((config->ban_on_wrong_password = str_to_int(rest)) > 0) {
 			return true;
 		}
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 	} else if (strcmp(key, "cacertificates") == 0) {
-		if (ssl_load_ca_root_certs(value, &(config->ca_certificates)) == 0) {
+		if (tls_load_ca_root_certs(value, &(config->ca_certificates)) == 0) {
 			return true;
 		}
 #endif
@@ -886,7 +857,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			return true;
 		}
 
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 	} else if (strcmp(key, "dhsize") == 0) {
 		if (strcmp(value, "1024") == 0) {
 			config->dh_size = 1024;
@@ -938,6 +909,10 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		if ((config->logfile_mask = parse_accesslist(value, false, config->logfile_mask)) != NULL) {
 			return true;
 		}
+	} else if (strcmp(key, "logtimeouts") == 0) {
+		if (parse_yesno(value, &(config->log_timeouts)) == 0) {
+			return true;
+		}
 #ifdef ENABLE_LOADCHECK
 	} else if (strcmp(key, "maxserverload") == 0) {
 		if ((config->max_server_load = atof(value)) > 0) {
@@ -955,16 +930,16 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		if ((config->mimetype_config = strdup(value)) != NULL) {
 			return true;
 		}
-#ifdef ENABLE_SSL
-	} else if (strcmp(key, "minsslversion") == 0) {
-		if (strcasecmp(value, "tls1.0") == 0) { 
-			config->min_ssl_version = SSL_MINOR_VERSION_1;
+#ifdef ENABLE_TLS
+	} else if ((strcmp(key, "mintlsversion") == 0) || (strcmp(key, "minsslversion") == 0)) {
+		if ((strcmp(value, "1.0") == 0) || (strcmp(value, "TLS1.0") == 0)) { 
+			config->min_tls_version = SSL_MINOR_VERSION_1;
 			return true;
-		} else if (strcasecmp(value, "tls1.1") == 0) { 
-			config->min_ssl_version = SSL_MINOR_VERSION_2;
+		} else if ((strcmp(value, "1.1") == 0) || (strcmp(value, "TLS1.1") == 0)) { 
+			config->min_tls_version = SSL_MINOR_VERSION_2;
 			return true;
-		} else if (strcasecmp(value, "tls1.2") == 0) { 
-			config->min_ssl_version = SSL_MINOR_VERSION_3;
+		} else if ((strcmp(value, "1.2") == 0) || (strcmp(value, "TLS1.2") == 0)) { 
+			config->min_tls_version = SSL_MINOR_VERSION_3;
 			return true;
 		}
 #endif
@@ -1179,7 +1154,7 @@ static bool user_setting(char *key, char *value, t_host *host, t_tempdata **temp
 	char *pwd = NULL, *grp = NULL;
 	t_error_handler *handler;
 	t_keyvalue *kv;
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 	char *rest;
 	int time;
 #endif
@@ -1250,10 +1225,10 @@ static bool user_setting(char *key, char *value, t_host *host, t_tempdata **temp
 		if (parse_charlist(value, &(host->required_group)) != -1) {
 			return true;
 		}
-#ifdef ENABLE_SSL
-	} else if (strcmp(key, "requiressl") == 0) {
+#ifdef ENABLE_TLS
+	} else if ((strcmp(key, "requiretls") == 0) || (strcmp(key, "requiressl") == 0)) {
 		split_string(value, &value, &rest, ',');
-		if (parse_yesno(value, &(host->require_ssl)) != 0) {
+		if (parse_yesno(value, &(host->require_tls)) != 0) {
 			return false;
 		}
 		if (rest != NULL) {
@@ -1466,7 +1441,7 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		if (parse_charlist(value, &(host->required_binding)) == 0) {
 			return true;
 		}
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 	} else if (strcmp(key, "randomheader") == 0) {
 		if ((host->random_header_length = str_to_int(value)) >= 10) {
 			if (host->random_header_length <= MAX_RANDOM_HEADER_LENGTH) {
@@ -1510,8 +1485,8 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		if (parse_yesno(value, &(host->secure_url)) == 0) {
 			return true;
 		}
-#ifdef ENABLE_SSL
-	} else if (strcmp(key, "sslcertfile") == 0) {
+#ifdef ENABLE_TLS
+	} else if ((strcmp(key, "tlscertfile") == 0) || (strcmp(key, "sslcertfile") == 0)) {
 		if ((host->key_cert_file = strdup(value)) != NULL) {
 			return true;
 		}
@@ -1529,6 +1504,12 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			host->execute_cgi = true;
 			return true;
 		}
+#ifdef ENABLE_RPROXY
+	} else if (strcmp(key, "userproxy") == 0) {
+		if (parse_charlist(value, &(host->use_rproxy)) == 0) {
+			return true;
+		}
+#endif
 #ifdef ENABLE_TOOLKIT
 	} else if (strcmp(key, "usetoolkit") == 0) {
 		if (parse_charlist(value, &(host->toolkit_rules)) == 0) {
@@ -1586,11 +1567,11 @@ static bool host_setting(char *key, char *value, t_host *host) {
 
 			if (strncmp(value, "ws://", 5) == 0) {
 				value += 5;
-#ifdef ENABLE_SSL
-				websocket->use_ssl = false;
+#ifdef ENABLE_TLS
+				websocket->use_tls = false;
 			} else if (strncmp(value, "wss://", 6) == 0) {
 				value += 6;
-				websocket->use_ssl = true;
+				websocket->use_tls = true;
 #endif
 			} else {
 				return false;
@@ -1789,7 +1770,7 @@ static bool binding_setting(char *key, char *value, t_binding *binding) {
 				return true;
 			}
 		}
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 	} else if (strcmp(key, "requiredca") == 0) {
 		split_string(value, &value, &rest, ',');
 		if ((binding->ca_cert_file = strdup(value)) != NULL) {
@@ -1800,9 +1781,9 @@ static bool binding_setting(char *key, char *value, t_binding *binding) {
 			}
 			return true;
 		}
-	} else if (strcmp(key, "sslcertfile") == 0) {
+	} else if ((strcmp(key, "tlscertfile") == 0) || (strcmp(key, "sslcertfile") == 0)) {
 		if ((binding->key_cert_file = strdup(value)) != NULL) {
-			binding->use_ssl = true;
+			binding->use_tls = true;
 			return true;
 		}
 #endif
@@ -2000,7 +1981,10 @@ int read_main_configfile(char *configfile, t_config *config, bool config_check) 
 					section = virtual_host;
 #ifdef ENABLE_TOOLKIT
 				} else if (strcmp(key, "urltoolkit") == 0) {
-					current_toolkit = new_url_toolkit();
+					if ((current_toolkit = new_url_toolkit()) == NULL) {
+						perror("new_url_toolkit()");
+						exit(EXIT_FAILURE);
+					}
 					current_toolkit->next = config->url_toolkit;
 					config->url_toolkit = current_toolkit;
 					section = url_toolkit;

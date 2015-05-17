@@ -25,7 +25,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <fcntl.h>
-#include "ssl.h"
+#include "tls.h"
 #include "libfs.h"
 #include "libstr.h"
 #include "liblist.h"
@@ -128,9 +128,9 @@ static int send_to_client(t_session *session, const char *buffer, int size) {
 			can_send = rest;
 		}
 
-#ifdef ENABLE_SSL
-		if (session->binding->use_ssl) {
-			if ((bytes_sent = ssl_send(&(session->ssl_context), (char*)(buffer + total_sent), can_send)) <= 0) {
+#ifdef ENABLE_TLS
+		if (session->binding->use_tls) {
+			if ((bytes_sent = tls_send(&(session->tls_context), (char*)(buffer + total_sent), can_send)) <= 0) {
 				bytes_sent = -1;
 			}
 		} else
@@ -144,7 +144,9 @@ static int send_to_client(t_session *session, const char *buffer, int size) {
 		if (bytes_sent == -1) {
 			if (errno != EINTR) {
 				if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
-					log_error(session, "send timeout");
+					if (session->config->log_timeouts) {
+						log_error(session, "send timeout");
+					}
 				} else if ((errno != EPIPE) && (errno != ECONNRESET)) {
 					log_error(session, "error while sending response");
 				}
@@ -205,7 +207,7 @@ int send_buffer(t_session *session, const char *buffer, int size) {
 /* Send a HTTP header to the client. Header is not closed by this function.
  */
 int send_header(t_session *session) {
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 	char random_header[MAX_RANDOM_HEADER_LENGTH + 13];
 	char *rand_set = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789PR";
 	unsigned long length, i;
@@ -373,10 +375,10 @@ int send_header(t_session *session) {
 		header = header->next;
 	}
 
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 	/* Random header
 	 */
-	if ((session->host->random_header_length > -1) && session->binding->use_ssl) {
+	if ((session->host->random_header_length > -1) && session->binding->use_tls) {
 		sprintf(random_header, "X-Random: ");
 		length = (session->host->random_header_length * ((unsigned int)rand() & MAX_RANDOM_HEADER_LENGTH_MASK)) / MAX_RANDOM_HEADER_LENGTH_MASK;
 		if (length == 0) {
@@ -396,7 +398,7 @@ int send_header(t_session *session) {
 
 	/* HTTP Strict Transport Security
 	 */
-	if ((session->host->hsts_time != NULL) && session->binding->use_ssl) {
+	if ((session->host->hsts_time != NULL) && session->binding->use_tls) {
 		if (send_buffer(session, hs_hsts, 35) == -1) {
 			return -1;
 		}
@@ -496,8 +498,8 @@ int send_http_code_header(t_session *session) {
 			}
 
 			if (session->cause_of_301 == enforce_first_hostname) {
-#ifdef ENABLE_SSL
-				if (session->binding->use_ssl || session->host->require_ssl) {
+#ifdef ENABLE_TLS
+				if (session->binding->use_tls || session->host->require_tls) {
 					if (send_buffer(session, hs_https, 8) == -1) {
 						return -1;
 					}
@@ -524,8 +526,8 @@ int send_http_code_header(t_session *session) {
 				break;
 			}
 
-#ifdef ENABLE_SSL
-			if (session->cause_of_301 == require_ssl) {
+#ifdef ENABLE_TLS
+			if (session->cause_of_301 == require_tls) {
 				if (send_buffer(session, hs_https, 8) == -1) {
 					return -1;
 				}

@@ -31,8 +31,8 @@
 #define IU_ISDIR         2
 
 typedef enum { tc_none, tc_header, tc_match, tc_method, tc_request_uri, tc_total_connections
-#ifdef ENABLE_SSL
-               , tc_use_ssl
+#ifdef ENABLE_TLS
+               , tc_use_tls
 #endif
                } t_toolkit_condition;
 typedef enum { to_none, to_ban, to_deny_access, to_expire, to_fastcgi, to_omit_request_log,
@@ -74,16 +74,17 @@ typedef struct type_toolkit_options {
 	bool caco_private;
 	int  total_connections;
 	bool log_request;
-#ifdef ENABLE_SSL
-	bool use_ssl;
+#ifdef ENABLE_TLS
+	bool use_tls;
 #endif
 	bool allow_dot_files;
 	t_url_toolkit *url_toolkit;
 	t_http_header *http_headers;
 } t_toolkit_options;
 
-t_url_toolkit *find_toolkit(char *toolkit_id, t_url_toolkit *url_toolkit);
+t_url_toolkit *select_toolkit(char *toolkit_id, t_url_toolkit *url_toolkit);
 bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit);
+t_url_toolkit *new_url_toolkit(void);
 bool toolkit_rules_oke(t_url_toolkit *url_toolkit);
 void init_toolkit_options(t_toolkit_options *options);
 int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options);

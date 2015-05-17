@@ -18,27 +18,27 @@
 
 #include <stdbool.h>
 #include <regex.h>
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 #include "polarssl/ssl.h"
 #endif
 #include "ip.h"
 #include "liblist.h"
 
 typedef struct type_rproxy {
-	regex_t   pattern;
-	bool      neg_match;
-
-#ifdef ENABLE_SSL
-	bool      use_ssl;
+	regex_t    pattern;
+	bool       neg_match;
+#ifdef ENABLE_TLS
+	bool       use_tls;
 #endif
-	char      *hostname;
-	size_t    hostname_len;
-	t_ip_addr ip_addr;
-	int       port;
-	char      *path;
-	size_t    path_len;
-	int       timeout;
-	bool      keep_alive;
+	char       *hostname;
+	size_t     hostname_len;
+	t_ip_addr  ip_addr;
+	int        port;
+	char       *path;
+	size_t     path_len;
+	int        timeout;
+	bool       keep_alive;
+	int        skip_dir;
 
 	struct type_rproxy *next;
 } t_rproxy;
@@ -56,8 +56,8 @@ typedef struct {
 	int           content_length;
 	char          *remote_user;
 	char          *uploaded_file;
-#ifdef ENABLE_SSL
-	bool          use_ssl;
+#ifdef ENABLE_TLS
+	bool          use_tls;
 #endif
 #ifdef ENABLE_CACHE
 	t_charlist    *cache_extensions;
@@ -66,9 +66,9 @@ typedef struct {
 
 typedef struct {
 	int socket;
-#ifdef ENABLE_SSL
-	bool use_ssl;
-	ssl_context ssl;
+#ifdef ENABLE_TLS
+	bool use_tls;
+	ssl_context tls_context;
 #endif
 } t_rproxy_webserver;
 
@@ -78,9 +78,9 @@ typedef struct {
 
 int init_rproxy_module(void);
 t_rproxy *rproxy_setting(char *line);
-t_rproxy *find_rproxy(t_rproxy *rproxy_list, char *uri
-#ifdef ENABLE_SSL
-	, bool use_ssl
+t_rproxy *select_rproxy(t_rproxy *rproxy_list, char *uri
+#ifdef ENABLE_TLS
+	, bool use_tls
 #endif
 	);
 bool rproxy_loop_detected(t_http_header *http_headers);

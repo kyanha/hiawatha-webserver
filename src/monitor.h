@@ -32,7 +32,8 @@ void monitor_count_bad_request(t_session *session);
 
 void monitor_count_host(t_session *session);
 void monitor_count_ban(t_session *session);
-void monitor_count_exploit(t_session *session);
+void monitor_count_exploit_attempt(t_session *session);
+void monitor_count_failed_login(t_session *session);
 void monitor_count_cgi(t_session *session, int time, bool timed_out, bool error);
 
 #endif

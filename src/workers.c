@@ -30,7 +30,7 @@
 #include "log.h"
 #include "httpauth.h"
 #include "tomahawk.h"
-#include "ssl.h"
+#include "tls.h"
 #include "cache.h"
 #include "toolkit.h"
 #include "xslt.h"
@@ -308,6 +308,67 @@ static t_access allow_client(t_session *session) {
 	return unspecified;
 }
 
+#ifdef ENABLE_TOOLKIT
+int process_url_toolkit(t_session *session, char *toolkit_id, t_toolkit_options *toolkit_options) {
+	int result;
+
+	if ((result = use_toolkit(session->uri, toolkit_id, toolkit_options)) == UT_ERROR) {
+		return 500;
+	}
+
+	if (toolkit_options->log_request == false) {
+		session->log_request = false;
+	}
+
+	if ((toolkit_options->ban > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
+		ban_ip(&(session->ip_address), toolkit_options->ban, session->config->kick_on_ban);
+		log_system(session, "Client banned because of URL match in UrlToolkit rule");
+		session->keep_alive = false;
+#ifdef ENABLE_MONITOR
+		if (session->config->monitor_enabled) {
+			monitor_count_ban(session);
+		}
+#endif
+		return 403;
+	}
+
+	session->toolkit_fastcgi = toolkit_options->fastcgi_server;
+
+	if (toolkit_options->new_url != NULL) {
+		if (register_tempdata(&(session->tempdata), toolkit_options->new_url, tc_data) == -1) {
+			free(toolkit_options->new_url);
+			log_error(session, "error registering temporary data");
+			return 500;
+		}
+		session->uri = toolkit_options->new_url;
+	}
+
+	if (result == UT_REDIRECT) {
+		if ((session->location = strdup(toolkit_options->new_url)) == NULL) {
+			return -1;
+		}
+		session->cause_of_301 = location;
+		return 301;
+	}
+
+	if (result == UT_DENY_ACCESS) {
+		log_error(session, "access denied via URL toolkit rule");
+		return 403;
+	}
+
+	if (toolkit_options->expire > -1) {
+		session->expires = toolkit_options->expire;
+		session->caco_private = toolkit_options->caco_private;
+	}
+
+	if (result == UT_EXIT) {
+		return UT_EXIT;
+	}
+
+	return 0;
+}
+#endif
+
 /* Serve the client that connected to the webserver
  */
 static int serve_client(t_session *session) {
@@ -376,8 +437,8 @@ static int serve_client(t_session *session) {
 			return 405;
 		}
 
-#ifdef ENABLE_SSL
-		if (session->binding->use_ssl) {
+#ifdef ENABLE_TLS
+		if (session->binding->use_tls) {
 			return 405;
 		}
 #endif
@@ -462,12 +523,12 @@ static int serve_client(t_session *session) {
 	}
 	session->host->access_time = session->time;
 
-#ifdef ENABLE_SSL
-	/* SSL client authentication
+#ifdef ENABLE_TLS
+	/* TLS client authentication
 	 */
-	if (session->binding->use_ssl) {
-		if ((session->host->ca_certificate != NULL) && (ssl_has_peer_cert(&(session->ssl_context)) == false)) {
-			log_error(session, "Missing client SSL certificate");
+	if (session->binding->use_tls) {
+		if ((session->host->ca_certificate != NULL) && (tls_has_peer_cert(&(session->tls_context)) == false)) {
+			log_error(session, "Missing client TLS certificate");
 			return 440;
 		}
 	}
@@ -484,16 +545,16 @@ static int serve_client(t_session *session) {
 		}
 	}
 
-	/* Enforce usage of SSL
+	/* Enforce usage of TLS
 	 */
-#ifdef ENABLE_SSL
-	if (session->host->require_ssl && (session->binding->use_ssl == false)) {
+#ifdef ENABLE_TLS
+	if (session->host->require_tls && (session->binding->use_tls == false)) {
 		if ((qmark = strchr(session->uri, '?')) != NULL) {
 			*qmark = '\0';
 			session->vars = qmark + 1;
 			session->uri_len = strlen(session->uri);
 		}
-		session->cause_of_301 = require_ssl;
+		session->cause_of_301 = require_tls;
 		return 301;
 	}
 #endif
@@ -524,7 +585,7 @@ static int serve_client(t_session *session) {
 #endif
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
-					monitor_count_exploit(session);
+					monitor_count_exploit_attempt(session);
 					monitor_event("Request body denied for %s", session->host->hostname.item[0]);
 				}
 #endif
@@ -572,9 +633,9 @@ static int serve_client(t_session *session) {
 	}
 
 #ifdef ENABLE_RPROXY
-	rproxy = find_rproxy(session->host->rproxy, session->request_uri
-#ifdef ENABLE_SSL
-		, session->binding->use_ssl
+	rproxy = select_rproxy(session->host->rproxy, session->uri
+#ifdef ENABLE_TLS
+		, session->binding->use_tls
 #endif
 		);
 
@@ -631,58 +692,17 @@ static int serve_client(t_session *session) {
 	toolkit_options.http_headers = session->http_headers;
 	toolkit_options.total_connections = total_connections;
 	toolkit_options.log_request = true;
-#ifdef ENABLE_SSL
-	toolkit_options.use_ssl = session->binding->use_ssl;
+#ifdef ENABLE_TLS
+	toolkit_options.use_tls = session->binding->use_tls;
 #endif
 
+	result = 0;
 	for (i = 0; i < session->host->toolkit_rules.size; i++) {
-		if ((result = use_toolkit(session->uri, session->host->toolkit_rules.item[i], &toolkit_options)) == UT_ERROR) {
-			return 500;
-		}
-
-		if (toolkit_options.log_request == false) {
-			session->log_request = false;
-		}
-
-		if ((toolkit_options.ban > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
-			ban_ip(&(session->ip_address), toolkit_options.ban, session->config->kick_on_ban);
-			log_system(session, "Client banned because of URL match in UrlToolkit rule");
-			session->keep_alive = false;
-#ifdef ENABLE_MONITOR
-			if (session->config->monitor_enabled) {
-				monitor_count_ban(session);
-			}
-#endif
-			return 403;
-		}
-
-		session->toolkit_fastcgi = toolkit_options.fastcgi_server;
-
-		if (toolkit_options.new_url != NULL) {
-			if (register_tempdata(&(session->tempdata), toolkit_options.new_url, tc_data) == -1) {
-				free(toolkit_options.new_url);
-				log_error(session, "error registering temporary data");
-				return 500;
-			}
-			session->uri = toolkit_options.new_url;
-		}
-
-		if (result == UT_REDIRECT) {
-			if ((session->location = strdup(toolkit_options.new_url)) == NULL) {
-				return -1;
-			}
-			session->cause_of_301 = location;
-			return 301;
-		}
-
-		if (result == UT_DENY_ACCESS) {
-			log_error(session, "access denied via URL toolkit rule");
-			return 403;
-		}
-
-		if (toolkit_options.expire > -1) {
-			session->expires = toolkit_options.expire;
-			session->caco_private = toolkit_options.caco_private;
+		result = process_url_toolkit(session, session->host->toolkit_rules.item[i], &toolkit_options);
+		if (result == UT_EXIT) {
+			break;
+		} else if (result != 0) {
+			return result;
 		}
 	}
 #endif
@@ -936,7 +956,7 @@ static void handle_timeout(t_session *session) {
 			monitor_count_ban(session);
 		}
 #endif
-	} else {
+	} else if (session->config->log_timeouts) {
 		log_system(session, "Timeout while waiting for first request");
 	}
 }
@@ -974,7 +994,7 @@ static void handle_request_result(t_session *session, int result) {
 			}
 			break;
 		case ec_CLIENT_DISCONNECTED:
-			if (session->kept_alive == 0) {
+			if ((session->kept_alive == 0) && session->config->log_timeouts) {
 				log_system(session, "Silent client disconnected");
 			}
 			break;
@@ -1141,17 +1161,17 @@ static void handle_request_result(t_session *session, int result) {
  */
 static void connection_handler(t_session *session) {
 	int result;
-#ifdef ENABLE_SSL
-	t_ssl_accept_data sad;
+#ifdef ENABLE_TLS
+	t_tls_accept_data sad;
 #endif
 
 #ifdef ENABLE_DEBUG
 	session->current_task = "thread started";
 #endif
 
-#ifdef ENABLE_SSL
-	if (session->binding->use_ssl) {
-		sad.context         = &(session->ssl_context);
+#ifdef ENABLE_TLS
+	if (session->binding->use_tls) {
+		sad.context         = &(session->tls_context);
 		sad.client_fd       = &(session->client_socket);
 		sad.private_key     = session->binding->private_key;
 		sad.certificate     = session->binding->certificate;
@@ -1159,22 +1179,22 @@ static void connection_handler(t_session *session) {
 		sad.ca_crl          = session->binding->ca_crl;
 
 		sad.timeout         = session->kept_alive == 0 ? session->binding->time_for_1st_request : session->binding->time_for_request;
-		sad.min_ssl_version = session->config->min_ssl_version;
+		sad.min_tls_version = session->config->min_tls_version;
 		sad.dh_size         = session->config->dh_size;
 #ifdef ENABLE_DEBUG
 		sad.thread_id       = session->thread_id;
 		session->current_task = "ssl accept";
 #endif
-		switch (ssl_accept(&sad)) {
+		switch (tls_accept(&sad)) {
 			case -1:
 				break;
-			case SSL_HANDSHAKE_NO_MATCH:
-				log_system(session, "No cypher overlap during SSL handshake.");
+			case TLS_HANDSHAKE_NO_MATCH:
+				log_system(session, "No cypher overlap during TLS handshake.");
 				break;
-			case SSL_HANDSHAKE_TIMEOUT:
+			case TLS_HANDSHAKE_TIMEOUT:
 				handle_timeout(session);
 				break;
-			case SSL_HANDSHAKE_OKE:
+			case TLS_HANDSHAKE_OKE:
 				session->socket_open = true;
 				break;
 		}

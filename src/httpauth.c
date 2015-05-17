@@ -29,6 +29,7 @@
 #include "liblist.h"
 #include "client.h"
 #include "httpauth.h"
+#include "monitor.h"
 #include "log.h"
 #include "polarssl/base64.h"
 #include "polarssl/md5.h"
@@ -329,11 +330,11 @@ static int basic_http_authentication(t_session *session, char *auth_str) {
 	crypt_data.initialized = 0;
 	encrypted = crypt_r(auth_passwd, salt, &crypt_data);
 
-	if (strcmp(encrypted, passwd) == 0) {
+	if (strcmp_rtap(encrypted, passwd) == 0) {
 #else
 	pthread_mutex_lock(&crypt_mutex);
 	encrypted = crypt(auth_passwd, salt);
-	cmp_result = strcmp(encrypted, passwd);
+	cmp_result = strcmp_rtap(encrypted, passwd);
 	pthread_mutex_unlock(&crypt_mutex);
 
 	if (cmp_result == 0) {
@@ -480,7 +481,7 @@ static int digest_http_authentication(t_session *session, char *auth_str) {
 
 	/* Password match?
 	 */
-	if (strcmp(result, response) != 0) {
+	if (strcmp_rtap(response, result) != 0) {
 		register_wrong_password(session);
 		return ha_DENIED;
 	}
@@ -500,6 +501,7 @@ int http_authentication_result(t_session *session, bool access_on_pwdfile_missin
 		if ((auth_str = strdup(auth_str)) == NULL) {
 			return ha_ERROR;
 		}
+
 		if ((strncmp(auth_str, "Basic ", 6) == 0) && (session->host->auth_method == basic)) {
 			session->http_auth = basic;
 			result = basic_http_authentication(session, auth_str + 6);
@@ -507,6 +509,16 @@ int http_authentication_result(t_session *session, bool access_on_pwdfile_missin
 			session->http_auth = digest;
 			result = digest_http_authentication(session, auth_str + 7);
 		}
+
+		if (result == ha_DENIED) {
+			sleep(1);
+#ifdef ENABLE_MONITOR
+			if (session->config->monitor_enabled) {
+				monitor_count_failed_login(session);
+			}
+#endif
+		}
+
 		free(auth_str);
 	}
 

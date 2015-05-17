@@ -27,10 +27,11 @@
 #include <pthread.h>
 #include "global.h"
 #include "rproxy.h"
-#include "ssl.h"
+#include "tls.h"
 #include "ip.h"
 #include "libstr.h"
 #include "libfs.h"
+#include "libstr.h"
 #include "polarssl/md5.h"
 #include "memdbg.h"
 
@@ -89,6 +90,7 @@ t_rproxy *rproxy_setting(char *line) {
 	t_rproxy *rproxy;
 	size_t len;
 	char *path, *port, *timeout, *keep_alive;
+	int skip_dir;
 
 	if (split_string(line, &path, &line, ' ') != 0) {
 		return NULL;
@@ -97,6 +99,15 @@ t_rproxy *rproxy_setting(char *line) {
 	}
 
 	split_string(line, &line, &timeout, ' ');
+
+	/* Skip directory
+	 */
+	if ((skip_dir = str_to_int(line)) != -1) {
+		split_string(timeout, &line, &timeout, ' ');
+	} else {
+		skip_dir = 0;
+	}
+
 	if (timeout != NULL) {
 		split_string(timeout, &timeout, &keep_alive, ' ');
 	} else {
@@ -106,6 +117,7 @@ t_rproxy *rproxy_setting(char *line) {
 	rproxy->next = NULL;
 	rproxy->timeout = 5;
 	rproxy->keep_alive = false;
+	rproxy->skip_dir = skip_dir;
 
 	/* Pattern
 	 */
@@ -125,11 +137,11 @@ t_rproxy *rproxy_setting(char *line) {
 	 */
 	if (strncmp(line, "http://", 7) == 0) {
 		line += 7;
-#ifdef ENABLE_SSL
-		rproxy->use_ssl = false;
+#ifdef ENABLE_TLS
+		rproxy->use_tls = false;
 	} else if (strncmp(line, "https://", 8) == 0) {
 		line += 8;
-		rproxy->use_ssl = true;
+		rproxy->use_tls = true;
 #endif
 	} else {
 		free(rproxy);
@@ -188,8 +200,8 @@ t_rproxy *rproxy_setting(char *line) {
 			return NULL;
 		}
 	} else {
-#ifdef ENABLE_SSL
-		if (rproxy->use_ssl) {
+#ifdef ENABLE_TLS
+		if (rproxy->use_tls) {
 			rproxy->port = 443;
 		} else
 #endif
@@ -251,9 +263,9 @@ t_rproxy *rproxy_setting(char *line) {
 
 /* Does URL match with proxy match pattern?
  */
-t_rproxy *find_rproxy(t_rproxy *rproxy_list, char *uri
-#ifdef ENABLE_SSL
-		, bool use_ssl
+t_rproxy *select_rproxy(t_rproxy *rproxy_list, char *uri
+#ifdef ENABLE_TLS
+		, bool use_tls
 #endif
 		) {
 	t_rproxy *rproxy;
@@ -262,16 +274,18 @@ t_rproxy *find_rproxy(t_rproxy *rproxy_list, char *uri
 		return false;
 	}
 
-#ifdef ENABLE_SSL
-	rproxy = rproxy_list;
-	while (rproxy != NULL) {
-		if (rproxy->use_ssl == use_ssl) {
-			if ((regexec(&(rproxy->pattern), uri, 0, NULL, 0) != REG_NOMATCH) != rproxy->neg_match) {
-				return rproxy;
+#ifdef ENABLE_TLS
+	if (rproxy_list->next != NULL) {
+		rproxy = rproxy_list;
+		while (rproxy != NULL) {
+			if (rproxy->use_tls == use_tls) {
+				if ((regexec(&(rproxy->pattern), uri, 0, NULL, 0) != REG_NOMATCH) != rproxy->neg_match) {
+					return rproxy;
+				}
 			}
-		}
 
-		rproxy = rproxy->next;
+			rproxy = rproxy->next;
+		}
 	}
 #endif
 
@@ -312,9 +326,9 @@ void init_rproxy_result(t_rproxy_result *result) {
 /* Send output buffer to webserver
  */
 static int send_buffer_to_webserver(t_rproxy_webserver *webserver, const char *buffer, int size) {
-#ifdef ENABLE_SSL
-	if (webserver->use_ssl) {
-		return ssl_send_buffer(&(webserver->ssl), buffer, size);
+#ifdef ENABLE_TLS
+	if (webserver->use_tls) {
+		return tls_send_buffer(&(webserver->tls_context), buffer, size);
 	} else
 #endif
 		return write_buffer(webserver->socket, buffer, size);
@@ -358,10 +372,10 @@ static int send_to_webserver(t_rproxy_webserver *webserver, t_rproxy_result *res
  */
 int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *options, t_rproxy *rproxy, t_rproxy_result *result, bool session_keep_alive) {
 	t_http_header *http_header;
-	char forwarded_for[20 + MAX_IP_STR_LEN], ip_addr[MAX_IP_STR_LEN], forwarded_port[32], *buffer, *referer;
+	char forwarded_for[20 + MAX_IP_STR_LEN], ip_addr[MAX_IP_STR_LEN], forwarded_port[32], *buffer, *referer, *uri;
 	bool forwarded_found = false;
 	t_send_buffer send_buffer;
-	int handle, bytes_read;
+	int handle, bytes_read, skip_dir;
 #ifdef ENABLE_CACHE
 	char extension[EXTENSION_SIZE];
 #endif
@@ -386,7 +400,15 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 		}
 	}
 
-	if (send_to_webserver(webserver, result, &send_buffer, options->uri, strlen(options->uri)) == -1) {
+	uri = options->uri;
+	skip_dir = rproxy->skip_dir;
+	while (skip_dir-- > 0) {
+		if ((uri = strchr(uri + 1, '/')) == NULL) {
+			uri = options->uri;
+			break;
+		}
+	}
+	if (send_to_webserver(webserver, result, &send_buffer, uri, strlen(uri)) == -1) {
 		return -1;
 	}
 
@@ -523,8 +545,8 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 	if (send_to_webserver(webserver, result, &send_buffer, "X-Forwarded-Proto: ", 19) == -1) {
 		return -1;
 	}
-#ifdef ENABLE_SSL
-	if (options->use_ssl) {
+#ifdef ENABLE_TLS
+	if (options->use_tls) {
 		if (send_to_webserver(webserver, result, &send_buffer, "https\r\n", 7) == -1) {
 			return -1;
 		}

@@ -529,7 +529,7 @@ t_filelist *sort_filelist(t_filelist *filelist) {
 				break;
 			}
 			if (newitem->is_dir == newpos->is_dir) {
-				if (strcmp(newpos->name, newitem->name) >= 0) {
+				if (strcasecmp(newpos->name, newitem->name) >= 0) {
 					break;
 				}
 			}

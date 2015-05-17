@@ -92,19 +92,22 @@ int fix_crappy_cgi_headers(t_cgi_info *cgi_info) {
 }
 
 char *find_cgi_header(char *buffer, int size, char *header) {
-	char *pos;
+	char *start, *pos;
 
 	if ((header == NULL) || (buffer == NULL)) {
 		return NULL;
 	}
 
-	if ((pos = strncasestr(buffer, header, size)) != NULL) {
-		if (pos == buffer) {
-			return buffer;
-		}
-		if (*(pos - 1) == '\n') {
+	start = buffer;
+	while ((pos = strncasestr(buffer, header, size)) != NULL) {
+		if (pos == start) {
+			return start;
+		} else if (*(pos - 1) == '\n') {
 			return pos;
 		}
+
+		size -= pos + 1 - buffer;
+		buffer = pos + 1;
 	}
 
 	return NULL;

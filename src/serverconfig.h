@@ -28,8 +28,8 @@
 #include "libfs.h"
 #include "liblist.h"
 #include "userconfig.h"
-#ifdef ENABLE_SSL
-#include "ssl.h"
+#ifdef ENABLE_TLS
+#include "tls.h"
 #include "polarssl/version.h"
 #endif
 #include "filehashes.h"
@@ -62,6 +62,7 @@ typedef struct type_monitor_host_stats {
 	off_t bytes_sent;
 	int bans;
 	int exploit_attempts;
+	int failed_logins;
 
 	int result_forbidden;
 	int result_not_found;
@@ -81,8 +82,8 @@ typedef struct type_websocket {
 	int port;
 	t_charlist path;
 	int timeout;
-#ifdef ENABLE_SSL
-	bool use_ssl;
+#ifdef ENABLE_TLS
+	bool use_tls;
 #endif
 
 	struct type_websocket *next;
@@ -143,8 +144,8 @@ typedef struct type_binding {
 	int           port;
 	t_ip_addr     interface;
 	char          *binding_id;
-#ifdef ENABLE_SSL
-	bool          use_ssl;
+#ifdef ENABLE_TLS
+	bool          use_tls;
 	char          *key_cert_file;
 	char          *ca_cert_file;
 	char          *ca_crl_file;
@@ -258,8 +259,8 @@ typedef struct type_host {
 #ifdef ENABLE_TOOLKIT
 	t_charlist      toolkit_rules;
 #endif
-#ifdef ENABLE_SSL
-    bool            require_ssl;
+#ifdef ENABLE_TLS
+    bool            require_tls;
 	char            *hsts_time;
 	char            *key_cert_file;
 	char            *ca_cert_file;
@@ -272,6 +273,7 @@ typedef struct type_host {
 #endif
 #ifdef ENABLE_RPROXY
 	t_rproxy        *rproxy;
+	t_charlist      use_rproxy;
 #endif
 	bool            prevent_sqli;
 	t_prevent       prevent_xss;
@@ -309,6 +311,7 @@ typedef struct type_config {
 	char          *server_string;
 	t_binding     *binding;
 	t_log_format  log_format;
+	bool          log_timeouts;
 	bool          anonymize_ip;
 	bool          wait_for_cgi;
 	t_charlist    cgi_extension;
@@ -403,8 +406,8 @@ typedef struct type_config {
 	char          *monitor_directory;
 	t_monitor_srv_stats monitor_srv_stats;
 #endif
-#ifdef ENABLE_SSL
-	int           min_ssl_version;
+#ifdef ENABLE_TLS
+	int           min_tls_version;
 	int           dh_size;
 	x509_crt      *ca_certificates;
 #endif

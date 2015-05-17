@@ -19,7 +19,7 @@
 #include "session.h"
 #include "memdbg.h"
 
-#define SSL_VAR_SIZE   512
+#define TLS_VAR_SIZE   512
 #define MAX_HEADER_LEN 100
 
 static int add_to_environment(t_fcgi_buffer *fcgi_buffer, char *key, char *value) {
@@ -36,10 +36,7 @@ static int add_to_environment(t_fcgi_buffer *fcgi_buffer, char *key, char *value
 	} else {
 		/* FastCGI
 		 */
-		key_len = strlen(key);
-		value_len = strlen(value);
-
-		if (value_len <= 127) {
+		if ((key_len = strlen(key)) <= 127) {
 			*buffer = (unsigned char)key_len;
 			len = 1;
 		} else {
@@ -50,7 +47,7 @@ static int add_to_environment(t_fcgi_buffer *fcgi_buffer, char *key, char *value
 			len = 4;
 		}
 
-		if (value_len <= 127) {
+		if ((value_len = strlen(value)) <= 127) {
 			*(buffer + len) = (unsigned char)value_len;
 			len++;
 		} else {
@@ -113,8 +110,8 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 	bool has_path_info = false;
 	t_http_header *http_headers;
 	t_keyvalue *envir;
-#ifdef ENABLE_SSL
-	char subject_dn[SSL_VAR_SIZE], issuer_dn[SSL_VAR_SIZE], serial_nr[SSL_VAR_SIZE];
+#ifdef ENABLE_TLS
+	char subject_dn[TLS_VAR_SIZE], issuer_dn[TLS_VAR_SIZE], serial_nr[TLS_VAR_SIZE];
 #endif
 #ifdef CYGWIN
 	char *root;
@@ -220,14 +217,14 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 		http_headers = http_headers->next;
 	}
 
-#ifdef ENABLE_SSL
-	if (session->binding->use_ssl) {
+#ifdef ENABLE_TLS
+	if (session->binding->use_tls) {
 		add_to_environment(fcgi_buffer, "HTTP_SCHEME", "https");
 		add_to_environment(fcgi_buffer, "HTTPS", "on");
 	} else {
 #endif
 		add_to_environment(fcgi_buffer, "HTTP_SCHEME", "http");
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 		add_to_environment(fcgi_buffer, "HTTPS", "off");
 	}
 #endif
@@ -255,15 +252,15 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 		envir = envir->next;
 	}
 
-#ifdef ENABLE_SSL
-	if (session->binding->use_ssl) {
-		if (get_peer_cert_info(&(session->ssl_context), subject_dn, issuer_dn, serial_nr, SSL_VAR_SIZE) == 0) {
-			add_to_environment(fcgi_buffer, "SSL_SUBJECT_DN", subject_dn);
-			add_to_environment(fcgi_buffer, "SSL_ISSUER_DN", issuer_dn);
-			add_to_environment(fcgi_buffer, "SSL_CERT_SERIAL", serial_nr);
+#ifdef ENABLE_TLS
+	if (session->binding->use_tls) {
+		if (tls_get_peer_cert_info(&(session->tls_context), subject_dn, issuer_dn, serial_nr, TLS_VAR_SIZE) == 0) {
+			add_to_environment(fcgi_buffer, "TLS_SUBJECT_DN", subject_dn);
+			add_to_environment(fcgi_buffer, "TLS_ISSUER_DN", issuer_dn);
+			add_to_environment(fcgi_buffer, "TLS_CERT_SERIAL", serial_nr);
 		}
-		add_to_environment(fcgi_buffer, "SSL_VERSION", ssl_version_string(&(session->ssl_context)));
-		add_to_environment(fcgi_buffer, "SSL_CIPHER", ssl_cipher_string(&(session->ssl_context)));
+		add_to_environment(fcgi_buffer, "TLS_VERSION", tls_version_string(&(session->tls_context)));
+		add_to_environment(fcgi_buffer, "TLS_CIPHER", tls_cipher_string(&(session->tls_context)));
 	}
 #endif
 }

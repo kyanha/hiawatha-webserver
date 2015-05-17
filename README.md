@@ -26,7 +26,7 @@ The following options for cmake are available. Default value is in uppercase.
 	-DENABLE_IPV6=ON|off               Enable IPv6 support.
 	-DENABLE_MONITOR=on|OFF            Enable support for the Hiawatha Monitor.
 	-DENABLE_RPROXY=ON|off             Enable reverse proxy support.
-	-DENABLE_SSL=ON|off                Enable SSL (mbed TLS) support.
+	-DENABLE_TLS=ON|off                Enable TLS (mbed TLS) support.
 	-DENABLE_TOMAHAWK=on|OFF           Enable Tomahawk, the Hiawatha command shell.
 	-DENABLE_TOOLKIT=ON|off            Enable the URL Toolkit.
 	-DENABLE_XSLT=ON|off               Enable XSLT support.

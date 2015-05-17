@@ -42,8 +42,12 @@ extern char *hs_x_forwarded_for;
 /* Detect chunked upload progress
  */
 static int all_chunks_uploaded(char *buffer, int size, long *chunk_size_pos) {
-	int chunk_size;
+	int chunk_size, len;
 	char *end;
+
+	if (*chunk_size_pos >= size) {
+		return -1;
+	}
 
 	if ((end = strstr(buffer + *chunk_size_pos, "\r\n")) == NULL) {
 		return 0;
@@ -54,12 +58,15 @@ static int all_chunks_uploaded(char *buffer, int size, long *chunk_size_pos) {
 
 	if (chunk_size == -1) {
 		return -1;
-	} else if (chunk_size == 0) {
-		return 1;
 	}
 
-	if (size >= (end - buffer) + chunk_size + 4) {
-		*chunk_size_pos = (end - buffer) + chunk_size + 4;
+	len = (end - buffer) + chunk_size + 4;
+	if (chunk_size == 0) {
+		if (size >= len) {
+			return 1;
+		}
+	} else if (size > len) {
+		*chunk_size_pos = len;
 		return all_chunks_uploaded(buffer, size, chunk_size_pos);
 	}
 
@@ -68,9 +75,8 @@ static int all_chunks_uploaded(char *buffer, int size, long *chunk_size_pos) {
 
 /* Merge chunks to one single content block
  */
-static long merge_chunks(char *buffer, int size, long *bytes_in_buffer) {
-	int chunk_size, ch_len;
-	long content_length = 0;
+static long merge_chunks(char *buffer, long size, long *bytes_in_buffer) {
+	long chunk_size, chunk_hf_len, content_length = 0;
 	char *end, *destination;
 
 	destination = buffer;
@@ -87,18 +93,26 @@ static long merge_chunks(char *buffer, int size, long *bytes_in_buffer) {
 			return -1;
 		}
 
-		ch_len = end - buffer + 4;
+		chunk_hf_len = end + 4 - buffer;
 
-		if (chunk_size > 0) {
-			memmove(destination, end + 2, chunk_size + 1);
+		if (chunk_hf_len + chunk_size > size) {
+			return -1;
+		}
+
+		if (chunk_size == 0) {
+			size -= chunk_hf_len;
+			if (size > 0) {
+				memmove(destination, end + 4, size);
+			}
+			*bytes_in_buffer -= chunk_hf_len;
+			*(destination + size) = '\0';
+		} else {
+			memmove(destination, end + 2, chunk_size);
 			destination += chunk_size;
-			size -= ch_len + chunk_size;
-			buffer += ch_len + chunk_size;
+			size -= chunk_hf_len + chunk_size;
+			buffer += chunk_hf_len + chunk_size;
 			content_length += chunk_size;
-			*bytes_in_buffer -= ch_len;
-		} else if (chunk_size == 0) {
-			memmove(destination, end + 4, size - ch_len + 1);
-			*bytes_in_buffer -= ch_len;
+			*bytes_in_buffer -= chunk_hf_len;
 		}
 	} while (chunk_size > 0);
 
@@ -283,15 +297,15 @@ int fetch_request(t_session *session) {
 			}
 		}
 
-#ifdef ENABLE_SSL
-		poll_result = session->binding->use_ssl ? ssl_pending(&(session->ssl_context)) : 0;
+#ifdef ENABLE_TLS
+		poll_result = session->binding->use_tls ? tls_pending(&(session->tls_context)) : 0;
 
 		if (poll_result == 0) {
 #endif
 			poll_data.fd = session->client_socket;
 			poll_data.events = POLL_EVENT_BITS;
 			poll_result = poll(&poll_data, 1, 1000);
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 		}
 #endif
 
@@ -333,9 +347,9 @@ int fetch_request(t_session *session) {
 
 				/* Read from socket.
 				 */
-#ifdef ENABLE_SSL
-				if (session->binding->use_ssl) {
-					bytes_read = ssl_receive(&(session->ssl_context), session->request + session->bytes_in_buffer,
+#ifdef ENABLE_TLS
+				if (session->binding->use_tls) {
+					bytes_read = tls_receive(&(session->tls_context), session->request + session->bytes_in_buffer,
 									session->buffer_size - session->bytes_in_buffer);
 				} else
 #endif
@@ -696,7 +710,7 @@ bool validate_url(t_session *session) {
 #endif
 #ifdef ENABLE_MONITOR
 	if (session->config->monitor_enabled) {
-		monitor_count_exploit(session);
+		monitor_count_exploit_attempt(session);
 		monitor_event("Invalid URL %s for %s", session->uri, session->host->hostname.item[0]);
 	}
 #endif
@@ -773,7 +787,7 @@ const char *http_error(int code) {
 		{428, "Precondition Required"},
 		{429, "Too Many Requests"},
 		{431, "Request Header Fields Too Large"},
-		{440, "Client SSL Certificate Required"},
+		{440, "Client TLS Certificate Required"},
 		{441, "SQL Injection Detected"},
 		{442, "Cross-Site Scripting Detected"},
 		{443, "Cross-Site Request Forgery Detected"},

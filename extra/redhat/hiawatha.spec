@@ -61,8 +61,8 @@ exit 0
 rm -rf %{buildroot}
 
 %files
-%attr(-, root, root) %{_bindir}/
-%attr(-, root, root) %{_sbindir}/
+%attr(555, root, root) %{_bindir}/
+%attr(555, root, root) %{_sbindir}/
 %attr(-, root, root) %{_libdir}/hiawatha/
 %attr(-, root, root) %{_mandir}/
 %attr(-, root, root) %{_localstatedir}/log/hiawatha/

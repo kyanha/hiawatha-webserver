@@ -11,17 +11,18 @@
 
 #include "config.h"
 
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <syslog.h>
 #include <pthread.h>
 #include <sys/socket.h>
 #include "alternative.h"
-#include "ssl.h"
+#include "tls.h"
 #include "libstr.h"
 #include "log.h"
 #include "polarssl/ctr_drbg.h"
@@ -30,7 +31,7 @@
 #include "polarssl/ssl_cache.h"
 #include "polarssl/error.h"
 #include "polarssl/version.h"
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 #include "polarssl/ssl.h"
 #include "polarssl/x509.h"
 #ifdef ENABLE_DEBUG
@@ -39,7 +40,7 @@
 #endif
 #include "memdbg.h"
 
-#define SSL_DEBUG_LEVEL          6
+#define TLS_DEBUG_LEVEL          6
 #define TIMESTAMP_SIZE          40
 #define SNI_MAX_HOSTNAME_LEN   128
 #define HS_TIMEOUT_CERT_SELECT  15
@@ -170,17 +171,17 @@ static t_sni_list *sni_list = NULL;
 static ctr_drbg_context ctr_drbg;
 static entropy_context entropy;
 #ifdef ENABLE_DEBUG
-static char *ssl_error_logfile;
+static char *tls_error_logfile;
 #endif
 static x509_crt *ca_certificates = NULL;
 
-/* Initialize SSL library
+/* Initialize TLS library
  */
 #ifdef ENABLE_DEBUG
-int init_ssl_module(x509_crt *ca_certs, char *logfile) {
-	ssl_error_logfile = logfile;
+int init_tls_module(x509_crt *ca_certs, char *logfile) {
+	tls_error_logfile = logfile;
 #else
-int init_ssl_module(x509_crt *ca_certs) {
+int init_tls_module(x509_crt *ca_certs) {
 #endif
 	ca_certificates = ca_certs;
 	char version[10];
@@ -198,7 +199,7 @@ int init_ssl_module(x509_crt *ca_certs) {
 	}
 
 #ifdef ENABLE_DEBUG
-	debug_set_threshold(SSL_DEBUG_LEVEL);
+	debug_set_threshold(TLS_DEBUG_LEVEL);
 #endif
 #endif
 
@@ -222,7 +223,7 @@ int init_ssl_module(x509_crt *ca_certs) {
 
 /* Add SNI information to list
  */
-int ssl_register_sni(t_charlist *hostname, pk_context *private_key, x509_crt *certificate,
+int tls_register_sni(t_charlist *hostname, pk_context *private_key, x509_crt *certificate,
                 x509_crt *ca_certificate, x509_crl *ca_crl) {
 	t_sni_list *sni, *last;
 
@@ -250,21 +251,21 @@ int ssl_register_sni(t_charlist *hostname, pk_context *private_key, x509_crt *ce
 	return 0;
 }
 
-/* SSL debug callback function
+/* TLS debug callback function
  */
 #ifdef ENABLE_DEBUG
-static void ssl_debug(void *thread_id, int level, const char *str) {
-	if (level >= SSL_DEBUG_LEVEL) {
+static void tls_debug(void *thread_id, int level, const char *str) {
+	if (level >= TLS_DEBUG_LEVEL) {
 		return;
 	}
 
-	log_string(ssl_error_logfile, "mbed TLS (%d): %s", *(int*)thread_id, str);
+	log_string(tls_error_logfile, "mbed TLS (%d): %s", *(int*)thread_id, str);
 }
 #endif
 
 /* Required to use random number generator functions in a multithreaded application
  */
-static int ssl_random(void *p_rng, unsigned char *output, size_t len) {
+static int tls_random(void *p_rng, unsigned char *output, size_t len) {
 	int result;
 
 	pthread_mutex_lock(&random_mutex);
@@ -274,18 +275,24 @@ static int ssl_random(void *p_rng, unsigned char *output, size_t len) {
 	return result;
 }
 
-static void print_ssl_error(char *message, int code) {
+static void print_tls_error(int code, char *message, ...) {
 	char cause[1024];
+	va_list args;
 
 	error_strerror(code, cause, 1023);
 	cause[1023] = '\0';
 
-	fprintf(stderr, "%s (-0x%X): %s\n", message, -code, cause);
+	va_start(args, message);
+
+	vfprintf(stderr, message, args);
+	fprintf(stderr, ": %s (-0x%X)\n", cause, -code);
+
+	va_end(args);
 }
 
 /* Load private key and certificate from file
  */
-int ssl_load_key_cert(char *file, pk_context **private_key, x509_crt **certificate) {
+int tls_load_key_cert(char *file, pk_context **private_key, x509_crt **certificate) {
 	int result;
 
 	if (file == NULL) {
@@ -298,7 +305,7 @@ int ssl_load_key_cert(char *file, pk_context **private_key, x509_crt **certifica
 	pk_init(*private_key);
 
 	if ((result = pk_parse_keyfile(*private_key, file, NULL)) != 0) {
-		print_ssl_error("Error loading RSA private key", result);
+		print_tls_error(result, "Error loading RSA private key from %s", file);
 		return -1;
 	}
 
@@ -308,7 +315,7 @@ int ssl_load_key_cert(char *file, pk_context **private_key, x509_crt **certifica
 	x509_crt_init(*certificate);
 
 	if ((result = x509_crt_parse_file(*certificate, file)) != 0) {
-		print_ssl_error("Error loading X.509 certificates", result);
+		print_tls_error(result, "Error loading X.509 certificates from %s", file);
 		return -1;
 	}
 
@@ -317,7 +324,7 @@ int ssl_load_key_cert(char *file, pk_context **private_key, x509_crt **certifica
 
 /* Load CA certificate from file.
  */
-int ssl_load_ca_cert(char *file, x509_crt **ca_certificate) {
+int tls_load_ca_cert(char *file, x509_crt **ca_certificate) {
 	int result;
 
 	if (file == NULL) {
@@ -330,7 +337,7 @@ int ssl_load_ca_cert(char *file, x509_crt **ca_certificate) {
 	x509_crt_init(*ca_certificate);
 
 	if ((result = x509_crt_parse_file(*ca_certificate, file)) != 0) {
-		print_ssl_error("Error loading X.509 CA certificate", result);
+		print_tls_error(result, "Error loading X.509 CA certificate from %s", file);
 		return -1;
 	}
 
@@ -339,7 +346,7 @@ int ssl_load_ca_cert(char *file, x509_crt **ca_certificate) {
 
 /* Load CA CRL from file
  */
-int ssl_load_ca_crl(char *file, x509_crl **ca_crl) {
+int tls_load_ca_crl(char *file, x509_crl **ca_crl) {
 	int result;
 
 	if (file == NULL) {
@@ -352,7 +359,7 @@ int ssl_load_ca_crl(char *file, x509_crl **ca_crl) {
 	x509_crl_init(*ca_crl);
 
 	if ((result = x509_crl_parse_file(*ca_crl, file)) != 0) {
-		print_ssl_error("Error loading X.509 CA CRL", result);
+		print_tls_error(result, "Error loading X.509 CA CRL from %s", file);
 		return -1;
 	}
 
@@ -361,7 +368,7 @@ int ssl_load_ca_crl(char *file, x509_crl **ca_crl) {
 
 /* Load CA root certificates
  */
-int ssl_load_ca_root_certs(char *source, x509_crt **ca_root_certs) {
+int tls_load_ca_root_certs(char *source, x509_crt **ca_root_certs) {
 	if ((*ca_root_certs = (x509_crt*)malloc(sizeof(x509_crt))) == NULL) {
 		return -1;
 	}
@@ -398,7 +405,7 @@ static int sni_callback(void *sad, ssl_context *context, const unsigned char *sn
 	while (sni != NULL) {
 		for (i = 0; i < sni->hostname->size; i++) {
 			if (hostname_match(hostname, *(sni->hostname->item + i))) {
-				((t_ssl_accept_data*)sad)->timeout = HS_TIMEOUT_CERT_SELECT;
+				((t_tls_accept_data*)sad)->timeout = HS_TIMEOUT_CERT_SELECT;
 
 				/* Set private key and certificate
 				 */
@@ -406,7 +413,7 @@ static int sni_callback(void *sad, ssl_context *context, const unsigned char *sn
 					ssl_set_own_cert(context, sni->certificate, sni->private_key);
 				}
 
-				/* Set CA certificate for SSL client authentication
+				/* Set CA certificate for TLS client authentication
 				 */
 				if (sni->ca_certificate != NULL) {
 					ssl_set_authmode(context, SSL_VERIFY_REQUIRED);
@@ -423,9 +430,9 @@ static int sni_callback(void *sad, ssl_context *context, const unsigned char *sn
 	return 0;
 }
 
-/* Accept incoming SSL connection
+/* Accept incoming TLS connection
  */
-int ssl_accept(t_ssl_accept_data *sad) {
+int tls_accept(t_tls_accept_data *sad) {
 	int result, handshake;
 	struct timeval timer;
 	time_t start_time;
@@ -443,11 +450,11 @@ int ssl_accept(t_ssl_accept_data *sad) {
 		sad->timeout = HS_TIMEOUT_CERT_SELECT;
 	}
 
-	ssl_set_min_version(sad->context, SSL_MAJOR_VERSION_3, sad->min_ssl_version);
+	ssl_set_min_version(sad->context, SSL_MAJOR_VERSION_3, sad->min_tls_version);
 	ssl_set_renegotiation(sad->context, SSL_RENEGOTIATION_DISABLED);
-	ssl_set_rng(sad->context, ssl_random, &ctr_drbg);
+	ssl_set_rng(sad->context, tls_random, &ctr_drbg);
 #ifdef ENABLE_DEBUG
-	ssl_set_dbg(sad->context, ssl_debug, &(sad->thread_id));
+	ssl_set_dbg(sad->context, tls_debug, &(sad->thread_id));
 #endif
 	ssl_set_bio(sad->context, net_recv, sad->client_fd, net_send, sad->client_fd);
 	ssl_set_sni(sad->context, sni_callback, sad);
@@ -471,28 +478,28 @@ int ssl_accept(t_ssl_accept_data *sad) {
 	setsockopt(*(sad->client_fd), SOL_SOCKET, SO_RCVTIMEO, (void*)&timer, sizeof(struct timeval));
 	start_time = time(NULL);
 
-	result = SSL_HANDSHAKE_OKE;
+	result = TLS_HANDSHAKE_OKE;
 	while ((handshake = ssl_handshake(sad->context)) != 0) {
 		if (handshake == POLARSSL_ERR_SSL_BAD_HS_PROTOCOL_VERSION) {
 			ssl_free(sad->context);
-			result = SSL_HANDSHAKE_NO_MATCH;
+			result = TLS_HANDSHAKE_NO_MATCH;
 			break;
 		}
 
 		if ((handshake != POLARSSL_ERR_NET_WANT_READ) && (handshake != POLARSSL_ERR_NET_WANT_WRITE)) {
 			ssl_free(sad->context);
-			result = SSL_HANDSHAKE_ERROR;
+			result = TLS_HANDSHAKE_ERROR;
 			break;
 		}
 
 		if (time(NULL) - start_time >= sad->timeout) {
 			ssl_free(sad->context);
-			result = SSL_HANDSHAKE_TIMEOUT;
+			result = TLS_HANDSHAKE_TIMEOUT;
 			break;
 		}
 	}
 
-	if (result == SSL_HANDSHAKE_OKE) {
+	if (result == TLS_HANDSHAKE_OKE) {
 		timer.tv_sec = 0;
 		timer.tv_usec = 0;
 		setsockopt(*(sad->client_fd), SOL_SOCKET, SO_RCVTIMEO, (void*)&timer, sizeof(struct timeval));
@@ -501,15 +508,15 @@ int ssl_accept(t_ssl_accept_data *sad) {
 	return result;
 }
 
-/* See if data from SSL connection is read to be read
+/* See if data from TLS connection is read to be read
  */
-int ssl_pending(ssl_context *ssl) {
+int tls_pending(ssl_context *ssl) {
 	return ssl_get_bytes_avail(ssl);
 }
 
-/* Read data from SSL connection
+/* Read data from TLS connection
  */
-int ssl_receive(ssl_context *ssl, char *buffer, unsigned int maxlength) {
+int tls_receive(ssl_context *ssl, char *buffer, unsigned int maxlength) {
 	int result;
 
 	do {
@@ -525,9 +532,9 @@ int ssl_receive(ssl_context *ssl, char *buffer, unsigned int maxlength) {
 	return result;
 }
 
-/* Send data via SSL connection
+/* Send data via TLS connection
  */
-int ssl_send(ssl_context *ssl, const char *buffer, unsigned int length) {
+int tls_send(ssl_context *ssl, const char *buffer, unsigned int length) {
 	int result;
 
 	do {
@@ -543,13 +550,13 @@ int ssl_send(ssl_context *ssl, const char *buffer, unsigned int length) {
 
 /* Check if peer sent a client certificate
  */
-bool ssl_has_peer_cert(ssl_context *context) {
+bool tls_has_peer_cert(ssl_context *context) {
 	return ssl_get_peer_cert(context) != NULL;
 }
 
 /* Get information from peer certificate
  */
-int get_peer_cert_info(ssl_context *context, char *subject_dn, char *issuer_dn, char *serial_nr, int length) {
+int tls_get_peer_cert_info(ssl_context *context, char *subject_dn, char *issuer_dn, char *serial_nr, int length) {
 	const x509_crt *peer_cert;
 
 	if ((peer_cert = ssl_get_peer_cert(context)) == NULL) {
@@ -580,34 +587,34 @@ int get_peer_cert_info(ssl_context *context, char *subject_dn, char *issuer_dn, 
 	return 0;
 }
 
-/* Get SSL version string
+/* Get TLS version string
  */
-char *ssl_version_string(ssl_context *context) {
+char *tls_version_string(ssl_context *context) {
 	return (char*)ssl_get_version(context);
 }
 
-/* Get SSL cipher
+/* Get TLS cipher
  */
-char *ssl_cipher_string(ssl_context *context) {
+char *tls_cipher_string(ssl_context *context) {
 	return (char*)ssl_get_ciphersuite(context);
 }
 
-/* Close SSL connection
+/* Close TLS connection
  */
-void ssl_close(ssl_context *ssl) {
+void tls_close(ssl_context *ssl) {
 	if (ssl != NULL) {
 		ssl_close_notify(ssl);
 		ssl_free(ssl);
 	}
 }
 
-/* Clean up SSL library
+/* Clean up TLS library
  */
-void ssl_shutdown(void) {
+void tls_shutdown(void) {
 	ssl_cache_free(&cache);
 }
 
-int ssl_connect(ssl_context *ssl, int *sock, char *hostname) {
+int tls_connect(ssl_context *ssl, int *sock, char *hostname) {
 #ifdef ENABLE_DEBUG
 	int no_thread_id = 0;
 #endif
@@ -628,11 +635,11 @@ int ssl_connect(ssl_context *ssl, int *sock, char *hostname) {
 
 	ssl_set_min_version(ssl, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1);
 	ssl_set_renegotiation(ssl, SSL_RENEGOTIATION_DISABLED);
-	ssl_set_rng(ssl, ssl_random, &ctr_drbg);
+	ssl_set_rng(ssl, tls_random, &ctr_drbg);
 	ssl_set_bio(ssl, net_recv, sock, net_send, sock);
 
 #ifdef ENABLE_DEBUG
-	ssl_set_dbg(ssl, ssl_debug, &no_thread_id);
+	ssl_set_dbg(ssl, tls_debug, &no_thread_id);
 #endif
 
 	if (hostname != NULL) {
@@ -641,13 +648,13 @@ int ssl_connect(ssl_context *ssl, int *sock, char *hostname) {
 
 	if (ssl_handshake(ssl) != 0) {
 		ssl_free(ssl);
-		return SSL_HANDSHAKE_ERROR;
+		return TLS_HANDSHAKE_ERROR;
 	}
 
-	return SSL_HANDSHAKE_OKE;
+	return TLS_HANDSHAKE_OKE;
 }
 
-int ssl_send_buffer(ssl_context *ssl, const char *buffer, int size) {
+int tls_send_buffer(ssl_context *ssl, const char *buffer, int size) {
 	int bytes_written, total_written = 0;
 
 	if (size <= 0) {

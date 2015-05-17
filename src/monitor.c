@@ -59,6 +59,7 @@ static void reset_host_stats(t_monitor_host_stats *stats) {
 		stats->bytes_sent = 0;
 		stats->bans = 0;
 		stats->exploit_attempts = 0;
+		stats->failed_logins = 0;
 
 		stats->result_forbidden = 0;
 		stats->result_not_found = 0;
@@ -274,14 +275,16 @@ int monitor_stats_to_buffer(t_config *config, time_t now) {
 		}
 
 		if (host->monitor_host_stats->requests + (long)host->monitor_host_stats->bytes_sent + host->monitor_host_stats->bans +
-		    host->monitor_host_stats->exploit_attempts + host->monitor_host_stats->result_forbidden +
-		    host->monitor_host_stats->result_not_found + host->monitor_host_stats->result_internal_error > 0) {
+		    host->monitor_host_stats->exploit_attempts + host->monitor_host_stats->failed_logins + 
+			host->monitor_host_stats->result_forbidden + host->monitor_host_stats->result_not_found +
+			host->monitor_host_stats->result_internal_error > 0) {
 
-			len = snprintf(str, 255, "host\t%ld\t%ld\t%s\t%d\t%ld\t%d\t%d\t%d\t%d\t%d\n",
+			len = snprintf(str, 255, "host\t%ld\t%ld\t%s\t%d\t%ld\t%d\t%d\t%d\t%d\t%d\t%d\n",
 				(long)timestamp_begin, (long)timestamp_end, host->hostname.item[0],
 				host->monitor_host_stats->requests, (long)host->monitor_host_stats->bytes_sent, host->monitor_host_stats->bans,
-				host->monitor_host_stats->exploit_attempts, host->monitor_host_stats->result_forbidden,
-				host->monitor_host_stats->result_not_found, host->monitor_host_stats->result_internal_error);
+				host->monitor_host_stats->exploit_attempts, host->monitor_host_stats->failed_logins,
+				host->monitor_host_stats->result_forbidden, host->monitor_host_stats->result_not_found,
+				host->monitor_host_stats->result_internal_error);
 
 			if (len < 255) {
 				add_string_to_buffer(str);
@@ -372,12 +375,20 @@ void monitor_count_ban(t_session *session) {
 	session->host->monitor_host_stats->bans++;
 }
 
-void monitor_count_exploit(t_session *session) {
+void monitor_count_exploit_attempt(t_session *session) {
 	if (session->host->monitor_host_stats == NULL) {
 		return;
 	}
 
 	session->host->monitor_host_stats->exploit_attempts++;
+}
+
+void monitor_count_failed_login(t_session *session) {
+	if (session->host->monitor_host_stats == NULL) {
+		return;
+	}
+
+	session->host->monitor_host_stats->failed_logins++;
 }
 
 void monitor_count_cgi(t_session *session, int runtime, bool timed_out, bool error) {

@@ -191,8 +191,8 @@ static const char **get_transform_parameters(t_session *session) {
 	if (session->config->server_string != NULL) {
 		add_parameter(params, "SERVER_SOFTWARE", session->config->server_string, &i);
 	}
-#ifdef ENABLE_SSL
-	if (session->binding->use_ssl) {
+#ifdef ENABLE_TLS
+	if (session->binding->use_tls) {
 		add_parameter(params, "HTTP_SCHEME", "https", &i);
 	} else
 #endif

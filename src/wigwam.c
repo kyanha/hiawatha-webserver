@@ -32,7 +32,7 @@
 #include "toolkit.h"
 #include "filehashes.h"
 #include "polarssl/md5.h"
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 #include "polarssl/ssl.h"
 #include "polarssl/x509.h"
 #endif
@@ -46,7 +46,7 @@
 
 #define HASH_ALGORITM HASH_MD5
 
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 #define RSA_MIN_SIZE 2048
 #endif
 
@@ -327,7 +327,7 @@ int check_main_config(char *config_dir) {
 	t_line *config = NULL, *haystack, *needles, *needle;
 	char *item, *rest, *info;
 	bool inside_section, has_dot;
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 	pk_context private_key;
 	x509_crt certificate;
 	char *last_file = NULL;
@@ -353,7 +353,12 @@ int check_main_config(char *config_dir) {
 	 */
 	//errors += find_duplicates(config, "BindingId", config_dir);
 	errors += find_duplicates(config, "FastCGIid", config_dir);
+#ifdef ENABLE_TOOLKIT
 	errors += find_duplicates(config, "ToolkitId", config_dir);
+#endif
+#ifdef ENABLE_RPROXY
+	errors += find_duplicates(config, "ProxyId", config_dir);
+#endif
 
 	/* Duplicate hostnames check
 	 */
@@ -445,6 +450,7 @@ int check_main_config(char *config_dir) {
 
 	/* Toolkit ID check
 	 */
+#ifdef ENABLE_TOOLKIT
 	haystack = search_key(config, "toolkitid");
 	needles = needle = search_key(config, "usetoolkit");
 	while (needle != NULL) {
@@ -463,6 +469,30 @@ int check_main_config(char *config_dir) {
 	}
 	dispose_result(needles, false);
 	dispose_result(haystack, false);
+#endif
+
+	/* Reverse Proxy ID check
+	 */
+#ifdef ENABLE_RPROXY
+	haystack = search_key(config, "proxyid");
+	needles = needle = search_key(config, "userproxy");
+	while (needle != NULL) {
+		if ((rest = strdup(needle->value)) == NULL) {
+			mem_error();
+		}
+		while (rest != NULL) {
+			split_string(rest, &item, &rest, ',');
+			if (in_result(item, haystack) == NULL) {
+				printf("Unknown ReverseProxy ID '%s' in VirtualHost on line %d in '%s/%s'.\n", item, needle->linenr, config_dir, needle->file);
+				errors++;
+			}
+		}
+		free(rest);
+		needle = needle->next;
+	}
+	dispose_result(needles, false);
+	dispose_result(haystack, false);
+#endif
 
 	/* Extension check
 	 */
@@ -565,10 +595,10 @@ int check_main_config(char *config_dir) {
 		haystack = haystack->next;
 	}
 
-#ifdef ENABLE_SSL
-	/* SSL checks
+#ifdef ENABLE_TLS
+	/* TLS checks
 	 */
-	needles = needle = search_key(config, "sslcertfile");
+	needles = needle = search_key(config, "tlscertfile");
 	while (needle != NULL) {
 		if (last_file != NULL) {
 			if (strcmp(needle->value, last_file) == 0) {
@@ -649,7 +679,7 @@ void check_url_toolkit(char *config_dir, char **toolkit_id) {
 	t_http_header *http_headers;
 	bool in_rule_section = false;
 	int result = 0;
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 	char *scheme;
 #endif
 
@@ -717,14 +747,14 @@ void check_url_toolkit(char *config_dir, char **toolkit_id) {
 		return;
 	}
 
-	if (*toolkit_id == NULL) {
+	if (toolkit_id == NULL) {
 		printf("No errors found in URL toolkit rules.\n");
 		return;
 	}
 
 	id = toolkit_id;
 	do {
-		if (find_toolkit(*id, url_toolkit) == false) {
+		if (select_toolkit(*id, url_toolkit) == false) {
 			printf("ToolkitID '%s' not found.\n", *id);
 			return;
 		}
@@ -760,11 +790,11 @@ void check_url_toolkit(char *config_dir, char **toolkit_id) {
 		options.website_root = ".";
 		options.url_toolkit = url_toolkit;
 		options.http_headers = http_headers;
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
 		if ((scheme = getenv("HTTP_SCHEME")) != NULL) {
-			options.use_ssl = strcmp(scheme, "https") == 0;
+			options.use_tls = strcmp(scheme, "https") == 0;
 		} else {
-			options.use_ssl = false;
+			options.use_tls = false;
 		}
 #endif
 
@@ -793,6 +823,9 @@ void check_url_toolkit(char *config_dir, char **toolkit_id) {
 			}
 			if (options.fastcgi_server != NULL) {
 				printf("Using FastCGI server: %s\n", options.fastcgi_server);
+				break;
+			}
+			if (result == UT_EXIT) {
 				break;
 			}
 			id++;

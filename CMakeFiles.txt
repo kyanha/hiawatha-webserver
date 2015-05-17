@@ -32,7 +32,7 @@ set(hiawatha_src
 	src/send.c
 	src/serverconfig.c
 	src/session.c
-	src/ssl.c
+	src/tls.c
 	src/target.c
 	src/tomahawk.c
 	src/toolkit.c
@@ -40,11 +40,11 @@ set(hiawatha_src
 	src/workers.c
 	src/xslt.c
 )
-if(NOT ENABLE_SSL AND NOT USE_SYSTEM_POLARSSL)
+if(NOT ENABLE_TLS AND NOT USE_SYSTEM_POLARSSL)
 	set(hiawatha_src ${hiawatha_src}
-		polarssl/library/base64.c
-		polarssl/library/md5.c
-		polarssl/library/sha256.c
+		mbedtls/library/base64.c
+		mbedtls/library/md5.c
+		mbedtls/library/sha256.c
 	)
 endif()
 
@@ -71,10 +71,10 @@ set(wigwam_src
 	src/toolkit.c
 	src/wigwam.c
 )
-if(NOT ENABLE_SSL AND NOT USE_SYSTEM_POLARSSL)
+if(NOT ENABLE_TLS AND NOT USE_SYSTEM_POLARSSL)
 	set(wigwam_src ${wigwam_src}
-		polarssl/library/md5.c
-		polarssl/library/sha256.c
+		mbedtls/library/md5.c
+		mbedtls/library/sha256.c
 	)
 endif()
 
