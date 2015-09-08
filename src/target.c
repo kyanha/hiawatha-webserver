@@ -1675,7 +1675,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 		webserver.use_tls = session->rproxy_use_tls;
 
 		if (webserver.use_tls) {
-			memcpy(&(webserver.tls_context), &(session->rproxy_ssl), sizeof(ssl_context));
+			memcpy(&(webserver.tls_context), &(session->rproxy_ssl), sizeof(mbedtls_ssl_context));
 		}
 #endif
 	} else {
@@ -2011,7 +2011,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 #ifdef ENABLE_TLS
 		session->rproxy_use_tls = webserver.use_tls;
 		if (session->rproxy_use_tls) {
-			memcpy(&(session->rproxy_ssl), &(webserver.tls_context), sizeof(ssl_context));
+			memcpy(&(session->rproxy_ssl), &(webserver.tls_context), sizeof(mbedtls_ssl_context));
 		}
 #endif
 	}
@@ -2046,7 +2046,7 @@ int forward_to_websocket(t_session *session) {
 	bool keep_reading = true;
 	char buffer[WS_BUFFER_SIZE];
 #ifdef ENABLE_TLS
-	ssl_context ws_tls_context;
+	mbedtls_ssl_context ws_tls_context;
 #endif
 
 	ws = session->host->websockets;

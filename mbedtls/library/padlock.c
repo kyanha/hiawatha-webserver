@@ -3,7 +3,7 @@
  *
  *  Copyright (C) 2006-2014, ARM Limited, All Rights Reserved
  *
- *  This file is part of mbed TLS (https://polarssl.org)
+ *  This file is part of mbed TLS (https://tls.mbed.org)
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -26,22 +26,28 @@
  *  programming_guide.pdf
  */
 
-#if !defined(POLARSSL_CONFIG_FILE)
-#include "polarssl/config.h"
+#if !defined(MBEDTLS_CONFIG_FILE)
+#include "mbedtls/config.h"
 #else
-#include POLARSSL_CONFIG_FILE
+#include MBEDTLS_CONFIG_FILE
 #endif
 
-#if defined(POLARSSL_PADLOCK_C)
+#if defined(MBEDTLS_PADLOCK_C)
 
-#include "polarssl/padlock.h"
+#include "mbedtls/padlock.h"
 
-#if defined(POLARSSL_HAVE_X86)
+#include <string.h>
+
+#ifndef asm
+#define asm __asm
+#endif
+
+#if defined(MBEDTLS_HAVE_X86)
 
 /*
  * PadLock detection routine
  */
-int padlock_supports( int feature )
+int mbedtls_padlock_has_support( int feature )
 {
     static int flags = -1;
     int ebx = 0, edx = 0;
@@ -72,7 +78,7 @@ int padlock_supports( int feature )
 /*
  * PadLock AES-ECB block en(de)cryption
  */
-int padlock_xcryptecb( aes_context *ctx,
+int mbedtls_padlock_xcryptecb( mbedtls_aes_context *ctx,
                        int mode,
                        const unsigned char input[16],
                        unsigned char output[16] )
@@ -84,7 +90,7 @@ int padlock_xcryptecb( aes_context *ctx,
     unsigned char buf[256];
 
     rk  = ctx->rk;
-    blk = PADLOCK_ALIGN16( buf );
+    blk = MBEDTLS_PADLOCK_ALIGN16( buf );
     memcpy( blk, input, 16 );
 
      ctrl = blk + 4;
@@ -102,7 +108,7 @@ int padlock_xcryptecb( aes_context *ctx,
          "movl    %1, %%ebx             \n\t"
          : "=m" (ebx)
          :  "m" (ebx), "m" (ctrl), "m" (rk), "m" (blk)
-         : "ecx", "edx", "esi", "edi" );
+         : "memory", "ecx", "edx", "esi", "edi" );
 
     memcpy( output, blk, 16 );
 
@@ -112,7 +118,7 @@ int padlock_xcryptecb( aes_context *ctx,
 /*
  * PadLock AES-CBC buffer en(de)cryption
  */
-int padlock_xcryptcbc( aes_context *ctx,
+int mbedtls_padlock_xcryptcbc( mbedtls_aes_context *ctx,
                        int mode,
                        size_t length,
                        unsigned char iv[16],
@@ -128,10 +134,10 @@ int padlock_xcryptcbc( aes_context *ctx,
 
     if( ( (long) input  & 15 ) != 0 ||
         ( (long) output & 15 ) != 0 )
-        return( POLARSSL_ERR_PADLOCK_DATA_MISALIGNED );
+        return( MBEDTLS_ERR_PADLOCK_DATA_MISALIGNED );
 
     rk = ctx->rk;
-    iw = PADLOCK_ALIGN16( buf );
+    iw = MBEDTLS_PADLOCK_ALIGN16( buf );
     memcpy( iw, iv, 16 );
 
      ctrl = iw + 4;
@@ -153,13 +159,13 @@ int padlock_xcryptcbc( aes_context *ctx,
          : "=m" (ebx)
          :  "m" (ebx), "m" (count), "m" (ctrl),
             "m"  (rk), "m" (input), "m" (output), "m" (iw)
-         : "eax", "ecx", "edx", "esi", "edi" );
+         : "memory", "eax", "ecx", "edx", "esi", "edi" );
 
     memcpy( iv, iw, 16 );
 
     return( 0 );
 }
 
-#endif /* POLARSSL_HAVE_X86 */
+#endif /* MBEDTLS_HAVE_X86 */
 
-#endif /* POLARSSL_PADLOCK_C */
+#endif /* MBEDTLS_PADLOCK_C */

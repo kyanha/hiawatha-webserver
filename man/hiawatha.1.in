@@ -180,8 +180,8 @@ Maximum number of simultaneous connections.
 .br
 Default = 150, example: ConnectionsTotal = 1000
 .TP
-.B DHsize = 1024|2048|4096
-Set the size of the Diffie-Hellman key.
+.B DHsize = 2048|4096|8192
+Set the size of the Diffie-Hellman keys.
 .br
 Default = 2048, example: DHsize = 4096
 .TP

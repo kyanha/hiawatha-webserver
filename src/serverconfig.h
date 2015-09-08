@@ -30,7 +30,7 @@
 #include "userconfig.h"
 #ifdef ENABLE_TLS
 #include "tls.h"
-#include "polarssl/version.h"
+#include "mbedtls/version.h"
 #endif
 #include "filehashes.h"
 
@@ -149,10 +149,11 @@ typedef struct type_binding {
 	char          *key_cert_file;
 	char          *ca_cert_file;
 	char          *ca_crl_file;
-	pk_context    *private_key;
-	x509_crt      *certificate;
-	x509_crt      *ca_certificate;
-	x509_crl      *ca_crl;
+	mbedtls_ssl_config *tls_config;
+	mbedtls_pk_context *private_key;
+	mbedtls_x509_crt   *certificate;
+	mbedtls_x509_crt   *ca_certificate;
+	mbedtls_x509_crl   *ca_crl;
 #endif
 
 #ifdef HAVE_ACCF
@@ -265,10 +266,10 @@ typedef struct type_host {
 	char            *key_cert_file;
 	char            *ca_cert_file;
 	char            *ca_crl_file;
-	pk_context      *private_key;
-	x509_crt        *certificate;
-	x509_crt        *ca_certificate;
-	x509_crl        *ca_crl;
+	mbedtls_pk_context *private_key;
+	mbedtls_x509_crt   *certificate;
+	mbedtls_x509_crt   *ca_certificate;
+	mbedtls_x509_crl   *ca_crl;
 	int             random_header_length;
 #endif
 #ifdef ENABLE_RPROXY
@@ -330,9 +331,6 @@ typedef struct type_config {
 	char          *system_logfile;
 	char          *garbage_logfile;
 	char          *exploit_logfile;
-#ifdef ENABLE_DEBUG
-	char          *debug_logfile;
-#endif
 	char          *pidfile;
 	t_accesslist  *logfile_mask;
 	char          *user_directory;
@@ -406,10 +404,11 @@ typedef struct type_config {
 	char          *monitor_directory;
 	t_monitor_srv_stats monitor_srv_stats;
 #endif
+
 #ifdef ENABLE_TLS
-	int           min_tls_version;
-	int           dh_size;
-	x509_crt      *ca_certificates;
+	int              min_tls_version;
+	int              dh_size;
+	mbedtls_x509_crt *ca_certificates;
 #endif
 } t_config;
 

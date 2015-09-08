@@ -3,7 +3,7 @@
  *
  *  Copyright (C) 2006-2014, ARM Limited, All Rights Reserved
  *
- *  This file is part of mbed TLS (https://polarssl.org)
+ *  This file is part of mbed TLS (https://tls.mbed.org)
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,34 +20,32 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#if !defined(POLARSSL_CONFIG_FILE)
-#include "polarssl/config.h"
+#if !defined(MBEDTLS_CONFIG_FILE)
+#include "mbedtls/config.h"
 #else
-#include POLARSSL_CONFIG_FILE
+#include MBEDTLS_CONFIG_FILE
 #endif
 
-#if defined(POLARSSL_VERSION_C)
+#if defined(MBEDTLS_VERSION_C)
 
-#include "polarssl/version.h"
+#include "mbedtls/version.h"
 #include <string.h>
 
-const char version[] = POLARSSL_VERSION_STRING;
-
-unsigned int version_get_number()
+unsigned int mbedtls_version_get_number()
 {
-    return( POLARSSL_VERSION_NUMBER );
+    return( MBEDTLS_VERSION_NUMBER );
 }
 
-void version_get_string( char *string )
+void mbedtls_version_get_string( char *string )
 {
-    memcpy( string, POLARSSL_VERSION_STRING,
-            sizeof( POLARSSL_VERSION_STRING ) );
+    memcpy( string, MBEDTLS_VERSION_STRING,
+            sizeof( MBEDTLS_VERSION_STRING ) );
 }
 
-void version_get_string_full( char *string )
+void mbedtls_version_get_string_full( char *string )
 {
-    memcpy( string, POLARSSL_VERSION_STRING_FULL,
-            sizeof( POLARSSL_VERSION_STRING_FULL ) );
+    memcpy( string, MBEDTLS_VERSION_STRING_FULL,
+            sizeof( MBEDTLS_VERSION_STRING_FULL ) );
 }
 
-#endif /* POLARSSL_VERSION_C */
+#endif /* MBEDTLS_VERSION_C */

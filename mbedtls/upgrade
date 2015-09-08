@@ -1,17 +1,17 @@
-#!/bin/bash
+#!/bin/sh
 
-function mbedtls_enable {
+mbedtls_enable() {
 	if [ "$1" = "" ]; then
 		return
 	fi
-	sed -i "s/^\/\/#define ${1}$/#define ${1}/" include/polarssl/config.h
+	perl -pi -e "s/^\/\/#define ${1}$/#define ${1}/" include/mbedtls/config.h
 }
 
-function mbedtls_disable {
+mbedtls_disable() {
 	if [ "$1" = "" ]; then
 		return
 	fi
-	sed -i "s/^#define ${1}$/\/\/#define ${1}/" include/polarssl/config.h
+	perl -pi -e "s/^#define ${1}$/\/\/#define ${1}/" include/mbedtls/config.h
 }
 
 cd `dirname $0`
@@ -44,14 +44,16 @@ mv ${dir}/ChangeLog .
 mv ${dir}/include .
 mv ${dir}/library .
 
-echo "Disabling SSL3.0 and RC4."
-mbedtls_disable POLARSSL_SSL_PROTO_SSL3
-mbedtls_disable POLARSSL_ARC4_C
-mbedtls_enable  POLARSSL_REMOVE_ARC4_CIPHERSUITES
+mbedtls_enable MBEDTLS_THREADING_PTHREAD
+mbedtls_enable MBEDTLS_THREADING_C
 
-if [ -f ${version}.diff ]; then
+echo "Disabling SSL3.0 and RC4."
+mbedtls_disable MBEDTLS_SSL_PROTO_SSL3
+mbedtls_disable MBEDTLS_ARC4_C
+
+if [ -f ${version}.patch ]; then
 	echo "Applying patch."
-	patch -p1 < ${version}.diff
+	patch < ${version}.patch
 fi
 
 echo "Cleaning up."

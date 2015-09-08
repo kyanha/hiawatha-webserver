@@ -1162,7 +1162,7 @@ static void handle_request_result(t_session *session, int result) {
 static void connection_handler(t_session *session) {
 	int result;
 #ifdef ENABLE_TLS
-	t_tls_accept_data sad;
+	int timeout;
 #endif
 
 #ifdef ENABLE_DEBUG
@@ -1171,21 +1171,12 @@ static void connection_handler(t_session *session) {
 
 #ifdef ENABLE_TLS
 	if (session->binding->use_tls) {
-		sad.context         = &(session->tls_context);
-		sad.client_fd       = &(session->client_socket);
-		sad.private_key     = session->binding->private_key;
-		sad.certificate     = session->binding->certificate;
-		sad.ca_certificate  = session->binding->ca_certificate;
-		sad.ca_crl          = session->binding->ca_crl;
-
-		sad.timeout         = session->kept_alive == 0 ? session->binding->time_for_1st_request : session->binding->time_for_request;
-		sad.min_tls_version = session->config->min_tls_version;
-		sad.dh_size         = session->config->dh_size;
 #ifdef ENABLE_DEBUG
-		sad.thread_id       = session->thread_id;
 		session->current_task = "ssl accept";
 #endif
-		switch (tls_accept(&sad)) {
+
+		timeout = session->kept_alive == 0 ? session->binding->time_for_1st_request : session->binding->time_for_request;
+		switch (tls_accept(&(session->client_socket), &(session->tls_context), session->binding->tls_config, timeout)) {
 			case -1:
 				break;
 			case TLS_HANDSHAKE_NO_MATCH:

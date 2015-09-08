@@ -26,7 +26,7 @@
 #include "client.h"
 #include "workers.h"
 #include "cache.h"
-#include "polarssl/md5.h"
+#include "mbedtls/md5.h"
 #include "memdbg.h"
 
 #define MAX_IDLE_TIME   60
@@ -422,7 +422,7 @@ static int handle_admin(t_admin *admin, t_config *config) {
 			fprintf(admin->fp, "\033[A\033[K\033[m\n"); /* Move cursor up, clear line and reset color */
 
 			pwd = remove_spaces(line);
-			md5((unsigned char*)pwd, strlen(pwd), digest);
+			mbedtls_md5((unsigned char*)pwd, strlen(pwd), digest);
 			md5_bin2hex(digest, encrypted);
 			memset(line, 0, MAX_CMD_SIZE);
 

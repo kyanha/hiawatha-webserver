@@ -25,69 +25,69 @@
 #include "tls.h"
 #include "libstr.h"
 #include "log.h"
-#include "polarssl/ctr_drbg.h"
-#include "polarssl/entropy.h"
-#include "polarssl/dhm.h"
-#include "polarssl/ssl_cache.h"
-#include "polarssl/error.h"
-#include "polarssl/version.h"
-#ifdef ENABLE_TLS
-#include "polarssl/ssl.h"
-#include "polarssl/x509.h"
+#include "mbedtls/ctr_drbg.h"
+#include "mbedtls/entropy.h"
+#include "mbedtls/dhm.h"
+#include "mbedtls/ssl_cache.h"
+#include "mbedtls/error.h"
+#include "mbedtls/version.h"
+#include "mbedtls/net.h"
+#include "mbedtls/ssl.h"
+#include "mbedtls/x509.h"
 #ifdef ENABLE_DEBUG
-#include "polarssl/debug.h"
-#endif
+#include "mbedtls/debug.h"
 #endif
 #include "memdbg.h"
 
-#define TLS_DEBUG_LEVEL          6
 #define TIMESTAMP_SIZE          40
 #define SNI_MAX_HOSTNAME_LEN   128
-#define HS_TIMEOUT_CERT_SELECT  15
+#ifdef ENABLE_DEBUG
+#define TLS_DEBUG_LEVEL          6
+#endif
 
 typedef struct type_sni_list {
 	t_charlist *hostname;
-	pk_context *private_key;
-	x509_crt *certificate;
-	x509_crt *ca_certificate;
-	x509_crl *ca_crl;
+	mbedtls_pk_context *private_key;
+	mbedtls_x509_crt *certificate;
+	mbedtls_x509_crt *ca_certificate;
+	mbedtls_x509_crl *ca_crl;
 
 	struct type_sni_list *next;
 } t_sni_list;
 
 static int ciphersuites_tls10[] = {
-	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-	TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-	TLS_DHE_RSA_WITH_AES_256_CBC_SHA,
-	TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA,
-	TLS_DHE_RSA_WITH_AES_128_CBC_SHA,
-	TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA,
-	TLS_RSA_WITH_AES_256_CBC_SHA,
-	TLS_RSA_WITH_CAMELLIA_256_CBC_SHA,
-	TLS_RSA_WITH_AES_128_CBC_SHA,
-	TLS_RSA_WITH_CAMELLIA_128_CBC_SHA,
+	MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+	MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+	MBEDTLS_TLS_DHE_RSA_WITH_AES_256_CBC_SHA,
+	MBEDTLS_TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA,
+	MBEDTLS_TLS_DHE_RSA_WITH_AES_128_CBC_SHA,
+	MBEDTLS_TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA,
+	MBEDTLS_TLS_RSA_WITH_AES_256_CBC_SHA,
+	MBEDTLS_TLS_RSA_WITH_CAMELLIA_256_CBC_SHA,
+	MBEDTLS_TLS_RSA_WITH_AES_128_CBC_SHA,
+	MBEDTLS_TLS_RSA_WITH_CAMELLIA_128_CBC_SHA,
 	0
 };
 
 static int ciphersuites_tls12[] = {
-	TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-	TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-	TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384,
-	TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
-	TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_CBC_SHA384,
-	TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_CBC_SHA256,
-	TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-	TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384,
-	TLS_ECDHE_RSA_WITH_CAMELLIA_128_CBC_SHA256,
-	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,
-	TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-	TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
-	TLS_DHE_RSA_WITH_AES_256_CBC_SHA256,
-	TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256,
-	TLS_RSA_WITH_AES_256_GCM_SHA384,
-	TLS_RSA_WITH_AES_256_CBC_SHA256,
-	TLS_RSA_WITH_CAMELLIA_256_CBC_SHA256,
+	MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384,
+	MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
+	MBEDTLS_TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_CBC_SHA384,
+	MBEDTLS_TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_CBC_SHA256,
+	MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	MBEDTLS_TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384,
+	MBEDTLS_TLS_ECDHE_RSA_WITH_CAMELLIA_128_CBC_SHA256,
+	MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,
+	MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+	MBEDTLS_TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
+	MBEDTLS_TLS_DHE_RSA_WITH_AES_256_CBC_SHA256,
+	MBEDTLS_TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256,
+	MBEDTLS_TLS_RSA_WITH_AES_256_GCM_SHA384,
+	MBEDTLS_TLS_RSA_WITH_AES_256_CBC_SHA256,
+	MBEDTLS_TLS_RSA_WITH_CAMELLIA_256_CBC_SHA256,
 	0
 };
 
@@ -116,8 +116,7 @@ static char *dhm_4096_P =
 	"FFFFFFFFFFFFFFFF";
 static char *dhm_4096_G = "02";
 
-/*
-static char dhm_8192_P =
+static char *dhm_8192_P =
 	"FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1"
 	"29024E088A67CC74020BBEA63B139B22514A08798E3404DD"
 	"EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245"
@@ -162,106 +161,14 @@ static char dhm_8192_P =
 	"9558E4475677E9AA9E3050E2765694DFC81F56E880B96E71"
 	"60C980DD98EDD3DFFFFFFFFFFFFFFFFF";
 static char *dhm_8192_G = "02";
-*/
 
 static pthread_mutex_t random_mutex;
 static pthread_mutex_t cache_mutex;
-static ssl_cache_context cache;
+static mbedtls_ssl_cache_context cache;
 static t_sni_list *sni_list = NULL;
-static ctr_drbg_context ctr_drbg;
-static entropy_context entropy;
-#ifdef ENABLE_DEBUG
-static char *tls_error_logfile;
-#endif
-static x509_crt *ca_certificates = NULL;
-
-/* Initialize TLS library
- */
-#ifdef ENABLE_DEBUG
-int init_tls_module(x509_crt *ca_certs, char *logfile) {
-	tls_error_logfile = logfile;
-#else
-int init_tls_module(x509_crt *ca_certs) {
-#endif
-	ca_certificates = ca_certs;
-	char version[10];
-
-	if (version_get_number() < 0x01030A00) {
-		version_get_string(version);
-		fprintf(stderr, "This Hiawatha installation requires mbed TLS v1.3.10 and you have v%s.", version);
-		return -1;
-	}
-
-#if POLARSSL_VERSION_NUMBER >= 0x01030700
-	if (version_check_feature("POLARSSL_THREADING_PTHREAD") != 0) {
-		fprintf(stderr, "mbed TLS was compiled without the required POLARSSL_THREADING_PTHREAD compiler flag.\n");
-		return -1;
-	}
-
-#ifdef ENABLE_DEBUG
-	debug_set_threshold(TLS_DEBUG_LEVEL);
-#endif
-#endif
-
-	entropy_init(&entropy);
-	if (ctr_drbg_init(&ctr_drbg, entropy_func, &entropy, (unsigned char*)"Hiawatha_RND", 10) != 0) {
-		return -1;
-	}
-	ctr_drbg_set_prediction_resistance(&ctr_drbg, CTR_DRBG_PR_OFF);
-
-	ssl_cache_init(&cache);
-	ssl_cache_set_max_entries(&cache, 100);
-
-	if (pthread_mutex_init(&random_mutex, NULL) != 0) {
-		return -1;
-	} else if (pthread_mutex_init(&cache_mutex, NULL) != 0) {
-		return -1;
-	}
-
-	return 0;
-}
-
-/* Add SNI information to list
- */
-int tls_register_sni(t_charlist *hostname, pk_context *private_key, x509_crt *certificate,
-                x509_crt *ca_certificate, x509_crl *ca_crl) {
-	t_sni_list *sni, *last;
-
-	if ((sni = (t_sni_list*)malloc(sizeof(t_sni_list))) == NULL) {
-		return -1;
-	}
-
-	sni->hostname = hostname;
-	sni->private_key = private_key;
-	sni->certificate = certificate;
-	sni->ca_certificate = ca_certificate;
-	sni->ca_crl = ca_crl;
-	sni->next = NULL;
-
-	if (sni_list == NULL) {
-		sni_list = sni;
-	} else {
-		last = sni_list;
-		while (last->next != NULL) {
-			last = last->next;
-		}
-		last->next = sni;
-	}
-
-	return 0;
-}
-
-/* TLS debug callback function
- */
-#ifdef ENABLE_DEBUG
-static void tls_debug(void *thread_id, int level, const char *str) {
-	if (level >= TLS_DEBUG_LEVEL) {
-		return;
-	}
-
-	log_string(tls_error_logfile, "mbed TLS (%d): %s", *(int*)thread_id, str);
-}
-#endif
+static mbedtls_ctr_drbg_context ctr_drbg;
+static mbedtls_entropy_context entropy;
+static mbedtls_ssl_config client_config;
 
 /* Required to use random number generator functions in a multithreaded application
  */
@@ -269,127 +176,23 @@ static int tls_random(void *p_rng, unsigned char *output, size_t len) {
 	int result;
 
 	pthread_mutex_lock(&random_mutex);
-	result = ctr_drbg_random(p_rng, output, len);
+	result = mbedtls_ctr_drbg_random(p_rng, output, len);
 	pthread_mutex_unlock(&random_mutex);
 
 	return result;
 }
 
-static void print_tls_error(int code, char *message, ...) {
-	char cause[1024];
-	va_list args;
-
-	error_strerror(code, cause, 1023);
-	cause[1023] = '\0';
-
-	va_start(args, message);
-
-	vfprintf(stderr, message, args);
-	fprintf(stderr, ": %s (-0x%X)\n", cause, -code);
-
-	va_end(args);
-}
-
-/* Load private key and certificate from file
+/* TLS debug callback function
  */
-int tls_load_key_cert(char *file, pk_context **private_key, x509_crt **certificate) {
-	int result;
-
-	if (file == NULL) {
-		return -1;
-	}
-
-	if ((*private_key = (pk_context*)malloc(sizeof(pk_context))) == NULL) {
-		return -1;
-	}
-	pk_init(*private_key);
-
-	if ((result = pk_parse_keyfile(*private_key, file, NULL)) != 0) {
-		print_tls_error(result, "Error loading RSA private key from %s", file);
-		return -1;
-	}
-
-	if ((*certificate = (x509_crt*)malloc(sizeof(x509_crt))) == NULL) {
-		return -1;
-	}
-	x509_crt_init(*certificate);
-
-	if ((result = x509_crt_parse_file(*certificate, file)) != 0) {
-		print_tls_error(result, "Error loading X.509 certificates from %s", file);
-		return -1;
-	}
-
-	return 0;
+#ifdef ENABLE_DEBUG
+static void tls_debug(void UNUSED(*ctx), int level, const char *file, int line, const char *str) {
+	log_string(TLS_ERROR_LOGFILE, "mbed TLS (%d) %s,%04d: %s", level, file, line, str);
 }
-
-/* Load CA certificate from file.
- */
-int tls_load_ca_cert(char *file, x509_crt **ca_certificate) {
-	int result;
-
-	if (file == NULL) {
-		return -1;
-	}
-
-	if ((*ca_certificate = (x509_crt*)malloc(sizeof(x509_crt))) == NULL) {
-		return -1;
-	}
-	x509_crt_init(*ca_certificate);
-
-	if ((result = x509_crt_parse_file(*ca_certificate, file)) != 0) {
-		print_tls_error(result, "Error loading X.509 CA certificate from %s", file);
-		return -1;
-	}
-
-	return 0;
-}
-
-/* Load CA CRL from file
- */
-int tls_load_ca_crl(char *file, x509_crl **ca_crl) {
-	int result;
-
-	if (file == NULL) {
-		return -1;
-	}
-
-	if ((*ca_crl = (x509_crl*)malloc(sizeof(x509_crl))) == NULL) {
-		return -1;
-	}
-	x509_crl_init(*ca_crl);
-
-	if ((result = x509_crl_parse_file(*ca_crl, file)) != 0) {
-		print_tls_error(result, "Error loading X.509 CA CRL from %s", file);
-		return -1;
-	}
-
-	return 0;
-}
-
-/* Load CA root certificates
- */
-int tls_load_ca_root_certs(char *source, x509_crt **ca_root_certs) {
-	if ((*ca_root_certs = (x509_crt*)malloc(sizeof(x509_crt))) == NULL) {
-		return -1;
-	}
-	x509_crt_init(*ca_root_certs);
-
-	if (is_directory(source)) {
-		if (x509_crt_parse_path(*ca_root_certs, source) != 0) {
-			return -1;
-		}
-	} else {
-		if (x509_crt_parse_file(*ca_root_certs, source) != 0) {
-			return -1;
-		}
-	}
-
-	return 0;
-}
+#endif
 
 /* Server Name Indication callback function
  */
-static int sni_callback(void *sad, ssl_context *context, const unsigned char *sni_hostname, size_t len) {
+static int sni_callback(void UNUSED(*param), mbedtls_ssl_context *context, const unsigned char *sni_hostname, size_t len) {
 	char hostname[SNI_MAX_HOSTNAME_LEN + 1];
 	t_sni_list *sni;
 	int i;
@@ -405,19 +208,17 @@ static int sni_callback(void *sad, ssl_context *context, const unsigned char *sn
 	while (sni != NULL) {
 		for (i = 0; i < sni->hostname->size; i++) {
 			if (hostname_match(hostname, *(sni->hostname->item + i))) {
-				((t_tls_accept_data*)sad)->timeout = HS_TIMEOUT_CERT_SELECT;
-
 				/* Set private key and certificate
 				 */
 				if ((sni->private_key != NULL) && (sni->certificate != NULL)) {
-					ssl_set_own_cert(context, sni->certificate, sni->private_key);
+					mbedtls_ssl_set_hs_own_cert(context, sni->certificate, sni->private_key);
 				}
 
 				/* Set CA certificate for TLS client authentication
 				 */
 				if (sni->ca_certificate != NULL) {
-					ssl_set_authmode(context, SSL_VERIFY_REQUIRED);
-					ssl_set_ca_chain(context, sni->ca_certificate, sni->ca_crl, NULL);
+					mbedtls_ssl_set_hs_authmode(context, MBEDTLS_SSL_VERIFY_REQUIRED);
+					mbedtls_ssl_set_hs_ca_chain(context, sni->ca_certificate, sni->ca_crl);
 				}
 
 				return 0;
@@ -430,70 +231,298 @@ static int sni_callback(void *sad, ssl_context *context, const unsigned char *sn
 	return 0;
 }
 
+/* Initialize TLS library
+ */
+int init_tls_module(mbedtls_x509_crt *ca_certificates) {
+	char version[16];
+
+	if (mbedtls_version_get_number() < 0x02000000) {
+		mbedtls_version_get_string(version);
+		fprintf(stderr, "This Hiawatha installation requires at least mbed TLS v2.0.0 and you have v%s.", version);
+		return -1;
+	}
+
+	if (mbedtls_version_check_feature("MBEDTLS_THREADING_PTHREAD") != 0) {
+		fprintf(stderr, "mbed TLS was compiled without the required MBEDTLS_THREADING_PTHREAD compiler flag.\n");
+		return -1;
+	}
+
+#ifdef ENABLE_DEBUG
+	mbedtls_debug_set_threshold(TLS_DEBUG_LEVEL);
+#endif
+
+	/* Entropy settings
+	 */
+	mbedtls_entropy_init(&entropy);
+	mbedtls_ctr_drbg_init(&ctr_drbg);
+	if (mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, (unsigned char*)"Hiawatha_RND", 10) != 0) {
+		return -1;
+	}
+	mbedtls_ctr_drbg_set_prediction_resistance(&ctr_drbg, MBEDTLS_CTR_DRBG_PR_OFF);
+
+	/* Cache settings
+	 */
+	mbedtls_ssl_cache_init(&cache);
+	mbedtls_ssl_cache_set_max_entries(&cache, 100);
+
+	/* Client SSL configuratiomn
+	 */
+	mbedtls_ssl_config_init(&client_config);
+	if (mbedtls_ssl_config_defaults(&client_config, MBEDTLS_SSL_IS_CLIENT, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT) != 0) {
+		return -1;
+	}
+	mbedtls_ssl_conf_min_version(&client_config, MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_1);
+	mbedtls_ssl_conf_renegotiation(&client_config, MBEDTLS_SSL_RENEGOTIATION_DISABLED);
+	mbedtls_ssl_conf_rng(&client_config, tls_random, &ctr_drbg);
+#ifdef ENABLE_DEBUG
+	mbedtls_ssl_conf_dbg(&client_config, tls_debug, &client_config);
+#endif
+
+	if (ca_certificates == NULL) {
+		mbedtls_ssl_conf_authmode(&client_config, MBEDTLS_SSL_VERIFY_NONE);
+	} else {
+		mbedtls_ssl_conf_authmode(&client_config, MBEDTLS_SSL_VERIFY_REQUIRED);
+		mbedtls_ssl_conf_ca_chain(&client_config, ca_certificates, NULL);
+	}
+
+	if (pthread_mutex_init(&random_mutex, NULL) != 0) {
+		return -1;
+	} else if (pthread_mutex_init(&cache_mutex, NULL) != 0) {
+		return -1;
+	}
+
+	return 0;
+}
+
+int  tls_set_config(mbedtls_ssl_config **tls_config, t_tls_setup *tls_setup) {
+	if ((*tls_config = (mbedtls_ssl_config*)malloc(sizeof(mbedtls_ssl_config))) == NULL) {
+		return -1;
+	}
+
+	mbedtls_ssl_config_init(*tls_config);
+	if (mbedtls_ssl_config_defaults(*tls_config, MBEDTLS_SSL_IS_SERVER, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT) != 0) {
+		return -1;
+	}
+
+	mbedtls_ssl_conf_min_version(*tls_config, MBEDTLS_SSL_MAJOR_VERSION_3, tls_setup->min_tls_version);
+	mbedtls_ssl_conf_renegotiation(*tls_config, MBEDTLS_SSL_RENEGOTIATION_DISABLED);
+	mbedtls_ssl_conf_rng(*tls_config, tls_random, &ctr_drbg);
+	mbedtls_ssl_conf_sni(*tls_config, sni_callback, NULL);
+	mbedtls_ssl_conf_session_cache(*tls_config, &cache, mbedtls_ssl_cache_get, mbedtls_ssl_cache_set);
+#ifdef ENABLE_DEBUG
+	mbedtls_ssl_conf_dbg(*tls_config, tls_debug, &tls_config);
+#endif
+
+	mbedtls_ssl_conf_ciphersuites_for_version(*tls_config, ciphersuites_tls10, MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_1);
+	mbedtls_ssl_conf_ciphersuites_for_version(*tls_config, ciphersuites_tls10, MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_2);
+	mbedtls_ssl_conf_ciphersuites_for_version(*tls_config, ciphersuites_tls12, MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_3);
+
+	if (tls_setup->ca_certificate == NULL) {
+		mbedtls_ssl_conf_authmode(*tls_config, MBEDTLS_SSL_VERIFY_NONE);
+	} else {
+		mbedtls_ssl_conf_authmode(*tls_config, MBEDTLS_SSL_VERIFY_REQUIRED);
+		mbedtls_ssl_conf_ca_chain(*tls_config, tls_setup->ca_certificate, tls_setup->ca_crl);
+	}
+
+	mbedtls_ssl_conf_own_cert(*tls_config, tls_setup->certificate, tls_setup->private_key);
+
+	if (tls_setup->dh_size == 2048) {
+		mbedtls_ssl_conf_dh_param(*tls_config, MBEDTLS_DHM_RFC5114_MODP_2048_P, MBEDTLS_DHM_RFC5114_MODP_2048_G);
+	} else if (tls_setup->dh_size == 4096) {
+		mbedtls_ssl_conf_dh_param(*tls_config, dhm_4096_P, dhm_4096_G);
+	} else if (tls_setup->dh_size == 8192) {
+		mbedtls_ssl_conf_dh_param(*tls_config, dhm_8192_P, dhm_8192_G);
+	}
+
+	return 0;
+}
+
+/* Add SNI information to list
+ */
+int tls_register_sni(t_charlist *hostname, t_tls_setup *tls_setup) {
+	t_sni_list *sni, *last;
+
+	if ((sni = (t_sni_list*)malloc(sizeof(t_sni_list))) == NULL) {
+		return -1;
+	}
+
+	sni->hostname = hostname;
+	sni->private_key = tls_setup->private_key;
+	sni->certificate = tls_setup->certificate;
+	sni->ca_certificate = tls_setup->ca_certificate;
+	sni->ca_crl = tls_setup->ca_crl;
+	sni->next = NULL;
+
+	if (sni_list == NULL) {
+		sni_list = sni;
+	} else {
+		last = sni_list;
+		while (last->next != NULL) {
+			last = last->next;
+		}
+		last->next = sni;
+	}
+
+	return 0;
+}
+
+static void print_tls_error(int code, char *message, ...) {
+	char cause[1024];
+	va_list args;
+
+	mbedtls_strerror(code, cause, 1023);
+	cause[1023] = '\0';
+
+	va_start(args, message);
+
+	vfprintf(stderr, message, args);
+	fprintf(stderr, ": %s (-0x%X)\n", cause, -code);
+
+	va_end(args);
+}
+
+/* Load private key and certificate from file
+ */
+int tls_load_key_cert(char *file, mbedtls_pk_context **private_key, mbedtls_x509_crt **certificate) {
+	int result;
+
+	if (file == NULL) {
+		return -1;
+	}
+
+	if ((*private_key = (mbedtls_pk_context*)malloc(sizeof(mbedtls_pk_context))) == NULL) {
+		return -1;
+	}
+	mbedtls_pk_init(*private_key);
+
+	if ((result = mbedtls_pk_parse_keyfile(*private_key, file, NULL)) != 0) {
+		print_tls_error(result, "Error loading RSA private key from %s", file);
+		return -1;
+	}
+
+	if ((*certificate = (mbedtls_x509_crt*)malloc(sizeof(mbedtls_x509_crt))) == NULL) {
+		return -1;
+	}
+	mbedtls_x509_crt_init(*certificate);
+
+	if ((result = mbedtls_x509_crt_parse_file(*certificate, file)) != 0) {
+		print_tls_error(result, "Error loading X.509 certificates from %s", file);
+		return -1;
+	}
+
+	return 0;
+}
+
+/* Load CA certificate from file.
+ */
+int tls_load_ca_cert(char *file, mbedtls_x509_crt **ca_certificate) {
+	int result;
+
+	if (file == NULL) {
+		return -1;
+	}
+
+	if ((*ca_certificate = (mbedtls_x509_crt*)malloc(sizeof(mbedtls_x509_crt))) == NULL) {
+		return -1;
+	}
+	mbedtls_x509_crt_init(*ca_certificate);
+
+	if ((result = mbedtls_x509_crt_parse_file(*ca_certificate, file)) != 0) {
+		print_tls_error(result, "Error loading X.509 CA certificate from %s", file);
+		return -1;
+	}
+
+	return 0;
+}
+
+/* Load CA CRL from file
+ */
+int tls_load_ca_crl(char *file, mbedtls_x509_crl **ca_crl) {
+	int result;
+
+	if (file == NULL) {
+		return -1;
+	}
+
+	if ((*ca_crl = (mbedtls_x509_crl*)malloc(sizeof(mbedtls_x509_crl))) == NULL) {
+		return -1;
+	}
+	mbedtls_x509_crl_init(*ca_crl);
+
+	if ((result = mbedtls_x509_crl_parse_file(*ca_crl, file)) != 0) {
+		print_tls_error(result, "Error loading X.509 CA CRL from %s", file);
+		return -1;
+	}
+
+	return 0;
+}
+
+/* Load CA root certificates
+ */
+int tls_load_ca_root_certs(char *source, mbedtls_x509_crt **ca_root_certs) {
+	int result;
+	char *error_msg = "Error loading root CA certificates from %s";
+
+	if ((*ca_root_certs = (mbedtls_x509_crt*)malloc(sizeof(mbedtls_x509_crt))) == NULL) {
+		return -1;
+	}
+	mbedtls_x509_crt_init(*ca_root_certs);
+
+	if (is_directory(source)) {
+		if ((result = mbedtls_x509_crt_parse_path(*ca_root_certs, source)) != 0) {
+			print_tls_error(result, error_msg, source);
+			return -1;
+		}
+	} else {
+		if ((result = mbedtls_x509_crt_parse_file(*ca_root_certs, source)) != 0) {
+			print_tls_error(result, error_msg, source);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
 /* Accept incoming TLS connection
  */
-int tls_accept(t_tls_accept_data *sad) {
+int tls_accept(int *sock, mbedtls_ssl_context *context, mbedtls_ssl_config *config, int timeout) {
 	int result, handshake;
 	struct timeval timer;
 	time_t start_time;
 
-	if (ssl_init(sad->context) != 0) {
+	mbedtls_ssl_init(context);
+
+	if (mbedtls_ctr_drbg_reseed(&ctr_drbg, (const unsigned char*)"client thread", 13) != 0) {
 		return -1;
 	}
 
-	ssl_set_endpoint(sad->context, SSL_IS_SERVER);
-	if (sad->ca_certificate == NULL) {
-		ssl_set_authmode(sad->context, SSL_VERIFY_NONE);
-	} else {
-		ssl_set_authmode(sad->context, SSL_VERIFY_REQUIRED);
-		ssl_set_ca_chain(sad->context, sad->ca_certificate, sad->ca_crl, NULL);
-		sad->timeout = HS_TIMEOUT_CERT_SELECT;
+	if (mbedtls_ssl_setup(context, config) != 0) {
+		return -1;
 	}
 
-	ssl_set_min_version(sad->context, SSL_MAJOR_VERSION_3, sad->min_tls_version);
-	ssl_set_renegotiation(sad->context, SSL_RENEGOTIATION_DISABLED);
-	ssl_set_rng(sad->context, tls_random, &ctr_drbg);
-#ifdef ENABLE_DEBUG
-	ssl_set_dbg(sad->context, tls_debug, &(sad->thread_id));
-#endif
-	ssl_set_bio(sad->context, net_recv, sad->client_fd, net_send, sad->client_fd);
-	ssl_set_sni(sad->context, sni_callback, sad);
-	ssl_set_session_cache(sad->context, ssl_cache_get, &cache, ssl_cache_set, &cache);
+	mbedtls_ssl_set_bio(context, sock, mbedtls_net_send, mbedtls_net_recv, NULL);
 
-	ssl_set_ciphersuites_for_version(sad->context, ciphersuites_tls10, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1);
-	ssl_set_ciphersuites_for_version(sad->context, ciphersuites_tls10, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_2);
-	ssl_set_ciphersuites_for_version(sad->context, ciphersuites_tls12, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_3);
-
-	ssl_set_own_cert(sad->context, sad->certificate, sad->private_key);
-	if (sad->dh_size == 1024) {
-		ssl_set_dh_param(sad->context, POLARSSL_DHM_RFC5114_MODP_1024_P, POLARSSL_DHM_RFC5114_MODP_1024_G);
-	} else if (sad->dh_size == 2048) {
-		ssl_set_dh_param(sad->context, POLARSSL_DHM_RFC5114_MODP_2048_P, POLARSSL_DHM_RFC5114_MODP_2048_G);
-	} else if (sad->dh_size == 4096) {
-		ssl_set_dh_param(sad->context, dhm_4096_P, dhm_4096_G);
-	}
-
-	timer.tv_sec = sad->timeout;
+	timer.tv_sec = timeout;
 	timer.tv_usec = 0;
-	setsockopt(*(sad->client_fd), SOL_SOCKET, SO_RCVTIMEO, (void*)&timer, sizeof(struct timeval));
+	setsockopt(*sock, SOL_SOCKET, SO_RCVTIMEO, (void*)&timer, sizeof(struct timeval));
 	start_time = time(NULL);
 
 	result = TLS_HANDSHAKE_OKE;
-	while ((handshake = ssl_handshake(sad->context)) != 0) {
-		if (handshake == POLARSSL_ERR_SSL_BAD_HS_PROTOCOL_VERSION) {
-			ssl_free(sad->context);
+	while ((handshake = mbedtls_ssl_handshake(context)) != 0) {
+		if (handshake == MBEDTLS_ERR_SSL_BAD_HS_PROTOCOL_VERSION) {
+			mbedtls_ssl_free(context);
 			result = TLS_HANDSHAKE_NO_MATCH;
 			break;
 		}
 
-		if ((handshake != POLARSSL_ERR_NET_WANT_READ) && (handshake != POLARSSL_ERR_NET_WANT_WRITE)) {
-			ssl_free(sad->context);
+		if ((handshake != MBEDTLS_ERR_SSL_WANT_READ) && (handshake != MBEDTLS_ERR_SSL_WANT_WRITE)) {
+			mbedtls_ssl_free(context);
 			result = TLS_HANDSHAKE_ERROR;
 			break;
 		}
 
-		if (time(NULL) - start_time >= sad->timeout) {
-			ssl_free(sad->context);
+		if (time(NULL) - start_time >= timeout) {
+			mbedtls_ssl_free(context);
 			result = TLS_HANDSHAKE_TIMEOUT;
 			break;
 		}
@@ -502,7 +531,7 @@ int tls_accept(t_tls_accept_data *sad) {
 	if (result == TLS_HANDSHAKE_OKE) {
 		timer.tv_sec = 0;
 		timer.tv_usec = 0;
-		setsockopt(*(sad->client_fd), SOL_SOCKET, SO_RCVTIMEO, (void*)&timer, sizeof(struct timeval));
+		setsockopt(*sock, SOL_SOCKET, SO_RCVTIMEO, (void*)&timer, sizeof(struct timeval));
 	}
 
 	return result;
@@ -510,20 +539,20 @@ int tls_accept(t_tls_accept_data *sad) {
 
 /* See if data from TLS connection is read to be read
  */
-int tls_pending(ssl_context *ssl) {
-	return ssl_get_bytes_avail(ssl);
+int tls_pending(mbedtls_ssl_context *context) {
+	return mbedtls_ssl_get_bytes_avail(context);
 }
 
 /* Read data from TLS connection
  */
-int tls_receive(ssl_context *ssl, char *buffer, unsigned int maxlength) {
+int tls_receive(mbedtls_ssl_context *context, char *buffer, unsigned int maxlength) {
 	int result;
 
 	do {
-		result = ssl_read(ssl, (unsigned char*)buffer, maxlength);
-	} while (result == POLARSSL_ERR_NET_WANT_READ);
+		result = mbedtls_ssl_read(context, (unsigned char*)buffer, maxlength);
+	} while (result == MBEDTLS_ERR_SSL_WANT_READ);
 
-	if (result == POLARSSL_ERR_SSL_PEER_CLOSE_NOTIFY) {
+	if (result == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) {
 		return 0;
 	} else if (result < 0) {
 		return -1;
@@ -534,12 +563,12 @@ int tls_receive(ssl_context *ssl, char *buffer, unsigned int maxlength) {
 
 /* Send data via TLS connection
  */
-int tls_send(ssl_context *ssl, const char *buffer, unsigned int length) {
+int tls_send(mbedtls_ssl_context *context, const char *buffer, unsigned int length) {
 	int result;
 
 	do {
-		result = ssl_write(ssl, (unsigned char*)buffer, length);
-	} while (result == POLARSSL_ERR_NET_WANT_WRITE);
+		result = mbedtls_ssl_write(context, (unsigned char*)buffer, length);
+	} while (result == MBEDTLS_ERR_SSL_WANT_WRITE);
 
 	if (result < 0) {
 		return -1;
@@ -550,36 +579,36 @@ int tls_send(ssl_context *ssl, const char *buffer, unsigned int length) {
 
 /* Check if peer sent a client certificate
  */
-bool tls_has_peer_cert(ssl_context *context) {
-	return ssl_get_peer_cert(context) != NULL;
+bool tls_has_peer_cert(mbedtls_ssl_context *context) {
+	return mbedtls_ssl_get_peer_cert(context) != NULL;
 }
 
 /* Get information from peer certificate
  */
-int tls_get_peer_cert_info(ssl_context *context, char *subject_dn, char *issuer_dn, char *serial_nr, int length) {
-	const x509_crt *peer_cert;
+int tls_get_peer_cert_info(mbedtls_ssl_context *context, char *subject_dn, char *issuer_dn, char *serial_nr, int length) {
+	const mbedtls_x509_crt *peer_cert;
 
-	if ((peer_cert = ssl_get_peer_cert(context)) == NULL) {
+	if ((peer_cert = mbedtls_ssl_get_peer_cert(context)) == NULL) {
 		return -1;
 	}
 
 	/* Subject DN
 	 */
-	if (x509_dn_gets(subject_dn, length, &(peer_cert->subject)) == -1) {
+	if (mbedtls_x509_dn_gets(subject_dn, length, &(peer_cert->subject)) == -1) {
 		return -1;
 	}
 	subject_dn[length - 1] = '\0';
 
 	/* Issuer DN
 	 */
-	if (x509_dn_gets(issuer_dn, length, &(peer_cert->issuer)) == -1) {
+	if (mbedtls_x509_dn_gets(issuer_dn, length, &(peer_cert->issuer)) == -1) {
 		return -1;
 	}
 	issuer_dn[length - 1] = '\0';
 
 	/* Serial number
 	 */
-	if (x509_serial_gets(serial_nr, length, &(peer_cert->serial)) == -1) {
+	if (mbedtls_x509_serial_gets(serial_nr, length, &(peer_cert->serial)) == -1) {
 		return -1;
 	}
 	serial_nr[length - 1] = '\0';
@@ -589,80 +618,69 @@ int tls_get_peer_cert_info(ssl_context *context, char *subject_dn, char *issuer_
 
 /* Get TLS version string
  */
-char *tls_version_string(ssl_context *context) {
-	return (char*)ssl_get_version(context);
+char *tls_version_string(mbedtls_ssl_context *context) {
+	return (char*)mbedtls_ssl_get_version(context);
 }
 
 /* Get TLS cipher
  */
-char *tls_cipher_string(ssl_context *context) {
-	return (char*)ssl_get_ciphersuite(context);
+char *tls_cipher_string(mbedtls_ssl_context *context) {
+	return (char*)mbedtls_ssl_get_ciphersuite(context);
 }
 
 /* Close TLS connection
  */
-void tls_close(ssl_context *ssl) {
-	if (ssl != NULL) {
-		ssl_close_notify(ssl);
-		ssl_free(ssl);
+void tls_close(mbedtls_ssl_context *context) {
+	if (context != NULL) {
+		mbedtls_ssl_close_notify(context);
+		mbedtls_ssl_free(context);
 	}
 }
 
 /* Clean up TLS library
  */
 void tls_shutdown(void) {
-	ssl_cache_free(&cache);
+	mbedtls_ssl_cache_free(&cache);
 }
 
-int tls_connect(ssl_context *ssl, int *sock, char *hostname) {
-#ifdef ENABLE_DEBUG
-	int no_thread_id = 0;
-#endif
-
-	memset(ssl, 0, sizeof(ssl_context));
-	if (ssl_init(ssl) != 0) {
+/* Connect to remote server via TLS
+ */
+int tls_connect(mbedtls_ssl_context *context, int *sock, char *hostname) {
+	if (mbedtls_ctr_drbg_reseed(&ctr_drbg, (const unsigned char*)"Reverse Proxy", 13) != 0) {
 		return -1;
 	}
 
-	ssl_set_endpoint(ssl, SSL_IS_CLIENT);
+	mbedtls_ssl_init(context);
 
-	if (ca_certificates == NULL) {
-		ssl_set_authmode(ssl, SSL_VERIFY_NONE);
-	} else {
-		ssl_set_authmode(ssl, SSL_VERIFY_REQUIRED);
-		ssl_set_ca_chain(ssl, ca_certificates, NULL, hostname);
+	if (mbedtls_ssl_setup(context, &client_config) != 0) {
+		return -1;
 	}
 
-	ssl_set_min_version(ssl, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_1);
-	ssl_set_renegotiation(ssl, SSL_RENEGOTIATION_DISABLED);
-	ssl_set_rng(ssl, tls_random, &ctr_drbg);
-	ssl_set_bio(ssl, net_recv, sock, net_send, sock);
-
-#ifdef ENABLE_DEBUG
-	ssl_set_dbg(ssl, tls_debug, &no_thread_id);
-#endif
+	mbedtls_ssl_set_bio(context, sock, mbedtls_net_send, mbedtls_net_recv, NULL);
 
 	if (hostname != NULL) {
-		ssl_set_hostname(ssl, hostname);
+		mbedtls_ssl_set_hostname(context, hostname);
 	}
 
-	if (ssl_handshake(ssl) != 0) {
-		ssl_free(ssl);
+	if (mbedtls_ssl_handshake(context) != 0) {
+		mbedtls_ssl_free(context);
 		return TLS_HANDSHAKE_ERROR;
 	}
 
 	return TLS_HANDSHAKE_OKE;
 }
 
-int tls_send_buffer(ssl_context *ssl, const char *buffer, int size) {
+/* Send buffer via TLS
+ */
+int tls_send_buffer(mbedtls_ssl_context *context, const char *buffer, int size) {
 	int bytes_written, total_written = 0;
 
 	if (size <= 0) {
 		return 0;
 	} else while (total_written < size) {
-		if ((bytes_written = ssl_write(ssl, (unsigned char*)buffer + total_written, size - total_written)) > 0) {
+		if ((bytes_written = mbedtls_ssl_write(context, (unsigned char*)buffer + total_written, size - total_written)) > 0) {
 			total_written += bytes_written;
-		} else if (bytes_written != POLARSSL_ERR_NET_WANT_WRITE) {
+		} else if (bytes_written != MBEDTLS_ERR_SSL_WANT_WRITE) {
 			return -1;
 		}
 	}

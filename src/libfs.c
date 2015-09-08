@@ -274,16 +274,23 @@ int create_file(char *file, mode_t mode, uid_t UNUSED(uid), gid_t UNUSED(gid)) {
 	if (stat(file, &status) == -1) {
 		if (errno != ENOENT) {
 			return -1;
-		} else if ((fd = open(file, O_CREAT, mode)) == -1) {
+		}
+		if ((fd = open(file, O_CREAT, mode)) == -1) {
 			return -2;
 		}
 		close(fd);
+
+		if (stat(file, &status) == -1) {
+			return -2;
+		}
 	}
 
 #ifndef CYGWIN
 	if (set_protection(file, &status, mode) == -1) {
 		return -3;
-	} else if (set_ownership(file, &status, uid, gid) == -1) {
+	}
+
+	if (set_ownership(file, &status, uid, gid) == -1) {
 		return -4;
 	}
 #endif
@@ -566,7 +573,7 @@ void remove_filelist(t_filelist *filelist) {
 
 /* Send buffer to handle
  */
-int write_buffer(int handle, const char *buffer, int size) {
+int write_buffer(int handle, const char *buffer, long size) {
 	long total_written = 0;
 	ssize_t bytes_written;
 

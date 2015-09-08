@@ -24,7 +24,7 @@
 #include "session.h"
 #include "libstr.h"
 #include "challenge.h"
-#include "polarssl/sha256.h"
+#include "mbedtls/sha256.h"
 #include "send.h"
 
 #define COOKIE_SIZE 20
@@ -100,7 +100,7 @@ static int generate_cookie(t_session *session, char *cookie, size_t size) {
 	len = strlen(text);
 	memcpy(text + len, secret, SECRET_SIZE);
 	*(text + len + SECRET_SIZE) = '\0';
-	sha256((unsigned char*)text, len + SECRET_SIZE, bin_hash, 0);
+	mbedtls_sha256((unsigned char*)text, len + SECRET_SIZE, bin_hash, 0);
 	sha2_bin2hex(bin_hash, hex_hash);
 
 	memcpy(cookie, hex_hash, size - 1);

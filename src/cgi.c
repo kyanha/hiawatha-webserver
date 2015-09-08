@@ -633,20 +633,25 @@ int send_fcgi_request(t_session *session, int sock) {
 	fcgi_buffer.sock = sock;
 	fcgi_buffer.size = 0;
 
-	fcgi_buffer.mode = 4;
 	if (write_buffer(sock, "\x01\x01\x00\x01" "\x00\x08\x00\x00" "\x00\x01\x00\x00" "\x00\x00\x00\x00", 16) == -1) {
 		return -1;
 	}
+
+	fcgi_buffer.type = FCGI_PARAMS;
 	set_environment(session, &fcgi_buffer);
 	if (send_fcgi_buffer(&fcgi_buffer, NULL, 0) == -1) {
 		return -1;
 	}
 
-	fcgi_buffer.mode = 5;
+	fcgi_buffer.type = FCGI_STDIN;
 	if ((session->body != NULL) && (session->content_length > 0)) {
 		/* Send POST data to FastCGI program.
 		 */
 		if (send_fcgi_buffer(&fcgi_buffer, session->body, session->content_length) == -1) {
+			return -1;
+		}
+
+		if (send_fcgi_buffer(&fcgi_buffer, NULL, 0) == -1) {
 			return -1;
 		}
 	} else if (session->uploaded_file != NULL) {
@@ -666,10 +671,10 @@ int send_fcgi_request(t_session *session, int sock) {
 		if (bytes_read == -1) {
 			return -1;
 		}
-	}
 
-	if (send_fcgi_buffer(&fcgi_buffer, NULL, 0) == -1) {
-		return -1;
+		if (send_fcgi_buffer(&fcgi_buffer, NULL, 0) == -1) {
+			return -1;
+		}
 	}
 
 	return 0;

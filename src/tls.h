@@ -18,55 +18,47 @@
 
 #include <stdbool.h>
 #include "liblist.h"
-#include "polarssl/ssl.h"
-#include "polarssl/x509.h"
-#include "polarssl/version.h"
+#include "mbedtls/ssl.h"
+#include "mbedtls/x509.h"
+#include "mbedtls/version.h"
 
 #define TLS_HANDSHAKE_OKE       0
 #define TLS_HANDSHAKE_ERROR    -1
 #define TLS_HANDSHAKE_TIMEOUT  -2
 #define TLS_HANDSHAKE_NO_MATCH -3
 
-typedef struct {
-	ssl_context *context;
-	int         *client_fd;
-	pk_context  *private_key;
-	x509_crt    *certificate;
-	x509_crt    *ca_certificate;
-	x509_crl    *ca_crl;
-	int         timeout;
-	int         min_tls_version;
-	int         dh_size;
 #ifdef ENABLE_DEBUG
-	int         thread_id;
+#define TLS_ERROR_LOGFILE LOG_DIR"/ssl.log"
 #endif
-} t_tls_accept_data;
 
-#ifdef ENABLE_DEBUG
-int  init_tls_module(x509_crt *ca_certs, char *logfile);
-#else
-int  init_tls_module(x509_crt *ca_certs);
-#endif
-#if POLARSSL_VERSION_NUMBER >= 0x01020000
-int  tls_register_sni(t_charlist *hostname, pk_context *private_key, x509_crt *certificate,
-                  x509_crt *ca_certificate, x509_crl *ca_crl);
-#endif
-int  tls_load_key_cert(char *file, pk_context **private_key, x509_crt **certificate);
-int  tls_load_ca_cert(char *file, x509_crt **ca_certificate);
-int  tls_load_ca_crl(char *file, x509_crl **ca_crl);
-int  tls_load_ca_root_certs(char *source, x509_crt **ca_root_certs);
-int  tls_accept(t_tls_accept_data *tls_accept_data);
-int  tls_pending(ssl_context *ssl);
-int  tls_receive(ssl_context *ssl, char *buffer, unsigned int maxlength);
-int  tls_send(ssl_context *ssl, const char *buffer, unsigned int length);
-bool tls_has_peer_cert(ssl_context *context);
-int  tls_get_peer_cert_info(ssl_context *context, char *subject_dn, char *issuer_dn, char *serial_nr, int length);
-char *tls_version_string(ssl_context *context);
-char *tls_cipher_string(ssl_context *context);
-void tls_close(ssl_context *ssl);
+typedef struct {
+	mbedtls_pk_context *private_key;
+	mbedtls_x509_crt   *certificate;
+	mbedtls_x509_crt   *ca_certificate;
+	mbedtls_x509_crl   *ca_crl;
+	int                min_tls_version;
+	int                dh_size;
+} t_tls_setup;
+
+int  init_tls_module(mbedtls_x509_crt *ca_certificats);
+int  tls_set_config(mbedtls_ssl_config **tls_config, t_tls_setup *tls_setup);
+int  tls_register_sni(t_charlist *hostname, t_tls_setup *tls_setup);
+int  tls_load_key_cert(char *file, mbedtls_pk_context **private_key, mbedtls_x509_crt **certificate);
+int  tls_load_ca_cert(char *file, mbedtls_x509_crt **ca_certificate);
+int  tls_load_ca_crl(char *file, mbedtls_x509_crl **ca_crl);
+int  tls_load_ca_root_certs(char *source, mbedtls_x509_crt **ca_root_certs);
+int  tls_accept(int *sock, mbedtls_ssl_context *context, mbedtls_ssl_config *config, int timeout);
+int  tls_pending(mbedtls_ssl_context *context);
+int  tls_receive(mbedtls_ssl_context *context, char *buffer, unsigned int maxlength);
+int  tls_send(mbedtls_ssl_context *context, const char *buffer, unsigned int length);
+bool tls_has_peer_cert(mbedtls_ssl_context *context);
+int  tls_get_peer_cert_info(mbedtls_ssl_context *context, char *subject_dn, char *issuer_dn, char *serial_nr, int length);
+char *tls_version_string(mbedtls_ssl_context *context);
+char *tls_cipher_string(mbedtls_ssl_context *context);
+void tls_close(mbedtls_ssl_context *context);
 void tls_shutdown(void);
-int  tls_connect(ssl_context *ssl, int *sock, char *hostname);
-int  tls_send_buffer(ssl_context *ssl, const char *buffer, int size);
+int  tls_connect(mbedtls_ssl_context *context, int *sock, char *hostname);
+int  tls_send_buffer(mbedtls_ssl_context *context, const char *buffer, int size);
 
 #endif
 

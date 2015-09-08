@@ -22,7 +22,7 @@ typedef struct {
 	int           sock;
 	unsigned char data[FCGI_BUFFER_SIZE + 8];
 	int           size;
-	unsigned char mode;
+	unsigned char type;
 } t_fcgi_buffer;
 
 void init_send_module(void);
@@ -31,7 +31,7 @@ int send_header(t_session *session);
 int send_chunk(t_session *session, const char *chunk, int size);
 int send_http_code_header(t_session *session);
 int send_http_code_body(t_session *session);
-int send_fcgi_buffer(t_fcgi_buffer *fcgi_buffer, const char *buffer, int size);
+int send_fcgi_buffer(t_fcgi_buffer *fcgi_buffer, const char *buffer, long size);
 int send_basic_auth(t_session *session);
 int send_digest_auth(t_session *session);
 

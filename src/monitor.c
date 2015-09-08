@@ -33,6 +33,7 @@
 #define MAX_MONITOR_BUFFER_SIZE 50 * KILOBYTE
 #define MAX_TIMESTAMP_SIZE      16
 #define MAX_FILENAME_SIZE       35
+#define FLUSH_INTERVAL          MINUTE
 
 static char *monitor_buffer = NULL;
 static int monitor_buffer_size;
@@ -168,7 +169,7 @@ int init_monitor_module(t_config *config) {
 
 	reset_server_stats(&(config->monitor_srv_stats));
 
-	stats_delay = MINUTE / TASK_RUNNER_INTERVAL;
+	stats_delay = FLUSH_INTERVAL / TASK_RUNNER_INTERVAL;
 
 	if (pthread_mutex_init(&monitor_buffer_mutex, NULL) != 0) {
 		return -1;
@@ -263,7 +264,7 @@ int monitor_stats_to_buffer(t_config *config, time_t now) {
 	timer = 0;
 
 	timestamp_end = now;
-	timestamp_begin = timestamp_end - stats_delay;
+	timestamp_begin = timestamp_end - FLUSH_INTERVAL;
 
 	/* Monitor host stat
 	 */

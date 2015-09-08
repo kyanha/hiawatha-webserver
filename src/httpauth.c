@@ -31,8 +31,8 @@
 #include "httpauth.h"
 #include "monitor.h"
 #include "log.h"
-#include "polarssl/base64.h"
-#include "polarssl/md5.h"
+#include "mbedtls/base64.h"
+#include "mbedtls/md5.h"
 #include "memdbg.h"
 
 #define ha_ALLOWED   200
@@ -281,7 +281,7 @@ static int basic_http_authentication(t_session *session, char *auth_str) {
 
 	/* Decode authentication string
 	 */
-	if (base64_decode((unsigned char*)auth_user, &auth_len, (unsigned char*)auth_str, auth_len) != 0) {
+	if (mbedtls_base64_decode((unsigned char*)auth_user, auth_len, &auth_len, (unsigned char*)auth_str, auth_len) != 0) {
 		register_wrong_password(session);
 		clear_free(auth_user, auth_len);
 		return ha_DENIED;
@@ -464,7 +464,7 @@ static int digest_http_authentication(t_session *session, char *auth_str) {
 		return ha_ERROR;
 	}
 	sprintf(value, "%s:%s", session->method, uri);
-	md5((unsigned char*)value, strlen(value), digest);
+	mbedtls_md5((unsigned char*)value, strlen(value), digest);
 	md5_bin2hex(digest, A2);
 	clear_free(value, strlen(value));
 
@@ -475,7 +475,7 @@ static int digest_http_authentication(t_session *session, char *auth_str) {
 		return ha_ERROR;
 	}
 	sprintf(value, "%s:%s:%s", A1, nonce, A2);
-	md5((unsigned char*)value, strlen(value), digest);
+	mbedtls_md5((unsigned char*)value, strlen(value), digest);
 	md5_bin2hex(digest, result);
 	clear_free(value, strlen(value));
 

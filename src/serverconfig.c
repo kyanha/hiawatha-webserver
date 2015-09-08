@@ -222,6 +222,7 @@ static t_binding *new_binding(void) {
 	binding->key_cert_file        = NULL;
 	binding->ca_cert_file         = NULL;
 	binding->ca_crl_file          = NULL;
+	binding->tls_config           = NULL;
 	binding->private_key          = NULL;
 	binding->certificate          = NULL;
 	binding->ca_certificate       = NULL;
@@ -300,9 +301,6 @@ t_config *default_config(void) {
 	config->system_logfile     = LOG_DIR"/system.log";
 	config->garbage_logfile    = NULL;
 	config->exploit_logfile    = LOG_DIR"/exploit.log";
-#ifdef ENABLE_DEBUG
-	config->debug_logfile    = LOG_DIR"/debug.log";
-#endif
 	config->logfile_mask       = NULL;
 
 	config->ban_on_denied_body = 0;
@@ -361,7 +359,7 @@ t_config *default_config(void) {
 #endif
 
 #ifdef ENABLE_TLS
-	config->min_tls_version    = SSL_MINOR_VERSION_1;
+	config->min_tls_version    = MBEDTLS_SSL_MINOR_VERSION_1;
 	config->dh_size            = 2048;
 	config->ca_certificates    = NULL;
 #endif
@@ -859,14 +857,14 @@ static bool system_setting(char *key, char *value, t_config *config) {
 
 #ifdef ENABLE_TLS
 	} else if (strcmp(key, "dhsize") == 0) {
-		if (strcmp(value, "1024") == 0) {
-			config->dh_size = 1024;
-			return true;
-		} else if (strcmp(value, "2048") == 0) {
+		if (strcmp(value, "2048") == 0) {
 			config->dh_size = 2048;
 			return true;
 		} else if (strcmp(value, "4096") == 0) {
 			config->dh_size = 4096;
+			return true;
+		} else if (strcmp(value, "8192") == 0) {
+			config->dh_size = 8192;
 			return true;
 		}
 #endif
@@ -933,13 +931,13 @@ static bool system_setting(char *key, char *value, t_config *config) {
 #ifdef ENABLE_TLS
 	} else if ((strcmp(key, "mintlsversion") == 0) || (strcmp(key, "minsslversion") == 0)) {
 		if ((strcmp(value, "1.0") == 0) || (strcmp(value, "TLS1.0") == 0)) { 
-			config->min_tls_version = SSL_MINOR_VERSION_1;
+			config->min_tls_version = MBEDTLS_SSL_MINOR_VERSION_1;
 			return true;
 		} else if ((strcmp(value, "1.1") == 0) || (strcmp(value, "TLS1.1") == 0)) { 
-			config->min_tls_version = SSL_MINOR_VERSION_2;
+			config->min_tls_version = MBEDTLS_SSL_MINOR_VERSION_2;
 			return true;
 		} else if ((strcmp(value, "1.2") == 0) || (strcmp(value, "TLS1.2") == 0)) { 
-			config->min_tls_version = SSL_MINOR_VERSION_3;
+			config->min_tls_version = MBEDTLS_SSL_MINOR_VERSION_3;
 			return true;
 		}
 #endif

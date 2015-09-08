@@ -602,7 +602,7 @@ int prevent_xss(t_session *session) {
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
 					monitor_count_exploit_attempt(session);
-					monitor_event("XSS attempt for %s/%s", session->host->hostname.item[0], session->uri);
+					monitor_event("XSS attempt for %s%s", session->host->hostname.item[0], session->uri);
 				}
 #endif
 				logged = true;
@@ -686,7 +686,7 @@ static int prevent_sqli_str(t_session *session, char *str, int length) {
 #ifdef ENABLE_MONITOR
 			if (session->config->monitor_enabled) {
 				monitor_count_exploit_attempt(session);
-				monitor_event("SQLi attempt for %s/%s", session->host->hostname.item[0], session->uri);
+				monitor_event("SQLi attempt for %s%s", session->host->hostname.item[0], session->uri);
 			}
 #endif
 
@@ -797,7 +797,7 @@ int prevent_csrf(t_session *session) {
 #ifdef ENABLE_MONITOR
 	if (session->config->monitor_enabled) {
 		monitor_count_exploit_attempt(session);
-		monitor_event("CSRF attempt for %s/%s via %s", session->host->hostname.item[0], session->uri, csrf_url);
+		monitor_event("CSRF attempt for %s%s via %s", session->host->hostname.item[0], session->uri, csrf_url);
 	}
 #endif
 

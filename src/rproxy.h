@@ -19,7 +19,7 @@
 #include <stdbool.h>
 #include <regex.h>
 #ifdef ENABLE_TLS
-#include "polarssl/ssl.h"
+#include "mbedtls/ssl.h"
 #endif
 #include "ip.h"
 #include "liblist.h"
@@ -68,7 +68,7 @@ typedef struct {
 	int socket;
 #ifdef ENABLE_TLS
 	bool use_tls;
-	ssl_context tls_context;
+	mbedtls_ssl_context tls_context;
 #endif
 } t_rproxy_webserver;
 

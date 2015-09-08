@@ -30,7 +30,7 @@ The following options for cmake are available. Default value is in uppercase.
 	-DENABLE_TOMAHAWK=on|OFF           Enable Tomahawk, the Hiawatha command shell.
 	-DENABLE_TOOLKIT=ON|off            Enable the URL Toolkit.
 	-DENABLE_XSLT=ON|off               Enable XSLT support.
-	-DUSE_SYSTEM_MBEDTLS=on|OFF        Compile Hiawatha against the system's mbed TLS library (>=1.3.10).
+	-DUSE_SYSTEM_MBEDTLS=on|OFF        Compile Hiawatha against the system's mbed TLS library (>=2.0.0).
 
 The following path settings are available for cmake.
 
@@ -46,7 +46,7 @@ The following path settings are available for cmake.
 	-DWEBROOT_DIR=<path>               Webroot directory used in the default hiawatha.conf.
 	-DWORK_DIR=<path>                  Path of directory where Hiawatha can write temporary files.
 
-Look inside the directory 'extra' for scripts to build packages for Debian, MacOS X and Windows (via Cygwin).
+Look inside the directory 'extra' for scripts to build packages for Debian, Red Hat, MacOS X and Windows (via Cygwin).
 
 Related projects
 ----------------

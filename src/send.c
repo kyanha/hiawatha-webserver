@@ -39,6 +39,7 @@
 #define MAX_TO_BUFFER  1000
 #define NONCE_DIGITS     10
 #define TIMESTR_SIZE     64
+#define FCGI_CHUNK_SIZE  (64 * KILOBYTE - 8)
 
 char *hs_http10  = "HTTP/1.0 ";                  /*  9 */
 char *hs_http11  = "HTTP/1.1 ";                  /*  9 */
@@ -638,63 +639,58 @@ int send_http_code_body(t_session *session) {
 	return 0;
 }
 
-static int set_padding(t_fcgi_buffer *fcgi_buffer, bool adjust_buffer) {
+static void fcgi_set_padding(t_fcgi_buffer *fcgi_buffer) {
 	unsigned char padding;
 
-	if ((padding = (fcgi_buffer->data[5] & 7)) > 0) {
+	if ((padding = fcgi_buffer->data[5] & 7) > 0) {
 		padding = 8 - padding;
-		if (adjust_buffer) {
-			memset(fcgi_buffer->data + fcgi_buffer->size, 0, (size_t)padding);
-			fcgi_buffer->size += (int)padding;
-		}
+		memset(fcgi_buffer->data + fcgi_buffer->size, 0, (size_t)padding);
+		fcgi_buffer->size += (long)padding;
 	}
 	fcgi_buffer->data[6] = padding;
-
-	return (int)padding;
 }
 
-int send_fcgi_buffer(t_fcgi_buffer *fcgi_buffer, const char *buffer, int size) {
-	int padding;
+int send_fcgi_buffer(t_fcgi_buffer *fcgi_buffer, const char *buffer, long size) {
+	long written;
 
 	if (size > FCGI_BUFFER_SIZE) {
 		if (fcgi_buffer->size > 0) {
-			set_padding(fcgi_buffer, true);
+			fcgi_set_padding(fcgi_buffer);
 			if (write_buffer(fcgi_buffer->sock, (char*)fcgi_buffer->data, fcgi_buffer->size) == -1) {
 				return -1;
 			}
+
+			fcgi_buffer->size = 0;
 		}
 
 		memcpy(fcgi_buffer->data, "\x01\x00\x00\x01" "\xff\xff\x00\x00", 8);
-		fcgi_buffer->data[1] = fcgi_buffer->mode;
-		fcgi_buffer->data[4] = (FCGI_BUFFER_SIZE >> 8 ) & 255;
-		fcgi_buffer->data[5] = FCGI_BUFFER_SIZE & 255;
+		fcgi_buffer->data[1] = fcgi_buffer->type;
+		fcgi_buffer->data[4] = (FCGI_CHUNK_SIZE >> 8) & 255;
+		fcgi_buffer->data[5] = FCGI_CHUNK_SIZE & 255;
 
-		padding = set_padding(fcgi_buffer, false);
-		if (write_buffer(fcgi_buffer->sock, (char*)fcgi_buffer->data, 8) == -1) {
-			return -1;
-		} else if (write_buffer(fcgi_buffer->sock, buffer, FCGI_BUFFER_SIZE) == -1) {
-			return -1;
-		}
+		written = 0;
+		do {
+			if (write_buffer(fcgi_buffer->sock, (char*)fcgi_buffer->data, 8) == -1) {
+				return -1;
+			} else if (write_buffer(fcgi_buffer->sock, buffer + written, FCGI_CHUNK_SIZE) == -1) {
+				return -1;
+			}
+			written += FCGI_CHUNK_SIZE;
+		} while (size - written > FCGI_BUFFER_SIZE);
 
-		fcgi_buffer->size = 0;
-		memset(fcgi_buffer->data, 0, (size_t)padding);
-
-		if (write_buffer(fcgi_buffer->sock, (char*)fcgi_buffer->data, padding) == -1) {
-			return -1;
-		} else if (send_fcgi_buffer(fcgi_buffer, buffer + FCGI_BUFFER_SIZE, size - FCGI_BUFFER_SIZE) == -1) {
+		if (send_fcgi_buffer(fcgi_buffer, buffer + written, size - written) == -1) {
 			return -1;
 		}
 	} else if (buffer == NULL) {
 		if (fcgi_buffer->size > 0) {
-			set_padding(fcgi_buffer, true);
+			fcgi_set_padding(fcgi_buffer);
 			if (write_buffer(fcgi_buffer->sock, (char*)fcgi_buffer->data, fcgi_buffer->size) == -1) {
 				return -1;
 			}
 		}
 
 		memcpy(fcgi_buffer->data, "\x01\x00\x00\x01" "\x00\x00\x00\x00", 8);
-		fcgi_buffer->data[1] = fcgi_buffer->mode;
-		set_padding(fcgi_buffer, true);
+		fcgi_buffer->data[1] = fcgi_buffer->type;
 		if (write_buffer(fcgi_buffer->sock, (char*)fcgi_buffer->data, 8) == -1) {
 			return -1;
 		}
@@ -702,7 +698,7 @@ int send_fcgi_buffer(t_fcgi_buffer *fcgi_buffer, const char *buffer, int size) {
 		fcgi_buffer->size = 0;
 	} else {
 		if ((fcgi_buffer->size + size > FCGI_BUFFER_SIZE) && (fcgi_buffer->size > 0)) {
-			set_padding(fcgi_buffer, true);
+			fcgi_set_padding(fcgi_buffer);
 			if (write_buffer(fcgi_buffer->sock, (char*)fcgi_buffer->data, fcgi_buffer->size) == -1) {
 				return -1;
 			}
@@ -711,9 +707,10 @@ int send_fcgi_buffer(t_fcgi_buffer *fcgi_buffer, const char *buffer, int size) {
 
 		if (fcgi_buffer->size == 0) {
 			memcpy(fcgi_buffer->data, "\x01\x00\x00\x01" "\x00\x00\x00\x00", 8);
-			fcgi_buffer->data[1] = fcgi_buffer->mode;
+			fcgi_buffer->data[1] = fcgi_buffer->type;
 			fcgi_buffer->size = 8;
 		}
+
 		memcpy(fcgi_buffer->data + fcgi_buffer->size, buffer, size);
 		fcgi_buffer->size += size;
 		fcgi_buffer->data[4] = ((fcgi_buffer->size - 8) >> 8) & 255;

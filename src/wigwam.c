@@ -31,10 +31,10 @@
 #include "ip.h"
 #include "toolkit.h"
 #include "filehashes.h"
-#include "polarssl/md5.h"
+#include "mbedtls/md5.h"
 #ifdef ENABLE_TLS
-#include "polarssl/ssl.h"
-#include "polarssl/x509.h"
+#include "mbedtls/ssl.h"
+#include "mbedtls/x509.h"
 #endif
 
 #define MAX_INPUT_SIZE KILOBYTE
@@ -328,8 +328,8 @@ int check_main_config(char *config_dir) {
 	char *item, *rest, *info;
 	bool inside_section, has_dot;
 #ifdef ENABLE_TLS
-	pk_context private_key;
-	x509_crt certificate;
+	mbedtls_pk_context private_key;
+	mbedtls_x509_crt certificate;
 	char *last_file = NULL;
 #endif
 
@@ -608,27 +608,27 @@ int check_main_config(char *config_dir) {
 
 		/* Private key check
 		 */
-		pk_init(&private_key);
-		if (pk_parse_keyfile(&private_key, needle->value, NULL) != 0) {
+		mbedtls_pk_init(&private_key);
+		if (mbedtls_pk_parse_keyfile(&private_key, needle->value, NULL) != 0) {
 			printf("Error loading RSA private key from %s.\n", needle->value);
 			errors++;
 			goto next_crt;
 		}
 
-		if ((pk_get_type(&private_key) == POLARSSL_PK_RSA) && (pk_get_size(&private_key) < RSA_MIN_SIZE)) {
+		if ((mbedtls_pk_get_type(&private_key) == MBEDTLS_PK_RSA) && (mbedtls_pk_get_bitlen(&private_key) < RSA_MIN_SIZE)) {
 			printf("Warning: the RSA key size in %s should be at least %d bits.\n", needle->value, RSA_MIN_SIZE);
 		}
 
 		/* Certificate check
 		 */
-		x509_crt_init(&certificate);
-		if (x509_crt_parse_file(&certificate, needle->value) != 0) {
+		mbedtls_x509_crt_init(&certificate);
+		if (mbedtls_x509_crt_parse_file(&certificate, needle->value) != 0) {
 			printf("Error loading X.509 certificate from %s.\n", needle->value);
 			errors++;
 			goto next_crt;
 		}
 
-		if (certificate.sig_md < POLARSSL_MD_SHA256) {
+		if (certificate.sig_md < MBEDTLS_MD_SHA256) {
 			printf("Warning: the certificate signature algoritm in %s should at least be SHA256.\n", needle->value);
 		}
 
@@ -883,9 +883,6 @@ void create_basic_password(char *username, char *password) {
 	char *salt_digits = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./";
 	int len, i;
 
-#ifndef HAVE_ARC4RANDOM
-	srand((unsigned)time(NULL));
-#endif
 	len = strlen(salt_digits);
 
 	if (password == NULL) {
@@ -895,11 +892,7 @@ void create_basic_password(char *username, char *password) {
 
 	sprintf(salt, "$%d$", HASH_ALGORITM);
 	for (i = 3; i < 19; i++) {
-#ifdef HAVE_ARC4RANDOM
-		salt[i] = salt_digits[arc4random_uniform(len)];
-#else
 		salt[i] = salt_digits[rand() % len];
-#endif
 	}
 	strcpy(salt + 19, "$");
 	encrypted = crypt(password, salt);
@@ -921,7 +914,7 @@ void create_digest_password(char *username, char *realm, char *password) {
 	}
 
 	sprintf(data, "%s:%s:%s", username, realm, password);
-	md5((unsigned char*)data, strlen(data), digest);
+	mbedtls_md5((unsigned char*)data, strlen(data), digest);
 	md5_bin2hex(digest, encrypted);
 
 	clear_free(data, strlen(data));

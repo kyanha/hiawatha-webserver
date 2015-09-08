@@ -91,7 +91,7 @@ char *version_string = "Hiawatha v"VERSION
 	", reverse proxy"
 #endif
 #ifdef ENABLE_TLS
-	", TLS ("POLARSSL_VERSION_STRING")"
+	", TLS ("MBEDTLS_VERSION_STRING")"
 #endif
 #ifdef ENABLE_TOMAHAWK
 	", Tomahawk"
@@ -121,7 +121,7 @@ void create_logfiles(t_config *config) {
 	create_logfile(config->garbage_logfile, LOG_PERM, config->server_uid, config->server_gid);
 	create_logfile(config->exploit_logfile, LOG_PERM, config->server_uid, config->server_gid);
 #ifdef ENABLE_DEBUG
-	create_logfile(config->debug_logfile, LOG_PERM, config->server_uid, config->server_gid);
+	create_logfile(TLS_ERROR_LOGFILE, LOG_PERM, config->server_uid, config->server_gid);
 #endif
 
 	host = config->first_host;
@@ -559,6 +559,7 @@ int run_webserver(t_settings *settings) {
 #endif
 #ifdef ENABLE_TLS
 	t_host             *host;
+	t_tls_setup        tls_setup;
 #endif
 #ifdef HAVE_ACCF
 	struct accept_filter_arg afa;
@@ -596,13 +597,12 @@ int run_webserver(t_settings *settings) {
 	}
 
 #ifdef ENABLE_TLS
-#ifdef ENABLE_DEBUG
-	if (init_tls_module(config->ca_certificates, config->debug_logfile) == -1) {
-#else
 	if (init_tls_module(config->ca_certificates) == -1) {
-#endif
 		return -1;
 	}
+
+	tls_setup.min_tls_version = config->min_tls_version;
+	tls_setup.dh_size         = config->dh_size;
 #endif
 
 	/* Load private keys and certificate for bindings
@@ -624,6 +624,15 @@ int run_webserver(t_settings *settings) {
 						return -1;
 					}
 				}
+			}
+
+			tls_setup.private_key    = binding->private_key;
+			tls_setup.certificate    = binding->certificate;
+			tls_setup.ca_certificate = binding->ca_certificate;
+			tls_setup.ca_crl         = binding->ca_crl;
+
+			if (tls_set_config(&(binding->tls_config), &tls_setup) != 0) {
+				return -1;
 			}
 		}
 #endif
@@ -664,8 +673,12 @@ int run_webserver(t_settings *settings) {
 		/* Initialize Server Name Indication
 		 */
 		if ((host->private_key != NULL) && (host->certificate != NULL)) {
-			if (tls_register_sni(&(host->hostname), host->private_key, host->certificate,
-			                     host->ca_certificate, host->ca_crl) == -1) {
+			tls_setup.private_key    = host->private_key;
+			tls_setup.certificate    = host->certificate;
+			tls_setup.ca_certificate = host->ca_certificate;
+			tls_setup.ca_crl         = host->ca_crl;
+
+			if (tls_register_sni(&(host->hostname), &tls_setup) == -1) {
 				return -1;
 			}
 		}

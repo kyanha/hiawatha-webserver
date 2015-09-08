@@ -1,14 +1,15 @@
 
-# Also see "include/polarssl/config.h"
+# Also see "include/mbedtls/config.h"
 
-# To compile on MinGW: add "-lws2_32" to LDFLAGS or define WINDOWS in your
-# environment
-#
-CFLAGS	+= -I../include -D_FILE_OFFSET_BITS=64 -Wall -W -Wdeclaration-after-statement
-OFLAGS	= -O2
+CFLAGS	?= -O2
+WARNING_CFLAGS ?=  -Wall -W -Wdeclaration-after-statement
+LDFLAGS ?=
+
+LOCAL_CFLAGS = $(WARNING_CFLAGS) -I../include -D_FILE_OFFSET_BITS=64
+LOCAL_LDFLAGS =
 
 ifdef DEBUG
-CFLAGS += -g3
+LOCAL_CFLAGS += -g3
 endif
 
 # MicroBlaze specific options:
@@ -17,53 +18,63 @@ endif
 # To compile on Plan9:
 # CFLAGS += -D_BSD_EXTENSION
 
-# To compile as a shared library:
-ifdef SHARED
-CFLAGS += -fPIC
+# if were running on Windows build for Windows
+ifdef WINDOWS
+WINDOWS_BUILD=1
 endif
 
-SONAME=libmbedtls.so.8
+# To compile as a shared library:
+ifdef SHARED
+# all code is position-indep with mingw, avoid warning about useless flag
+ifndef WINDOWS_BUILD
+LOCAL_CFLAGS += -fPIC -fpic
+endif
+endif
 
-DLEXT=so.8
+SOEXT_TLS=so.10
+SOEXT_X509=so.0
+SOEXT_CRYPTO=so.0
+
+DLEXT=so
 # OSX shared library extension:
 # DLEXT=dylib
 
 # Windows shared library extension:
-ifdef WINDOWS
+ifdef WINDOWS_BUILD
 DLEXT=dll
-LDFLAGS += -lws2_32
 endif
 
-OBJS=	aes.o		aesni.o		arc4.o			\
-		asn1parse.o								\
-		asn1write.o base64.o	bignum.o		\
-		blowfish.o	camellia.o	ccm.o			\
-		certs.o		cipher.o	cipher_wrap.o	\
-		ctr_drbg.o	debug.o		des.o			\
-		dhm.o		ecdh.o		ecdsa.o			\
-		ecp.o		ecp_curves.o				\
-		entropy.o	entropy_poll.o				\
-		error.o		gcm.o		havege.o		\
-		hmac_drbg.o								\
-		md.o		md_wrap.o	md2.o			\
-		md4.o		md5.o						\
-		memory_buffer_alloc.o	net.o			\
-		oid.o									\
-		padlock.o	pbkdf2.o	pem.o			\
-		pkcs5.o		pkcs11.o	pkcs12.o		\
-		pk.o		pk_wrap.o	pkparse.o		\
-		pkwrite.o	platform.o	ripemd160.o		\
-		rsa.o		sha1.o		sha256.o		\
-		sha512.o	ssl_cache.o	ssl_cli.o		\
-		ssl_srv.o   ssl_ciphersuites.o			\
-		ssl_tls.o	threading.o	timing.o		\
-		version.o	version_features.o			\
-		x509.o		x509_create.o				\
-		x509_crl.o	x509_crt.o	x509_csr.o		\
-		x509write_crt.o			x509write_csr.o	\
-		xtea.o
+OBJS_CRYPTO=	aes.o		aesni.o		arc4.o		\
+		asn1parse.o	asn1write.o	base64.o	\
+		bignum.o	blowfish.o	camellia.o	\
+		ccm.o		cipher.o	cipher_wrap.o	\
+		ctr_drbg.o	des.o		dhm.o		\
+		ecdh.o		ecdsa.o		ecp.o		\
+		ecp_curves.o	entropy.o	entropy_poll.o	\
+		error.o		gcm.o		havege.o	\
+		hmac_drbg.o	md.o		md2.o		\
+		md4.o		md5.o		md_wrap.o	\
+		memory_buffer_alloc.o		oid.o		\
+		padlock.o	pem.o		pk.o		\
+		pk_wrap.o	pkcs12.o	pkcs5.o		\
+		pkparse.o	pkwrite.o	platform.o	\
+		ripemd160.o	rsa.o		sha1.o		\
+		sha256.o	sha512.o	threading.o	\
+		timing.o	version.o			\
+		version_features.o		xtea.o
+
+OBJS_X509=	certs.o		pkcs11.o	x509.o		\
+		x509_create.o	x509_crl.o	x509_crt.o	\
+		x509_csr.o	x509write_crt.o	x509write_csr.o
+
+OBJS_TLS=	debug.o		net.o		ssl_cache.o	\
+		ssl_ciphersuites.o		ssl_cli.o	\
+		ssl_cookie.o	ssl_srv.o	ssl_ticket.o	\
+		ssl_tls.o
 
 .SILENT:
+
+.PHONY: all static shared clean
 
 ifndef SHARED
 all: static
@@ -71,56 +82,86 @@ else
 all: shared static
 endif
 
-static: libpolarssl.a
+static: libmbedcrypto.a libmbedx509.a libmbedtls.a
 
-shared: libpolarssl.so
+shared: libmbedcrypto.$(DLEXT) libmbedx509.$(DLEXT) libmbedtls.$(DLEXT)
 
-libpolarssl.a: libmbedtls.a
-	echo "  LN    $@ -> $?"
-ifndef WINDOWS
-	ln -sf $? $@
-else
-	copy /y /b $? $@
-endif
-
-libmbedtls.a: $(OBJS)
+# tls
+libmbedtls.a: $(OBJS_TLS)
 	echo "  AR    $@"
-	$(AR) r $@ $(OBJS)
+	$(AR) rc $@ $(OBJS_TLS)
 	echo "  RL    $@"
 	$(AR) s $@
 
-libpolarssl.so: libmbedtls.so
-	echo "  LN    $@ -> $?"
-ifndef WINDOWS
-	ln -sf $? $@
-else
-	copy /y /b $? $@
-endif
-
-libmbedtls.${DLEXT}: $(OBJS)
+libmbedtls.$(SOEXT_TLS): $(OBJS_TLS)
 	echo "  LD    $@"
-	$(CC) ${LDFLAGS} -shared -Wl,-soname,$(SONAME) -o $@ $(OBJS)
+	$(CC) -shared -Wl,-soname,$@ $(LOCAL_LDFLAGS) $(LDFLAGS) -o $@ $(OBJS_TLS)
 
-libmbedtls.so: libmbedtls.${DLEXT}
-	echo "  LN    $@ -> libmbedtls.${DLEXT}"
-	ln -sf libmbedtls.${DLEXT} $@
+libmbedtls.so: libmbedtls.$(SOEXT_TLS)
+	echo "  LN    $@ -> $<"
+	ln -sf $< $@
 
-libmbedtls.dylib: $(OBJS)
+libmbedtls.dylib: $(OBJS_TLS)
 	echo "  LD    $@"
-	$(CC) ${LDFLAGS} -dynamiclib -o $@ $(OBJS)
+	$(CC) -dynamiclib $(LOCAL_LDFLAGS) $(LDFLAGS) -o $@ $(OBJS_TLS)
 
-libmbedtls.dll: $(OBJS)
+libmbedtls.dll: $(OBJS_TLS)
 	echo "  LD    $@"
-	$(CC) -shared -Wl,-soname,$@ -o $@ $(OBJS) -lws2_32 -lwinmm -lgdi32
+	$(CC) -shared -Wl,-soname,$@ -Wl,--out-implib,$@.a -o $@ $(OBJS_TLS) -lws2_32 -lwinmm -lgdi32 $(LOCAL_LDFLAGS) $(LDFLAGS)
+
+# x509
+libmbedx509.a: $(OBJS_X509)
+	echo "  AR    $@"
+	$(AR) rc $@ $(OBJS_X509)
+	echo "  RL    $@"
+	$(AR) s $@
+
+libmbedx509.$(SOEXT_X509): $(OBJS_X509)
+	echo "  LD    $@"
+	$(CC) -shared -Wl,-soname,$@ $(LOCAL_LDFLAGS) $(LDFLAGS) -o $@ $(OBJS_X509)
+
+libmbedx509.so: libmbedx509.$(SOEXT_X509)
+	echo "  LN    $@ -> $<"
+	ln -sf $< $@
+
+libmbedx509.dylib: $(OBJS_X509)
+	echo "  LD    $@"
+	$(CC) -dynamiclib $(LOCAL_LDFLAGS) $(LDFLAGS) -o $@ $(OBJS_X509)
+
+libmbedx509.dll: $(OBJS_X509)
+	echo "  LD    $@"
+	$(CC) -shared -Wl,-soname,$@ -Wl,--out-implib,$@.a -o $@ $(OBJS_X509) -lws2_32 -lwinmm -lgdi32 $(LOCAL_LDFLAGS) $(LDFLAGS)
+
+# crypto
+libmbedcrypto.a: $(OBJS_CRYPTO)
+	echo "  AR    $@"
+	$(AR) rc $@ $(OBJS_CRYPTO)
+	echo "  RL    $@"
+	$(AR) s $@
+
+libmbedcrypto.$(SOEXT_CRYPTO): $(OBJS_CRYPTO)
+	echo "  LD    $@"
+	$(CC) -shared -Wl,-soname,$@ $(LOCAL_LDFLAGS) $(LDFLAGS) -o $@ $(OBJS_CRYPTO)
+
+libmbedcrypto.so: libmbedcrypto.$(SOEXT_CRYPTO)
+	echo "  LN    $@ -> $<"
+	ln -sf $< $@
+
+libmbedcrypto.dylib: $(OBJS_CRYPTO)
+	echo "  LD    $@"
+	$(CC) -dynamiclib $(LOCAL_LDFLAGS) $(LDFLAGS) -o $@ $(OBJS_CRYPTO)
+
+libmbedcrypto.dll: $(OBJS_CRYPTO)
+	echo "  LD    $@"
+	$(CC) -shared -Wl,-soname,$@ -Wl,--out-implib,$@.a -o $@ $(OBJS_CRYPTO) -lws2_32 -lwinmm -lgdi32 $(LOCAL_LDFLAGS) $(LDFLAGS)
 
 .c.o:
 	echo "  CC    $<"
-	$(CC) $(CFLAGS) $(OFLAGS) -c $<
+	$(CC) $(LOCAL_CFLAGS) $(CFLAGS) -c $<
 
 clean:
 ifndef WINDOWS
-	rm -f *.o libpolarssl.* libmbedtls.*
-endif
-ifdef WINDOWS
-	del /Q /F *.o libpolarssl.* libmbedtls.*
+	rm -f *.o libmbed*
+else
+	del /Q /F *.o libmbed*
 endif

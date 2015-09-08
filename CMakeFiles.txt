@@ -40,7 +40,7 @@ set(hiawatha_src
 	src/workers.c
 	src/xslt.c
 )
-if(NOT ENABLE_TLS AND NOT USE_SYSTEM_POLARSSL)
+if(NOT ENABLE_TLS AND NOT USE_SYSTEM_MBEDTLS)
 	set(hiawatha_src ${hiawatha_src}
 		mbedtls/library/base64.c
 		mbedtls/library/md5.c
@@ -71,7 +71,7 @@ set(wigwam_src
 	src/toolkit.c
 	src/wigwam.c
 )
-if(NOT ENABLE_TLS AND NOT USE_SYSTEM_POLARSSL)
+if(NOT ENABLE_TLS AND NOT USE_SYSTEM_MBEDTLS)
 	set(wigwam_src ${wigwam_src}
 		mbedtls/library/md5.c
 		mbedtls/library/sha256.c

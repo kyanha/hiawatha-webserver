@@ -32,7 +32,7 @@
 #include "libstr.h"
 #include "libfs.h"
 #include "libstr.h"
-#include "polarssl/md5.h"
+#include "mbedtls/md5.h"
 #include "memdbg.h"
 
 #define RPROXY_ID_LEN             10 /* Must be smaller than 32 */
@@ -70,7 +70,7 @@ int init_rproxy_module(void) {
 	strftime(str, 49, "%a %d %b %Y %T", &s);
 	str[49] = '\0';
 
-	md5((unsigned char*)str, strlen(str), digest);
+	mbedtls_md5((unsigned char*)str, strlen(str), digest);
 	md5_bin2hex(digest, rproxy_id);
 	rproxy_id[RPROXY_ID_LEN] = '\0';
 
@@ -452,6 +452,10 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 
 	for (http_header = options->http_headers; http_header != NULL; http_header = http_header->next) {
 		if (rproxy->hostname != NULL) {
+			if (strcasecmp(http_header->data, "Expect: 100-Continue") == 0) {
+				continue;
+			}
+
 			if (strncasecmp(http_header->data, "Host:", 5) == 0) {
 				continue;
 			}

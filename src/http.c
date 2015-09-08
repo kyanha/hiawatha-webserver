@@ -21,6 +21,7 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include "global.h"
+#include "alternative.h"
 #include "session.h"
 #include "libstr.h"
 #include "liblist.h"
@@ -29,10 +30,11 @@
 #include "log.h"
 #include "monitor.h"
 #include "memdbg.h"
+#include "send.h"
 
 #define REQUEST_BUFFER_CHUNK     4 * KILOBYTE
 #define NO_REQUEST_LIMIT_TIME  300
-#define NO_REQUEST_LIMIT_SIZE   16 * MEGABYTE
+#define NO_REQUEST_LIMIT_SIZE   32 * MEGABYTE
 
 extern char *hs_conlen;
 extern char *hs_chunked;
@@ -186,6 +188,12 @@ int fetch_request(t_session *session) {
 						session->bytes_in_buffer = header_length;
 					}
 
+					/* Handle 100-continue
+					 */
+					if (strnstr(session->request, "Expect: 100-continue\r\n", header_length) != NULL) {
+						send_buffer(session, "HTTP/1.1 100 Continue\r\n\r\n", 25);
+						send_buffer(session, NULL, 0);
+					}
 				}
 			}
 

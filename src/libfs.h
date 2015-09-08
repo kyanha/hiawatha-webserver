@@ -40,7 +40,7 @@ FILE *fopen_neighbour(char *filename, char *mode, char *neighbour);
 t_filelist *read_filelist(char *directory);
 t_filelist *sort_filelist(t_filelist *filelist);
 void remove_filelist(t_filelist *filelist);
-int write_buffer(int handle, const char *buffer, int size);
+int write_buffer(int handle, const char *buffer, long size);
 #ifdef CYGWIN
 char *cygwin_to_windows(char *path);
 #endif

@@ -1,3 +1,11 @@
+hiawatha (9.14) stable; urgency=low
+
+  * mbed TLS updated to 2.0.0.
+  * Small bugfixes.
+  * Bugfix: crash when sending very large request to FastCGI server.
+
+ -- Hugo Leisink <hugo@leisink.net>  Wed, 26 Jul 2015 11:23:50 +0200
+
 hiawatha (9.13) stable; urgency=low
 
   * Renamed SSLcertFile to TLScertFile.

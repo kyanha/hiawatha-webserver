@@ -24,8 +24,40 @@
 #include "libstr.h"
 #include "libfs.h"
 #include "filehashes.h"
-#include "polarssl/sha256.h"
+#include "mbedtls/sha256.h"
 #include "memdbg.h"
+
+#define BUFFER_SIZE 1024
+
+int sha256_file( const char *path, unsigned char output[32], int is224) {
+	FILE *fp;
+	size_t bytes_read;
+	mbedtls_sha256_context context;
+	unsigned char buffer[BUFFER_SIZE];
+
+	if ((fp = fopen(path, "rb")) == NULL) {
+		return -1;
+	}
+
+	mbedtls_sha256_init(&context);
+	mbedtls_sha256_starts(&context, is224);
+
+	while ((bytes_read = fread(buffer, 1, BUFFER_SIZE, fp)) > 0) {
+		mbedtls_sha256_update(&context, buffer, bytes_read);
+	}
+
+	mbedtls_sha256_finish(&context, output);
+	mbedtls_sha256_free(&context);
+
+	if (ferror(fp) != 0) {
+		fclose(fp);
+		return -1;
+	}
+
+	fclose(fp);
+
+	return 0;
+}
 
 static void sha2_bin2hex(unsigned char bin[SHA_HASH_SIZE], char hex[FILE_HASH_SIZE + 1]) {
 	int i;
