@@ -71,6 +71,8 @@ extern char *hs_conlen;
 extern char *hs_contyp;
 extern char *hs_chunked;
 
+extern char *upgrade_websocket;
+
 /* Read a file from disk and send it to the client.
  */
 int send_file(t_session *session) {
@@ -427,7 +429,7 @@ int send_file(t_session *session) {
 		}
 
 	}
-	
+
 	retval = 200;
 
 fail:
@@ -942,8 +944,12 @@ int execute_cgi(t_session *session) {
 #endif
 
 							if (find_cgi_header(cgi_info.input_buffer, header_length, "Location:") != NULL) {
-								session->return_code = 302;
-							} else if ((code = find_cgi_header(cgi_info.input_buffer, header_length, "Status:")) != NULL) {
+								if (session->return_code == 200) {
+									session->return_code = 302;
+								}
+							}
+
+							if ((code = find_cgi_header(cgi_info.input_buffer, header_length, "Status:")) != NULL) {
 								result = extract_http_code(code + 7);
 
 								if ((result <= 0) || (result > 999)) {
@@ -1542,7 +1548,7 @@ static int find_chunk_size(char *buffer, int size, int *chunk_size, int *chunk_l
 
 	if (*chunk_size == -1) {
 		return -1;
-	} else if (*chunk_size == 0) { 
+	} else if (*chunk_size == 0) {
 		return 0;
 	}
 
@@ -1567,9 +1573,11 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	char *reverse_proxy, ip_address[MAX_IP_STR_LEN + 1];
 	int bytes_read, bytes_in_buffer = 0, result = 200, code, poll_result, send_result, delta;
 	int content_length = -1, content_read = 0, chunk_size = 0, chunk_left = 0, header_length;
-	bool header_read = false, keep_reading = true, keep_alive, chunked_transfer = false, send_in_chunks = false;
-	struct pollfd poll_data;
+	bool header_read = false, keep_reading, keep_alive, upgraded_to_websocket = false;
+	bool chunked_transfer = false, send_in_chunks = false;
+	struct pollfd poll_data[2];
 	time_t deadline;
+	t_stream stream1, stream2;
 #ifdef ENABLE_TLS
 	char *hostname;
 #endif
@@ -1603,7 +1611,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 					result = rs_DISCONNECT;
 				}
 			}
-			
+
 			if (send_buffer(session, cached_object->content, cached_object->content_length) == -1) {
 				result = rs_DISCONNECT;
 			}
@@ -1711,8 +1719,10 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	 */
 	deadline = time(NULL) + rproxy->timeout;
 
-	poll_data.fd = webserver.socket;
-	poll_data.events = POLL_EVENT_BITS;
+	poll_data[0].fd = webserver.socket;
+	poll_data[0].events = POLL_EVENT_BITS;
+
+	keep_reading = true;
 
 	do {
 #ifdef ENABLE_TLS
@@ -1720,7 +1730,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 
 		if (poll_result == 0)
 #endif
-			poll_result = poll(&poll_data, 1, 1000);
+			poll_result = poll(poll_data, 1, 1000);
 
 		switch (poll_result) {
 			case -1:
@@ -1801,7 +1811,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 									session->return_code = code;
 								}
 
-								if ((code != 200) && (session->host->trigger_on_cgi_status)) {
+								if ((code >= 300) && session->host->trigger_on_cgi_status) {
 									result = code;
 									keep_reading = false;
 									keep_alive = false;
@@ -1831,11 +1841,22 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 									}
 								}
 
-								delta = remove_header(buffer, hs_conn, header_length, bytes_in_buffer);
-								bytes_in_buffer -= delta;
-								end_of_header -= delta;
-								header_length -= delta;
-								bytes_read -= delta;
+								/* Check for WebSocket upgrade
+								 */
+								if (find_cgi_header(buffer, header_length, "Connection: upgrade") != NULL) {
+									if (find_cgi_header(buffer, header_length, upgrade_websocket) != NULL) {
+										upgraded_to_websocket = true;
+										keep_reading = false;
+									}
+								}
+
+								if (upgraded_to_websocket == false) {
+									delta = remove_header(buffer, hs_conn, header_length, bytes_in_buffer);
+									bytes_in_buffer -= delta;
+									end_of_header -= delta;
+									header_length -= delta;
+									bytes_read -= delta;
+								}
 
 								if ((session->request_method == HEAD) || empty_body_because_of_http_status(code)) {
 									content_length = 0;
@@ -1980,8 +2001,36 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 		}
 	} while (keep_reading);
 
-	if (send_in_chunks && (result == 200)) {
+	if (send_in_chunks && ((result < 300) || (session->host->trigger_on_cgi_status == false))) {
 		send_chunk(session, NULL, 0);
+	}
+
+	if (upgraded_to_websocket) {
+		/* Connection upgraded to Websocket
+		 */
+		if (send_in_chunks == false) {
+			send_buffer(session, NULL, 0);
+		}
+
+		stream1.socket = webserver.socket;
+#ifdef ENABLE_TLS
+		stream1.use_tls = webserver.use_tls;
+		stream1.tls_context = &(webserver.tls_context);
+#endif
+
+		stream2.socket = session->client_socket;
+#ifdef ENABLE_TLS
+		stream2.use_tls = session->binding->use_tls;
+		stream2.tls_context = &(session->tls_context);
+#endif
+
+		result = link_streams(&stream1, &stream2, rproxy->timeout);
+
+		keep_alive = false;
+		session->return_code = 101;
+#ifdef ENABLE_CACHE
+		cache_buffer = NULL;
+#endif
 	}
 
 	session->time = time(NULL);
@@ -2039,12 +2088,11 @@ static int add_to_buffer(char *str, char *buffer, size_t *size, size_t max_size)
 
 int forward_to_websocket(t_session *session) {
 	t_websocket *ws;
-	int result = -1, ws_socket, poll_result, bytes_read;
+	int result = -1, ws_socket;
 	size_t size;
 	t_http_header *http_header;
-	struct pollfd poll_data[2];
-	bool keep_reading = true;
 	char buffer[WS_BUFFER_SIZE];
+	t_stream stream1, stream2;
 #ifdef ENABLE_TLS
 	mbedtls_ssl_context ws_tls_context;
 #endif
@@ -2063,9 +2111,15 @@ int forward_to_websocket(t_session *session) {
 		return -1;
 	}
 
-	if ((ws_socket = connect_to_server(&(ws->ip_address), ws->port)) == -1) {
+	if (ws->unix_socket != NULL) {
+		ws_socket = connect_to_unix_socket(ws->unix_socket);
+	} else {
+		ws_socket = connect_to_server(&(ws->ip_address), ws->port);
+	}
+
+	if (ws_socket == -1) {
 		log_error(session, "error connecting to websocket");
-		return -1;
+		return 503;
 	}
 
 #ifdef ENABLE_TLS
@@ -2105,116 +2159,30 @@ int forward_to_websocket(t_session *session) {
 		goto ws_error;
 	}
 
-	if (write_buffer(ws_socket, buffer, size) == -1) {
-		goto ws_error;
-	}
-
-	poll_data[0].fd = ws_socket;
-	poll_data[0].events = POLL_EVENT_BITS;
-	poll_data[1].fd = session->client_socket;
-	poll_data[1].events = POLL_EVENT_BITS;
-
-	result = 0;
-
-	/* Forward data
-	 */
-	do {
 #ifdef ENABLE_TLS
-		poll_result = session->binding->use_tls ? tls_pending(&(session->tls_context)) : 0;
-
-		if (poll_result == 0)
-#endif
-			poll_result = poll(poll_data, 2, ws->timeout);
-
-		switch (poll_result) {
-			case -1:
-				result = -1;
-				keep_reading = false;
-				break;
-			case 0:
-				result = 504;
-				keep_reading = false;
-				break;
-			default:
-				/* Data from websocket to client
-				 */
-				if (poll_data[0].revents != 0) {
-#ifdef ENABLE_TLS
-					if (ws->use_tls) {
-						if ((bytes_read = tls_receive(&ws_tls_context, buffer, WS_BUFFER_SIZE)) == -1) {
-							keep_reading = false;
-							result = -1;
-							break;
-						}
-					} else
-#endif
-						if ((bytes_read = read(ws_socket, buffer, WS_BUFFER_SIZE)) == -1) {
-							keep_reading = false;
-							result = -1;
-							break;
-						}
-
-					if (bytes_read == 0) {
-						keep_reading = false;
-						break;
-					}
-
-#ifdef ENABLE_TLS
-					if (session->binding->use_tls) {
-						if (tls_send_buffer(&(session->tls_context), buffer, bytes_read) == -1) {
-							keep_reading = false;
-							result = -1;
-							break;
-						}
-					} else
-#endif
-						if (write_buffer(session->client_socket, buffer, bytes_read) == -1) {
-							keep_reading = false;
-							result = -1;
-							break;
-						}
-				}
-
-				/* Data from client to websocket
-				 */
-				if (poll_data[1].revents != 0) {
-#ifdef ENABLE_TLS
-					if (session->binding->use_tls) {
-						if ((bytes_read = tls_receive(&(session->tls_context), buffer, WS_BUFFER_SIZE)) == -1) {
-							keep_reading = false;
-							result = -1;
-							break;
-						}
-					} else
-#endif
-						if ((bytes_read = read(session->client_socket, buffer, WS_BUFFER_SIZE)) == -1) {
-							keep_reading = false;
-							result = -1;
-							break;
-						}
-
-					if (bytes_read == 0) {
-						keep_reading = false;
-						break;
-					}
-
-#ifdef ENABLE_TLS
-					if (ws->use_tls) {
-						if (tls_send_buffer(&ws_tls_context, buffer, bytes_read) == -1) {
-							keep_reading = false;
-							result = -1;
-							break;
-						}
-					} else
-#endif
-						if (write_buffer(ws_socket, buffer, bytes_read) == -1) {
-							keep_reading = false;
-							result = -1;
-							break;
-						}
-				}
+	if (ws->use_tls) {
+		if (tls_send_buffer(&ws_tls_context, buffer, size) == -1) {
+			goto ws_error;
 		}
-	} while (keep_reading);
+	} else
+#endif
+		if (write_buffer(ws_socket, buffer, size) == -1) {
+			goto ws_error;
+		}
+
+	stream1.socket = ws_socket;
+#ifdef ENABLE_TLS
+	stream1.use_tls = ws->use_tls;
+	stream1.tls_context = &ws_tls_context;
+#endif
+
+	stream2.socket = session->client_socket;
+#ifdef ENABLE_TLS
+	stream2.use_tls = session->binding->use_tls;
+	stream2.tls_context = &(session->tls_context);
+#endif
+
+	result = link_streams(&stream1, &stream2, ws->timeout);
 
 ws_error:
 #ifdef ENABLE_TLS

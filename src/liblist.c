@@ -27,7 +27,7 @@ t_http_header *parse_http_headers(char *line) {
 	t_http_header *first, *http_header;
 	char *value;
 
-	if (line == NULL) {
+	if (empty_string(line)) {
 		return NULL;
 	} else if (*line == '\0') {
 		return NULL;
@@ -135,7 +135,9 @@ int parse_charlist(char *value, t_charlist *list) {
 	char *scan, **new;
 	int add = 1, i;
 
-	if ((value == NULL) || (list == NULL)) {
+	if (list == NULL) {
+		return -1;
+	} else if (empty_string(value)) {
 		return -1;
 	}
 
@@ -237,9 +239,10 @@ t_accesslist *parse_accesslist(char *line, bool pwd_allowed, t_accesslist *list)
 	char *rule, *ip, *mask;
 	bool error = false;
 
-	if (line == NULL) {
+	if (empty_string(line)) {
 		return remove_accesslist(list);
 	}
+
 	if (list != NULL) {
 		new = list;
 		while (new->next != NULL) {
@@ -384,36 +387,38 @@ int parse_keyvalue(char *line, t_keyvalue **kvlist, char *delimiter) {
 	char *value;
 	t_keyvalue *prev;
 
-	if ((line == NULL) || (kvlist == NULL) || (delimiter == NULL)) {
+	if ((kvlist == NULL) || (delimiter == NULL)) {
+		return -1;
+	} else if (empty_string(line)) {
 		return -1;
 	}
 
-	if ((value = strstr(line, delimiter)) != NULL) {
-		*value = '\0';
-		value += strlen(delimiter);
-
-		prev = *kvlist;
-		if ((*kvlist = (t_keyvalue*)malloc(sizeof(t_keyvalue))) == NULL) {
-			return -1;
-		}
-		(*kvlist)->next = prev;
-
-		(*kvlist)->value = NULL;
-		if (((*kvlist)->key = strdup(remove_spaces(line))) == NULL) {
-			free(*kvlist);
-			return -1;
-		}
-		(*kvlist)->key_len = strlen((*kvlist)->key);
-
-		if (((*kvlist)->value = strdup(remove_spaces(value))) == NULL) {
-			free((*kvlist)->key);
-			free(*kvlist);
-			return -1;
-		}
-		(*kvlist)->value_len = strlen((*kvlist)->value);
-	} else {
+	if ((value = strstr(line, delimiter)) == NULL) {
 		return -1;
 	}
+
+	*value = '\0';
+	value += strlen(delimiter);
+
+	prev = *kvlist;
+	if ((*kvlist = (t_keyvalue*)malloc(sizeof(t_keyvalue))) == NULL) {
+		return -1;
+	}
+	(*kvlist)->next = prev;
+
+	(*kvlist)->value = NULL;
+	if (((*kvlist)->key = strdup(remove_spaces(line))) == NULL) {
+		free(*kvlist);
+		return -1;
+	}
+	(*kvlist)->key_len = strlen((*kvlist)->key);
+
+	if (((*kvlist)->value = strdup(remove_spaces(value))) == NULL) {
+		free((*kvlist)->key);
+		free(*kvlist);
+		return -1;
+	}
+	(*kvlist)->value_len = strlen((*kvlist)->value);
 
 	return 0;
 }
@@ -440,7 +445,7 @@ int parse_error_handler(char *line, t_error_handler **handlers) {
 	char *param;
 	int code;
 
-	if (line == NULL) {
+	if (empty_string(line)) {
 		return -1;
 	} else if ((handler = (t_error_handler*)malloc(sizeof(t_error_handler))) == NULL) {
 		return -1;

@@ -7,21 +7,27 @@
 <html>
 
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title><xsl:value-of select="hostname" /> : <xsl:value-of select="request_uri" /></title>
 <style type="text/css">
 	body {
 		background-color:#ffffff;
 		font-family:sans-serif;
 		font-size:12px;
-		padding:25px 100px 25px 100px;
+		padding:25px 100px;
 	}
 
 	h1 {
+		font-size:200%;
 		letter-spacing:5px;
+		max-width:800px;
+		margin:15px auto;
 	}
 
-	table.list {
+	table {
 		width:100%;
+		max-width:800px;
+		margin:0 auto;
 		padding:20px;
 		border-spacing:0;
 		border:1px solid #c0c0c0;
@@ -30,45 +36,45 @@
 		box-shadow:6px 12px 10px #808080;
 	}
 
-	tr.header th {
-		border-bottom:1px solid #e0e0e0;
+	thead th {
+		border-bottom:2px solid #e0e0e0;
 		letter-spacing:1px;
 	}
-	tr.header th.timestamp {
+	thead th.timestamp {
 		width:160px;
 	}
-	tr.header th.size {
+	thead th.size {
 		width:140px;
 	}
 
-	tr.file td {
+	tbody td {
 		border-bottom:1px solid #e0e0e0;
 		padding:2px 15px;
 	}
-	tr.file:hover td {
+	tbody tr:hover td {
 		background-color:#ffffc0;
 		cursor:pointer;
 	}
-	tr.file:nth-child(even) {
+	tbody tr:nth-child(even) {
 		background-color:#e8e8f0;
 	}
-	tr.file:nth-child(odd) {
+	tbody tr:nth-child(odd) {
 		background-color:#f0f0f8;
 	}
-	tr.file td.size {
+	tbody td.size {
 		text-align:right;
 	}
-	tr.file td.dir a {
+	tbody td.dir a {
 		color:#0000ff;
 	}
-	tr.file td.file a {
+	tbody td.file a {
 		color:#4080ff;
 	}
 
-	tr.bottom td {
+	tfoot td {
 		padding:20px 15px 0 15px;
 	}
-	tr.bottom td.totalsize {
+	tfoot td.totalsize {
 		text-align:right;
 	}
 
@@ -84,29 +90,62 @@
 	div.powered a {
 		color:#80b0c0;
 	}
+
+	@media (max-width:767px) {
+		body {
+			padding:25px;
+		}
+
+		h1 {
+			font-size:160%;
+			letter-spacing:3px;
+		}
+
+		tbody td {
+			padding:5px 15px;
+		}
+	}
+
+	@media (max-width:511px) {
+		h1 {
+			font-size:130%;
+			letter-spacing:1px;
+		}
+
+		table th:nth-child(2),
+		table td:nth-child(2) {
+			display:none;
+		}
+	}
 </style>
 </head>
 
 <body>
 <h1><xsl:value-of select="hostname" /> : <xsl:value-of select="request_uri" /></h1>
-<table class="list">
-<tr class="header">
+<table>
+<thead>
+<tr>
 	<th class="filename">filename</th>
 	<th class="timestamp">timestamp</th>
 	<th class="size">filesize</th>
 </tr>
+</thead>
+<tbody>
 <xsl:for-each select="files/file">
-<tr class="file" onClick="javascript:window.location.href='{.}'">
+<tr onClick="javascript:window.location.href='{.}'">
 	<td class="{@type}"><a href="{.}"><xsl:value-of select="." /></a></td>
 	<td><xsl:value-of select="@timestamp" /></td>
 	<td class="size"><xsl:value-of select="@size" /></td>
 </tr>
 </xsl:for-each>
-<tr class="bottom">
+</tbody>
+<tfoot>
+<tr>
 	<td class="totalfiles"><xsl:value-of select="count(files/file)" /> files</td>
 	<td></td>
 	<td class="totalsize"><xsl:value-of select="total_size" /></td>
 </tr>
+</tfoot>
 </table>
 <div class="powered">Powered by <a href="http://www.hiawatha-webserver.org/" target="_blank"><xsl:value-of select="software" /></a></div>
 </body>

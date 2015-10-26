@@ -222,7 +222,7 @@ static char *get_A1(t_session *session, char *username, char *realm) {
 
 /* Find algoritm id and salt in password
  */
-static int find_algoritm_and_salt(char *line) {	
+static int find_algoritm_and_salt(char *line) {
 	char *end;
 
 	end = line;

@@ -20,7 +20,6 @@
 #include <poll.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <dirent.h>
 #include <errno.h>
 #include <pthread.h>
 #include <syslog.h>
@@ -91,7 +90,7 @@ char *version_string = "Hiawatha v"VERSION
 	", reverse proxy"
 #endif
 #ifdef ENABLE_TLS
-	", TLS ("MBEDTLS_VERSION_STRING")"
+	", TLS (v"MBEDTLS_VERSION_STRING")"
 #endif
 #ifdef ENABLE_TOMAHAWK
 	", Tomahawk"
@@ -567,13 +566,19 @@ int run_webserver(t_settings *settings) {
 
 	/* Read configuration
 	 */
-	config = default_config();
-	if (chdir(settings->config_dir) == -1) {
+	if (init_config_module(settings->config_dir) == -1) {
+		perror("init_config_module()");
+		return -1;
+	} else if ((config = default_config()) == NULL) {
+		perror("default_config()");
+		return -1;
+	} else if (chdir(settings->config_dir) == -1) {
 		perror(settings->config_dir);
 		return -1;
 	} else if (settings->config_check) {
 		printf("Using %s\n", settings->config_dir);
 	}
+
 	if (read_main_configfile("hiawatha.conf", config, settings->config_check) == -1) {
 		return -1;
 	} else if (check_configuration(config) == -1) {
@@ -817,7 +822,7 @@ int run_webserver(t_settings *settings) {
 	 */
 	binding = config->binding;
 	while (binding != NULL) {
-		if (listen(binding->socket, 16) == -1) {
+		if (listen(binding->socket, config->listen_backlog) == -1) {
 			perror("listen(http(s))");
 			return -1;
 		}
@@ -1002,7 +1007,7 @@ int run_webserver(t_settings *settings) {
 #ifdef ENABLE_TOMAHAWK
 		current_poll = poll_data + number_of_bindings;
 		number_of_admins = prepare_admins_for_poll(current_poll);
-		
+
 		switch (poll(poll_data, number_of_bindings + number_of_admins, 1000)) {
 #else
 		switch (poll(poll_data, number_of_bindings, 1000)) {

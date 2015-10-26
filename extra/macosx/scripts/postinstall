@@ -8,4 +8,4 @@ for file in $files ; do
 	if [ -f $file.installer.backup ]; then
 		mv -f $file.installer.backup $file
 	fi
-done 
+done

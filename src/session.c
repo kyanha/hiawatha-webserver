@@ -718,7 +718,7 @@ int prevent_sqli(t_session *session) {
 	}
 
 	if (session->cookie != NULL) {
-		if ((result = prevent_sqli_str(session, session->cookie, strlen(session->cookie))) != 0) {	
+		if ((result = prevent_sqli_str(session, session->cookie, strlen(session->cookie))) != 0) {
 			return result;
 		}
 	}

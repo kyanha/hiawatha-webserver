@@ -163,6 +163,11 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 #endif
 		add_to_environment_chroot(session, fcgi_buffer, "DOCUMENT_ROOT", session->host->website_root);
 
+	if (session->alias != NULL) {
+		add_to_environment_chroot(session, fcgi_buffer, "ALIAS_FROM", session->alias->key);
+		add_to_environment_chroot(session, fcgi_buffer, "ALIAS_TO", session->alias->value);
+	}
+
 	if (ip_to_str(&(session->ip_address), ip, MAX_IP_STR_LEN) != -1) {
 		add_to_environment(fcgi_buffer, "REMOTE_ADDR", ip);
 	}

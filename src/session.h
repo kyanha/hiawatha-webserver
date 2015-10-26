@@ -129,7 +129,7 @@ typedef struct type_session {
 	char            *current_task;
 #endif
 
-#ifdef ENABLE_RPROXY	
+#ifdef ENABLE_RPROXY
 	/* Reverse proxy keep-alive
 	 */
 	bool            rproxy_kept_alive;

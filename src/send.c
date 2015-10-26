@@ -36,10 +36,11 @@
 #include "tomahawk.h"
 #include "memdbg.h"
 
-#define MAX_TO_BUFFER  1000
-#define NONCE_DIGITS     10
-#define TIMESTR_SIZE     64
-#define FCGI_CHUNK_SIZE  (64 * KILOBYTE - 8)
+#define MAX_TO_BUFFER     1000
+#define NONCE_DIGITS        10
+#define TIMESTR_SIZE        64
+#define FCGI_CHUNK_SIZE    (64 * KILOBYTE - 8)
+#define STREAM_BUFFER_SIZE  32 * KILOBYTE
 
 char *hs_http10  = "HTTP/1.0 ";                  /*  9 */
 char *hs_http11  = "HTTP/1.1 ";                  /*  9 */
@@ -47,6 +48,7 @@ char *hs_server  = "Server: ";                   /*  8 */
 char *hs_conn    = "Connection: ";               /* 12 */
 char *hs_concl   = "close\r\n";                  /*  7 */
 char *hs_conka   = "keep-alive\r\n";             /* 12 */
+char *hs_conup   = "upgrade\r\n";                /*  9 */
 char *hs_contyp  = "Content-Type: ";             /* 14 */
 char *hs_conlen  = "Content-Length: ";           /* 16 */
 char *hs_lctn    = "Location: ";                 /* 10 */
@@ -68,13 +70,14 @@ char *unknown_http_code = "Unknown Error";
 
 static char *ec_doctype = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\">\n";
 static char *ec_head    = "<html>\n<head>\n<title>";
-static char *ec_body1   = "</title>\n<style type=\"text/css\">\n"
-                          "body { background-color:#d0d0d0; font-family:sans-serif }\n"
-                          "div { background-color:#f8f8f8; letter-spacing:4px; width:500px; margin:100px auto 0; padding:50px; "
+static char *ec_body1   = "</title>\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n<style type=\"text/css\">\n"
+                          "body { background-color:#d0d0d0; font-family:sans-serif; padding:0 30px }\n"
+                          "div { background-color:#f8f8f8; letter-spacing:4px; max-width:400px; margin:100px auto 0 auto; padding:50px; "
                                 "border-radius:10px; border:1px solid #808080; box-shadow:8px 15px 20px #404040 }\n"
                           "h1 { margin:0; font-size:22px; font-weight:normal }\n"
                           "p { margin:10px 0 0 0; padding-top:2px; font-size:14px; color:#606060; border-top:1px solid #a0a0ff; "
                               "text-align:right; font-weight:bold }\n"
+                          "@media (max-width:767px) { h1 { font-size:90%; letter-spacing:2px } p { font-size:70% } }\n"
                           "</style>\n</head>\n<body>\n<div>\n<h1>";
 static char *ec_body2   = "</h1>\n<p>";
 static char *ec_tail    = "</p>\n</div>\n</body>\n</html>";
@@ -509,7 +512,7 @@ int send_http_code_header(t_session *session) {
 				if (send_buffer(session, hs_http, 7) == -1) {
 					return -1;
 				}
-				
+
 				if (send_buffer(session, *(session->host->hostname.item), strlen(*(session->host->hostname.item))) == -1) {
 					return -1;
 				}
@@ -767,4 +770,127 @@ int send_digest_auth(t_session *session) {
 	}
 
 	return send_buffer(session, "\", algorithm=MD5\r\n", 18);
+}
+
+/* Link two streams
+ */
+int link_streams(t_stream *stream1, t_stream *stream2, int poll_timeout) {
+	struct pollfd poll_data[2];
+	int result, poll_result, bytes_read;
+	bool keep_reading;
+	char buffer[STREAM_BUFFER_SIZE];
+
+	poll_data[0].fd = stream1->socket;
+	poll_data[0].events = POLL_EVENT_BITS;
+	poll_data[1].fd = stream2->socket;
+	poll_data[1].events = POLL_EVENT_BITS;
+
+	result = 0;
+	keep_reading = true;
+	poll_timeout *= 1000;
+
+	/* Forward data
+	 */
+	do {
+#ifdef ENABLE_TLS
+		poll_result = stream1->use_tls ? tls_pending(stream1->tls_context) : 0;
+		if (poll_result == 0) {
+			poll_result = stream2->use_tls ? tls_pending(stream2->tls_context) : 0;
+		}
+
+		if (poll_result == 0)
+#endif
+			poll_result = poll(poll_data, 2, poll_timeout);
+
+		switch (poll_result) {
+			case -1:
+				result = -1;
+				keep_reading = false;
+				break;
+			case 0:
+				result = 504;
+				keep_reading = false;
+				break;
+			default:
+				/* Data from stream1 to stream2
+				 */
+				if (poll_data[0].revents != 0) {
+#ifdef ENABLE_TLS
+					if (stream1->use_tls) {
+						if ((bytes_read = tls_receive(stream1->tls_context, buffer, STREAM_BUFFER_SIZE)) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+					} else
+#endif
+						if ((bytes_read = read(stream1->socket, buffer, STREAM_BUFFER_SIZE)) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+
+					if (bytes_read == 0) {
+						keep_reading = false;
+						break;
+					}
+
+#ifdef ENABLE_TLS
+					if (stream2->use_tls) {
+						if (tls_send_buffer(stream2->tls_context, buffer, bytes_read) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+					} else
+#endif
+						if (write_buffer(stream2->socket, buffer, bytes_read) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+				}
+
+				/* Data from stream2 to stream1
+				 */
+				if (poll_data[1].revents != 0) {
+#ifdef ENABLE_TLS
+					if (stream2->use_tls) {
+						if ((bytes_read = tls_receive(stream2->tls_context, buffer, STREAM_BUFFER_SIZE)) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+					} else
+#endif
+						if ((bytes_read = read(stream2->socket, buffer, STREAM_BUFFER_SIZE)) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+
+					if (bytes_read == 0) {
+						keep_reading = false;
+						break;
+					}
+
+#ifdef ENABLE_TLS
+					if (stream1->use_tls) {
+						if (tls_send_buffer(stream1->tls_context, buffer, bytes_read) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+					} else
+#endif
+						if (write_buffer(stream1->socket, buffer, bytes_read) == -1) {
+							keep_reading = false;
+							result = -1;
+							break;
+						}
+				}
+		}
+	} while (keep_reading);
+
+	return result;
 }

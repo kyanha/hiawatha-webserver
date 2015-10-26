@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
@@ -808,7 +809,7 @@ int show_index(t_session *session) {
 			return -1;
 		}
 	}
-	
+
 	if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "</index>") == -1) {
 		free(text_xml);
 		return -1;
@@ -935,7 +936,7 @@ int show_http_code_body(t_session *session) {
 			return -1;
 		}
 	}
-	
+
 	if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "</error>") == -1) {
 		free(text_xml);
 		return -1;

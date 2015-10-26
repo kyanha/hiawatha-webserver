@@ -32,6 +32,7 @@
 #include "tomahawk.h"
 #include "tls.h"
 #include "cache.h"
+#include "rproxy.h"
 #include "toolkit.h"
 #include "xslt.h"
 #include "monitor.h"
@@ -82,7 +83,7 @@ static int send_code(t_session *session) {
 	    (session->return_code == 204) || (session->return_code == 304)) {
 		if (send_buffer(session, hs_conlen, 16) == -1) {
 			return -1;
-		}	
+		}
 		return send_buffer(session, "0\r\n\r\n", 5);
 	}
 
@@ -600,47 +601,54 @@ static int serve_client(t_session *session) {
 		*(session->body + session->content_length) = chr;
 	}
 
-	/* Websocket
-	 */
-	if (session->request_method == GET) {
-		if ((header = get_http_header("Connection:", session->http_headers)) != NULL) {
-			if (strcasestr(header, "upgrade") != NULL) {
-				if ((header = get_http_header("Upgrade:", session->http_headers)) != NULL) {
-					if (strcasecmp(header, "websocket") == 0) {
-						switch (access = allow_client(session)) {
-							case deny:
-								log_error(session, fb_accesslist);
-								return 403;
-							case allow:
-								break;
-							case pwd:
-							case unspecified:
-								if ((auth_result = http_authentication_result(session, access == unspecified)) != 200) {
-									return auth_result;
-								}
-						}
-
-						session->keep_alive = false;
-						if (forward_to_websocket(session) == -1) {
-							return 500;
-						}
-
-						return 200;
-					}
-				}
-			}
-		}
-	}
-
 #ifdef ENABLE_RPROXY
 	rproxy = select_rproxy(session->host->rproxy, session->uri
 #ifdef ENABLE_TLS
 		, session->binding->use_tls
 #endif
 		);
+#endif
+
+	/* Websocket
+	 */
+	if ((session->request_method == GET) && (session->host->websockets != NULL)) {
+		if ((header = get_http_header("Connection:", session->http_headers)) == NULL) {
+			goto no_websocket;
+		} else if (strcasestr(header, "upgrade") == NULL) {
+			goto no_websocket;
+		} else if ((header = get_http_header("Upgrade:", session->http_headers)) == NULL) {
+			goto no_websocket;
+		} else if (strcasecmp(header, "websocket") != 0) {
+			goto no_websocket;
+		}
+
+		switch (access = allow_client(session)) {
+			case deny:
+				log_error(session, fb_accesslist);
+				return 403;
+			case allow:
+				break;
+			case pwd:
+			case unspecified:
+				if ((auth_result = http_authentication_result(session, access == unspecified)) != 200) {
+					return auth_result;
+				}
+		}
+
+		session->keep_alive = false;
+		if ((result = forward_to_websocket(session)) != 0) {
+			return result;
+		}
+
+		session->return_code = 101;
+
+		return 200;
+	}
+no_websocket:
 
 	/* Actions based on request method
 	 */
+#ifdef ENABLE_RPROXY
 	if (rproxy == NULL)
 #endif
 	switch (session->request_method) {
@@ -1524,7 +1532,7 @@ void manage_thread_pool(int default_thread_pool_size, int thread_kill_rate) {
 			thread = thread->next;
 		}
 	}
-	
+
 	pthread_mutex_unlock(&thread_pool_mutex);
 }
 

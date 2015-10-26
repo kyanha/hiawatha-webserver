@@ -25,6 +25,7 @@ void check_clear_free(void *ptr, int size);
 
 int  parse_yesno(char *yesno, bool *result);
 int  str_to_int(char *str);
+bool empty_string(char *str);
 short hex_char_to_int(char c);
 int  hex_to_int(char *str);
 char *remove_spaces(char *str);

@@ -3,8 +3,8 @@
 
 # VARIABLES
 # With 'set', you can declare a variable. Make sure the name of the
-# variable doesn't conflict with any of the configuration options. The 
-# variables are case-sensitive and cannot be redeclared.
+# variable doesn't conflict with any of the configuration options.
+# The variables are case-sensitive and cannot be redeclared.
 #
 #set LOCALHOST = 127.0.0.0/8
 

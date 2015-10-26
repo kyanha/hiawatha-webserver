@@ -278,7 +278,7 @@ static bool parse_parameters(t_toolkit_rule *new_rule, char *value, char **opera
 			return false;
 		} else if ((new_rule->parameter = strdup(rest)) == NULL) {
 			return false;
-		} 
+		}
 	} else {
 		/* Error
 		 */
@@ -425,7 +425,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		 */
 		new_rule->condition = tc_method;
 		new_rule->flow = tf_continue;
-		
+
 		if (split_string(value, &value, &rest, ' ') == -1) {
 			return false;
 		}

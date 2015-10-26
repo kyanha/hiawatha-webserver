@@ -54,4 +54,4 @@
 
 /* Features
  */
-#cmakedefine HAVE_ACCF ${HAVE_ACCF} 
+#cmakedefine HAVE_ACCF ${HAVE_ACCF}

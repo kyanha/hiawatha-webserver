@@ -88,6 +88,23 @@ int str_to_int(char *str) {
 	return value;
 }
 
+/* Check if string is empty
+ */
+bool empty_string(char *str) {
+	if (str == NULL) {
+		return true;
+	}
+
+	while (*str != '\0') {
+		if ((*str != ' ') && (*str != '\t')) {
+			return false;
+		}
+		str++;
+	}
+
+	return true;
+}
+
 /* Convert a hexadecimal char to decimal.
  */
 short hex_char_to_int(char c) {
@@ -173,7 +190,7 @@ char *uncomment(char *str) {
 	if ((hash = strstr(str, " #")) != NULL) {
 		*hash = '\0';
 	}
-	
+
 	if ((hash = strstr(str, "\t#")) != NULL) {
 		*hash = '\0';
 	}

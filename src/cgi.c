@@ -19,11 +19,7 @@
 #include <pthread.h>
 #include <poll.h>
 #include <sys/socket.h>
-#include <sys/un.h>
 #include <sys/time.h>
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
-#endif
 #include "global.h"
 #include "alternative.h"
 #include "libstr.h"
@@ -32,6 +28,7 @@
 #include "client.h"
 #include "serverconfig.h"
 #include "envir.h"
+#include "ip.h"
 #include "log.h"
 #include "memdbg.h"
 
@@ -568,61 +565,15 @@ t_cgi_result read_from_cgi_process(t_session *session, t_cgi_info *cgi_info) {
  *  ================
  */
 int connect_to_fcgi_server(t_connect_to *connect_to) {
-	int sock = -1, max_len;
-	struct sockaddr_un sunix;
-	struct sockaddr_in saddr4;
-#ifdef ENABLE_IPV6
-	struct sockaddr_in6 saddr6;
-#endif
-
 	if (connect_to == NULL) {
 		return -1;
 	}
 
 	if (connect_to->unix_socket != NULL) {
-		/* UNIX socket
-		 */
-		if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) > 0) {
-			sunix.sun_family = AF_UNIX;
-			max_len = sizeof(sunix.sun_path);
-			strncpy(sunix.sun_path, connect_to->unix_socket, max_len);
-			sunix.sun_path[max_len - 1] = '\0';
-			if (connect(sock, (struct sockaddr*)&sunix, sizeof(struct sockaddr_un)) != 0) {
-				close(sock);
-				sock = -1;
-			}
-		}
-	} else if (connect_to->ip_addr.family == AF_INET) {
-		/* IPv4
-		 */
-		if ((sock = socket(AF_INET, SOCK_STREAM, 0)) > 0) {
-			memset(&saddr4, 0, sizeof(struct sockaddr_in));
-			saddr4.sin_family = AF_INET;
-			saddr4.sin_port = htons(connect_to->port);
-			memcpy(&saddr4.sin_addr.s_addr, &(connect_to->ip_addr.value), connect_to->ip_addr.size);
-			if (connect(sock, (struct sockaddr*)&saddr4, sizeof(struct sockaddr_in)) != 0) {
-				close(sock);
-				sock = -1;
-			}
-		}
-#ifdef ENABLE_IPV6
-	} else if (connect_to->ip_addr.family == AF_INET6) {
-		/* IPv6
-		 */
-		if ((sock = socket(AF_INET6, SOCK_STREAM, 0)) > 0) {
-			memset(&saddr6, 0, sizeof(struct sockaddr_in6));
-			saddr6.sin6_family = AF_INET6;
-			saddr6.sin6_port = htons(connect_to->port);
-			memcpy(&saddr6.sin6_addr.s6_addr, &(connect_to->ip_addr.value), connect_to->ip_addr.size);
-			if (connect(sock, (struct sockaddr*)&saddr6, sizeof(struct sockaddr_in6)) != 0) {
-				close(sock);
-				sock = -1;
-			}
-		}
-#endif
+		return connect_to_unix_socket(connect_to->unix_socket);
+	} else {
+		return connect_to_server(&(connect_to->ip_addr), connect_to->port);
 	}
-
-	return sock;
 }
 
 int send_fcgi_request(t_session *session, int sock) {

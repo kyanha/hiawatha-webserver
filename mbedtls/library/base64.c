@@ -1,9 +1,8 @@
 /*
  *  RFC 1521 base64 encoding/decoding
  *
- *  Copyright (C) 2006-2014, ARM Limited, All Rights Reserved
- *
- *  This file is part of mbed TLS (https://tls.mbed.org)
+ *  Copyright (C) 2006-2015, ARM Limited, All Rights Reserved
+ *  SPDX-License-Identifier: GPL-2.0
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -18,6 +17,8 @@
  *  You should have received a copy of the GNU General Public License along
  *  with this program; if not, write to the Free Software Foundation, Inc.,
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ *  This file is part of mbed TLS (https://tls.mbed.org)
  */
 
 #if !defined(MBEDTLS_CONFIG_FILE)
@@ -70,6 +71,8 @@ static const unsigned char base64_dec_map[128] =
      49,  50,  51, 127, 127, 127, 127, 127
 };
 
+#define BASE64_SIZE_T_MAX   ( (size_t) -1 ) /* SIZE_T_MAX is not standard */
+
 /*
  * Encode a buffer into base64 format
  */
@@ -86,14 +89,15 @@ int mbedtls_base64_encode( unsigned char *dst, size_t dlen, size_t *olen,
         return( 0 );
     }
 
-    n = ( slen << 3 ) / 6;
+    n = slen / 3 + ( slen % 3 != 0 );
 
-    switch( ( slen << 3 ) - ( n * 6 ) )
+    if( n > ( BASE64_SIZE_T_MAX - 1 ) / 4 )
     {
-        case  2: n += 3; break;
-        case  4: n += 2; break;
-        default: break;
+        *olen = BASE64_SIZE_T_MAX;
+        return( MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL );
     }
+
+    n *= 4;
 
     if( dlen < n + 1 )
     {
@@ -185,7 +189,10 @@ int mbedtls_base64_decode( unsigned char *dst, size_t dlen, size_t *olen,
     }
 
     if( n == 0 )
+    {
+        *olen = 0;
         return( 0 );
+    }
 
     n = ( ( n * 6 ) + 7 ) >> 3;
     n -= j;

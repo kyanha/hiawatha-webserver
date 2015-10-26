@@ -1,6 +1,6 @@
 #!/bin/sh
 
-install_dir="C:\\\\Program Files\\\\Hiawatha"
+default_dir="C:\\\\Program Files\\\\Hiawatha"
 
 if [ `uname -o` != "Cygwin" ]; then
 	echo "Cygwin required."
@@ -41,64 +41,66 @@ cd build_windows_package
 
 # Compile Hiawatha
 #
-install_dir_cyg=`cygpath -p "${install_dir}"`
-cmake .. -DCMAKE_INSTALL_SBINDIR="${install_dir_cyg}/bin" \
-         -DCONFIG_DIR="${install_dir_cyg}/config" \
-         -DLOG_DIR="${install_dir_cyg}/log" \
-         -DPID_DIR="${install_dir_cyg}/log" \
-         -DWORK_DIR="${install_dir_cyg}/work" \
-         -DWEBROOT_DIR="C:\wwwroot" -DCMAKE_LEGACY_CYGWIN_WIN32=0
+default_dir_cyg=`cygpath -p "${default_dir}"`
+cmake .. -DCMAKE_INSTALL_SBINDIR="${default_dir_cyg}/program" \
+         -DCONFIG_DIR="${default_dir_cyg}/config" \
+         -DLOG_DIR="${default_dir_cyg}/logfiles" \
+         -DPID_DIR="${default_dir_cyg}/work" \
+         -DWORK_DIR="${default_dir_cyg}/work" \
+         -DWEBROOT_DIR="${default_dir}/default_site" \
+         -DCMAKE_LEGACY_CYGWIN_WIN32=0
 make
 
 # Make Windows package
 #
 echo "-- Building package"
-version=`grep VERSION config.h | cut -f2 -d'"'`
-dir="hiawatha-${version}"
 
-mkdir -p ${dir}/Hiawatha
-mkdir ${dir}/Hiawatha/bin
-mkdir ${dir}/Hiawatha/config
-mkdir ${dir}/Hiawatha/log
-mkdir ${dir}/Hiawatha/work
-mkdir ${dir}/wwwroot
+mkdir -p root/Hiawatha
+mkdir root/Hiawatha/config
+mkdir root/Hiawatha/default_site
+mkdir root/Hiawatha/documentation
+mkdir root/Hiawatha/logfiles
+mkdir root/Hiawatha/program
+mkdir root/Hiawatha/work
 
-cp hiawatha.exe ${dir}/Hiawatha/bin
-cp ssi-cgi.exe ${dir}/Hiawatha/bin
-cp wigwam.exe ${dir}/Hiawatha/bin
-cp mbedtls/library/cygmbed*.dll ${dir}/Hiawatha/bin
-strip ${dir}/Hiawatha/bin/*.exe
+cp hiawatha.exe root/Hiawatha/program
+cp ssi-cgi.exe root/Hiawatha/program
+cp wigwam.exe root/Hiawatha/program
+cp mbedtls/library/cygmbed*.dll root/Hiawatha/program
+strip root/Hiawatha/program/*.exe
 
-files="cygcrypt-0.dll cyggcc_s-1.dll cygrunsrv.exe cygiconv-2.dll cygwin1.dll cygxml2-2.dll cygxslt-1.dll cygz.dll cyglzma-5.dll"
+files="cygcrypt-0.dll cyggcc_s-1.dll cyggcc_s-seh-1.dll cygrunsrv.exe cygiconv-2.dll cygwin1.dll cygxml2-2.dll cygxslt-1.dll cygz.dll cyglzma-5.dll"
 for file in ${files}; do
-	cp /bin/${file} ${dir}/Hiawatha/bin
+	if [ -f /bin/${file} ]; then
+		cp /bin/${file} root/Hiawatha/program
+	fi
 done
 
-cp ../config/index.xslt ${dir}/Hiawatha/config
-cp ../config/error.xslt ${dir}/Hiawatha/config
-cp ../config/mimetype.conf ${dir}/Hiawatha/config
-cp ../extra/windows/*.lnk ${dir}/Hiawatha
-sed "s/INSTALL_DIR/${install_dir}/" ../extra/windows/Hiawatha.bat > ${dir}/Hiawatha/bin/Hiawatha.bat
-sed "s/INSTALL_DIR/${install_dir}/" ../extra/windows/TestConfig.bat > ${dir}/Hiawatha/bin/TestConfig.bat
-sed "s/INSTALL_DIR/${install_dir}/" ../extra/windows/hiawatha.conf > ${dir}/Hiawatha/config/hiawatha.conf
-cp ../extra/windows/Hiawatha.ico ${dir}/Hiawatha
-cp ../extra/windows/Installation.txt ${dir}
-cp ../extra/index.html ${dir}/wwwroot
-cp ../ChangeLog ${dir}/ChangeLog.txt
-unix2dos ${dir}/ChangeLog.txt
-cp ../LICENSE ${dir}/License.txt
-unix2dos ${dir}/License.txt
+cp ../config/index.xslt root/Hiawatha/config
+cp ../config/error.xslt root/Hiawatha/config
+cp ../config/mimetype.conf root/Hiawatha/config
+cp ../extra/windows/*.bat root/Hiawatha
+cp ../extra/windows/hiawatha.conf root/Hiawatha/config
+cp ../extra/windows/Installation.txt root
+cp ../extra/index.html root/Hiawatha/default_site
+cp ../ChangeLog root/ChangeLog.txt
+unix2dos root/ChangeLog.txt
+cp ../LICENSE root/License.txt
+unix2dos root/License.txt
 
-touch ${dir}/Hiawatha/log/access.log
-touch ${dir}/Hiawatha/log/error.log
-touch ${dir}/Hiawatha/log/exploit.log
-touch ${dir}/Hiawatha/log/system.log
+touch root/Hiawatha/logfiles/access.log
+touch root/Hiawatha/logfiles/error.log
+touch root/Hiawatha/logfiles/exploit.log
+touch root/Hiawatha/logfiles/system.log
 
-man -P cat -t man/hiawatha.1 | ps2pdf - > ${dir}/hiawatha.pdf
-man -P cat -t ../man/ssi-cgi.1 | ps2pdf - > ${dir}/ssi-cgi.pdf
-man -P cat -t ../man/wigwam.1 | ps2pdf - > ${dir}/wigwam.pdf
+man -P cat -t man/hiawatha.1 | ps2pdf - > root/Hiawatha/documentation/hiawatha.pdf
+man -P cat -t ../man/ssi-cgi.1 | ps2pdf - > root/Hiawatha/documentation/ssi-cgi.pdf
+man -P cat -t ../man/wigwam.1 | ps2pdf - > root/Hiawatha/documentation/wigwam.pdf
 
-zip -r ../hiawatha-${version}.zip ${dir}
+version=`grep VERSION config.h | cut -f2 -d'"'`
+cd root
+zip -r ../../hiawatha-${version}.zip .
+cd ..
 
 # Done
 #

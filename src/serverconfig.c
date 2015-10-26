@@ -43,15 +43,43 @@ enum t_user_config { uc_only_root, uc_ignore_root, uc_non_root };
 static bool including = false;
 static t_keyvalue *variables = NULL;
 #ifdef ENABLE_XSLT
-static char *index_xslt = CONFIG_DIR"/index.xslt";
+static char *index_xslt;
 #endif
+
+int init_config_module(char *config_dir) {
+	size_t config_dir_len;
+	char *line;
+
+	config_dir_len = strlen(config_dir);
+
+	/* Set CONFIG_DIR config variable
+	 */
+	if ((line = (char*)malloc(config_dir_len + 12)) == NULL) {
+		return -1;
+	}
+
+	snprintf(line, 1024, "CONFIG_DIR=%s", config_dir);
+	if (parse_keyvalue(line, &variables, "=") == -1) {
+		return -1;
+	}
+
+#ifdef ENABLE_XSLT
+	/* Set default path to index.xslt
+	 */
+	index_xslt = line;
+	sprintf(index_xslt, "%s/index.xslt", config_dir);
+#else
+	free(line);
+#endif
+
+	return 0;
+}
 
 static t_host *new_host(void) {
 	t_host *host;
 
 	if ((host = (t_host*)malloc(sizeof(t_host))) == NULL) {
-		perror("new_host()");
-		exit(EXIT_FAILURE);
+		return NULL;
 	}
 
 	host->website_root        = NULL;
@@ -148,8 +176,7 @@ static t_directory *new_directory(void) {
 	t_directory *directory;
 
 	if ((directory = (t_directory*)malloc(sizeof(t_directory))) == NULL) {
-		perror("new_directory()");
-		exit(EXIT_FAILURE);
+		return NULL;
 	}
 
 	directory->path                = NULL;
@@ -175,12 +202,10 @@ static t_directory *new_directory(void) {
 	directory->nr_of_clients       = 0;
 	directory->upload_speed        = 0;
 	directory->session_speed       = 0;
-	directory->envir_str           = NULL;
 	directory->time_for_cgi        = TIMER_OFF;
 	directory->run_on_download     = NULL;
 	if (pthread_mutex_init(&(directory->client_mutex), NULL) != 0) {
-		perror("new_directory()");
-		exit(EXIT_FAILURE);
+		return NULL;
 	}
 
 	directory->next                = NULL;
@@ -192,8 +217,7 @@ static t_fcgi_server *new_fcgi_server(void) {
 	t_fcgi_server *fcgi_server;
 
 	if ((fcgi_server = (t_fcgi_server*)malloc(sizeof(t_fcgi_server))) == NULL) {
-		perror("new_fcgi_server()");
-		exit(EXIT_FAILURE);
+		return NULL;
 	}
 
 	fcgi_server->fcgi_id          = NULL;
@@ -211,8 +235,7 @@ static t_binding *new_binding(void) {
 	t_binding *binding;
 
 	if ((binding = (t_binding*)malloc(sizeof(t_binding))) == NULL) {
-		perror("new_binding()");
-		exit(EXIT_FAILURE);
+		return NULL;
 	}
 
 	binding->port                 = -1;
@@ -231,7 +254,7 @@ static t_binding *new_binding(void) {
 	binding->binding_id           = NULL;
 #ifdef HAVE_ACCF
 	binding->enable_accf          = false;
-#endif 
+#endif
 	binding->enable_trace         = false;
 	binding->enable_alter         = false;
 	binding->max_keepalive        = 50;
@@ -252,8 +275,7 @@ t_config *default_config(void) {
 	t_config *config;
 
 	if ((config = (t_config*)malloc(sizeof(t_config))) == NULL) {
-		perror("default_config()");
-		exit(EXIT_FAILURE);
+		return NULL;
 	}
 
 	config->mimetype_config    = "mimetype.conf";
@@ -278,9 +300,13 @@ t_config *default_config(void) {
 	config->total_connections  = 150;
 	config->connections_per_ip = 15;
 	config->socket_send_timeout = 3;
+	config->listen_backlog     = 16;
 	config->kill_timedout_cgi  = true;
 	config->wait_for_cgi       = true;
-	config->first_host         = new_host();
+	if ((config->first_host = new_host()) == NULL) {
+		free(config);
+		return NULL;
+	}
 	config->mimetype           = NULL;
 	config->directory          = NULL;
 	config->throttle           = NULL;
@@ -390,17 +416,47 @@ static int fgets_multi(char *line, int size, FILE *fp) {
 }
 
 static bool valid_start_file(char *file) {
-	bool retval = false;
-
 	if (file != NULL) {
 		if (strchr(file, '/') == NULL) {
 			if (strlen(file) <= MAX_START_FILE_LENGTH) {
-				retval = true;
+				return true;
 			}
 		}
 	}
 
-	return retval;
+	return false;
+}
+
+#ifdef CYGWIN
+static bool valid_windows_path(char *path) {
+	if (((*path >= 'a') && (*path <= 'z')) || ((*path >= 'A') && (*path <= 'Z'))) {
+		if (*(path + 1) == ':') {
+			if ((*(path + 2) == '\\') || (*(path + 2) == '/')) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+#endif
+
+static bool valid_path(char *path) {
+	if (path == NULL) {
+		return false;
+	}
+
+	if (*path == '/') {
+		return true;
+	}
+
+#ifdef CYGWIN
+	if (valid_windows_path(path)) {
+		return true;
+	}
+#endif
+
+	return false;
 }
 
 static bool valid_directory(char *dir) {
@@ -408,13 +464,21 @@ static bool valid_directory(char *dir) {
 
 	if (dir == NULL) {
 		return false;
-	} else if ((len = strlen(dir)) <= 1) {
-		return false;
-	} else if ((*dir == '/') && (*(dir + len - 1) != '/')) {
-		return true;
 	}
 
-	return false;
+	if ((len = strlen(dir)) <= 1) {
+		return false;
+	}
+
+	if (valid_path(dir) == false) {
+		return false;
+	}
+
+	if (*(dir + len - 1) == '/') {
+		return false;
+	}
+
+	return true;
 }
 
 static int parse_mode(char *line, mode_t *mode) {
@@ -703,7 +767,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 	char *uid, *gid, *rest;
 	t_cgi_handler *cgi;
 	t_throttle *throt;
-	int speed;
+	int speed, result;
 #ifdef ENABLE_TOMAHAWK
 	t_binding *binding;
 	char *port, *password;
@@ -797,7 +861,15 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			return true;
 		}
 	} else if (strcmp(key, "cgihandler") == 0) {
-		if (split_string(value, &value, &rest, ':') == 0) {
+#ifdef CYGWIN
+		if (valid_windows_path(value)) {
+			result = split_string(value + 2, &value, &rest, ':');
+			value -= 2;
+		} else
+#endif
+			result = split_string(value, &value, &rest, ':');
+
+		if (result == 0) {
 			if ((*value != '\0') && (*rest != '\0')) {
 				cgi = config->cgi_handler;
 				if ((config->cgi_handler = (t_cgi_handler*)malloc(sizeof(t_cgi_handler))) != NULL) {
@@ -869,13 +941,13 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		}
 #endif
 	} else if (strcmp(key, "exploitlogfile") == 0) {
-		if (*value == '/') {
+		if (valid_path(value)) {
 			if ((config->exploit_logfile = strdup(value)) != NULL) {
 				return true;
 			}
 		}
 	} else if (strcmp(key, "garbagelogfile") == 0) {
-		if (*value == '/') {
+		if (valid_path(value)) {
 			if ((config->garbage_logfile = strdup(value)) != NULL) {
 				return true;
 			}
@@ -890,6 +962,10 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		}
 	} else if (strcmp(key, "killtimedoutcgi") == 0) {
 		if (parse_yesno(value, &(config->kill_timedout_cgi)) == 0) {
+			return true;
+		}
+	} else if (strcmp(key, "listenbacklog") == 0) {
+		if ((config->listen_backlog = str_to_int(value)) >= 1) {
 			return true;
 		}
 	} else if (strcmp(key, "logformat") == 0) {
@@ -930,20 +1006,22 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		}
 #ifdef ENABLE_TLS
 	} else if ((strcmp(key, "mintlsversion") == 0) || (strcmp(key, "minsslversion") == 0)) {
-		if ((strcmp(value, "1.0") == 0) || (strcmp(value, "TLS1.0") == 0)) { 
+		if ((strcmp(value, "1.0") == 0) || (strcmp(value, "TLS1.0") == 0)) {
 			config->min_tls_version = MBEDTLS_SSL_MINOR_VERSION_1;
 			return true;
-		} else if ((strcmp(value, "1.1") == 0) || (strcmp(value, "TLS1.1") == 0)) { 
+		} else if ((strcmp(value, "1.1") == 0) || (strcmp(value, "TLS1.1") == 0)) {
 			config->min_tls_version = MBEDTLS_SSL_MINOR_VERSION_2;
 			return true;
-		} else if ((strcmp(value, "1.2") == 0) || (strcmp(value, "TLS1.2") == 0)) { 
+		} else if ((strcmp(value, "1.2") == 0) || (strcmp(value, "TLS1.2") == 0)) {
 			config->min_tls_version = MBEDTLS_SSL_MINOR_VERSION_3;
 			return true;
 		}
 #endif
 #ifdef ENABLE_MONITOR
 	} else if (strcmp(key, "monitorserver") == 0) {
-		monitor_host = new_host();
+		if ((monitor_host = new_host()) == NULL) {
+			return false;
+		}
 		monitor_host->next = config->first_host->next;
 		config->first_host->next = monitor_host;
 
@@ -983,7 +1061,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		return true;
 #endif
 	} else if (strcmp(key, "pidfile") == 0) {
-		if (*value == '/') {
+		if (valid_path(value)) {
 			if ((config->pidfile = strdup(value)) != NULL) {
 				return true;
 			}
@@ -1043,12 +1121,12 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			return true;
 		}
 	} else if (strcmp(key, "systemlogfile") == 0) {
-		if (*value == '/') {
+		if (valid_path(value)) {
 			if ((config->system_logfile = strdup(value)) != NULL) {
 				return true;
 			}
 		}
-#ifdef ENABLE_THREAD_POOL	
+#ifdef ENABLE_THREAD_POOL
 	} else if (strcmp(key, "threadkillrate") == 0) {
 		if ((config->thread_kill_rate = str_to_int(value)) >= 1) {
 			return true;
@@ -1087,7 +1165,9 @@ static bool system_setting(char *key, char *value, t_config *config) {
 #ifdef ENABLE_TOMAHAWK
 	} else if (strcmp(key, "tomahawk") == 0) {
 		if (split_string(value, &port, &password, ',') == 0) {
-			binding = new_binding();
+			if ((binding = new_binding()) == NULL) {
+				return false;
+			}
 			set_to_localhost(&(binding->interface));
 
 			binding->next = config->tomahawk_port;
@@ -1122,9 +1202,17 @@ static bool system_setting(char *key, char *value, t_config *config) {
 	} else if (strcmp(key, "workdirectory") == 0) {
 		if (valid_directory(value) == false) {
 			return false;
-		} else if (strchr(value + 1, '/') == NULL) {
-			return false;
-		} else if ((config->work_directory = strdup(value)) != NULL) {
+		}
+
+		if (strchr(value + 1, '/') == NULL) {
+#ifdef CYGWIN
+			if (strchr(value + 1, '\\') == NULL) {
+				return false;
+			}
+#endif
+		}
+
+		if ((config->work_directory = strdup(value)) != NULL) {
 			return true;
 		}
 	} else if (strcmp(key, "wrapusercgi") == 0) {
@@ -1265,7 +1353,7 @@ static bool user_setting(char *key, char *value, t_host *host, t_tempdata **temp
 		} else if (strcmp(value, "no") == 0) {
 			host->show_index = NULL;
 			return true;
-		} else if ((*value == '/') || (strcmp(value, "xml") == 0)) {
+		} else if (valid_path(value) || (strcmp(value, "xml") == 0)) {
 			if ((host->show_index = strdup(value)) != NULL) {
 				return true;
 			}
@@ -1305,7 +1393,7 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			return true;
 		} else {
 			split_string(value, &value, &rest, ',');
-			if (*value == '/') {
+			if (valid_path(value)) {
 				if ((host->access_logfile = strdup(value)) != NULL) {
 					if (rest != NULL) {
 						if (strcasecmp(rest, "daily") == 0) {
@@ -1370,14 +1458,14 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			return true;
 		}
 	} else if (strcmp(key, "errorlogfile") == 0) {
-		if (*value == '/') {
+		if (valid_path(value)) {
 			if ((host->error_logfile = strdup(value)) != NULL) {
 				return true;
 			}
 		}
 #ifdef ENABLE_XSLT
 	} else if (strcmp(key, "errorxsltfile") == 0) {
-		if (*value == '/') {
+		if (valid_path(value)) {
 			if ((host->error_xslt_file = strdup(value)) != NULL) {
 				return true;
 			}
@@ -1525,7 +1613,7 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		}
 #endif
 	} else if (strcmp(key, "volatileobject") == 0) {
-		if (*value == '/') {
+		if (valid_path(value)) {
 			host->volatile_object.size++;
 			if ((host->volatile_object.item = (char**)realloc(host->volatile_object.item, host->volatile_object.size * sizeof(char*))) != NULL) {
 				if ((*(host->volatile_object.item + host->volatile_object.size - 1) = strdup(value)) != NULL) {
@@ -1548,20 +1636,37 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			}
 		}
 	} else if (strcmp(key, "websocket") == 0) {
-		if ((websocket = (t_websocket*)malloc(sizeof(t_websocket))) != NULL) {
-			init_charlist(&(websocket->path));
-			websocket->timeout = 10 * MINUTE * 1000;
-			websocket->next = NULL;
+		if ((websocket = (t_websocket*)malloc(sizeof(t_websocket))) == NULL) {
+			return false;
+		}
 
-			if (host->websockets == NULL) {
-				host->websockets = websocket;
-			} else {
-				ws = host->websockets;
-				while (ws->next != NULL) {
-					ws = ws->next;
-				}
-				ws->next = websocket;
+		init_charlist(&(websocket->path));
+		websocket->timeout = 10 * MINUTE;
+		websocket->next = NULL;
+
+		if (host->websockets == NULL) {
+			host->websockets = websocket;
+		} else {
+			ws = host->websockets;
+			while (ws->next != NULL) {
+				ws = ws->next;
 			}
+			ws->next = websocket;
+		}
+
+		if (split_string(value, &value, &rest, ' ') != 0) {
+			return false;
+		}
+
+		if (strncmp(value, "/", 1) == 0) {
+			if ((websocket->unix_socket = strdup(value)) == NULL) {
+				return false;
+			}
+#ifdef ENABLE_TLS
+			websocket->use_tls = false;
+#endif
+		} else {
+			websocket->unix_socket = NULL;
 
 			if (strncmp(value, "ws://", 5) == 0) {
 				value += 5;
@@ -1575,18 +1680,18 @@ static bool host_setting(char *key, char *value, t_host *host) {
 				return false;
 			}
 
-			if (split_string(value, &value, &rest, ' ') == 0) {
-				if (parse_ip_port(value, &(websocket->ip_address), &(websocket->port)) == 0) {
-					split_string(rest, &value, &rest, ' ');
-					if (parse_charlist(value, &(websocket->path)) == 0) {
-						if (rest == NULL) {
-							return true;
-						} else if ((websocket->timeout = str_to_int(rest)) > 0) {
-							websocket->timeout *= MINUTE * 1000;
-							return true;
-						}
-					}
-				}
+			if (parse_ip_port(value, &(websocket->ip_address), &(websocket->port)) != 0) {
+				return false;
+			}
+		}
+
+		split_string(rest, &value, &rest, ' ');
+		if (parse_charlist(value, &(websocket->path)) == 0) {
+			if (rest == NULL) {
+				return true;
+			} else if ((websocket->timeout = str_to_int(rest)) > 0) {
+				websocket->timeout *= MINUTE;
+				return true;
 			}
 		}
 	} else if (strcmp(key, "wrapcgi") == 0) {
@@ -1641,7 +1746,7 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 			return false;
 		}
 		length = strlen(value);
-		if ((length < 128) && (*value == '/')) {
+		if ((length < 128) && valid_path(value)) {
 			if (*(value + length - 1) == '/') {
 				if (length >= 3) {
 					directory->path_match = part;
@@ -1668,10 +1773,6 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 		if ((directory->run_on_download = strdup(value)) != NULL) {
 			return true;
 		}
-	} else if (strcmp(key, "setenv") == 0) {
-		if (parse_keyvalue(value, &(directory->envir_str), "=") != -1) {
-			return true;
-		}
 #ifdef ENABLE_XSLT
 	} else if (strcmp(key, "showindex") == 0) {
 		if (strcmp(value, "yes") == 0) {
@@ -1682,7 +1783,7 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 			directory->show_index = NULL;
 			directory->show_index_set = true;
 			return true;
-		} else if ((*value == '/') || (strcmp(value, "xml") == 0)) {
+		} else if (valid_path(value) || (strcmp(value, "xml") == 0)) {
 			if ((directory->show_index = strdup(value)) != NULL) {
 				directory->show_index_set = true;
 				return true;
@@ -1727,7 +1828,7 @@ static bool binding_setting(char *key, char *value, t_binding *binding) {
 			return true;
 		}
 	} else
-#endif 
+#endif
 	if (strcmp(key, "enablealter") == 0) {
 		if (parse_yesno(value, &(binding->enable_alter)) == 0) {
 			return true;
@@ -1945,10 +2046,16 @@ int read_main_configfile(char *configfile, t_config *config, bool config_check) 
 						while (current_binding->next != NULL) {
 							current_binding = current_binding->next;
 						}
-						current_binding->next = new_binding();
+						if ((current_binding->next = new_binding()) == NULL) {
+							perror("new_binding()");
+							return -1;
+						}
 						current_binding = current_binding->next;
 					} else {
-						config->binding = new_binding();
+						if ((config->binding = new_binding()) == NULL) {
+							perror("new_binding()");
+							return -1;
+						}
 						current_binding = config->binding;
 					}
 					section = binding;
@@ -1958,15 +2065,24 @@ int read_main_configfile(char *configfile, t_config *config, bool config_check) 
 						while (current_directory->next != NULL) {
 							current_directory = current_directory->next;
 						}
-						current_directory->next = new_directory();
+						if ((current_directory->next = new_directory()) == NULL) {
+							perror("new_directory()");
+							return -1;
+						}
 						current_directory = current_directory->next;
 					} else {
-						config->directory = new_directory();
+						if ((config->directory = new_directory()) == NULL) {
+							perror("new_directory()");
+							return -1;
+						}
 						current_directory = config->directory;
 					}
 					section = directory;
 				} else if (strcmp(key, "fastcgiserver") == 0) {
-					current_fcgi_server = new_fcgi_server();
+					if ((current_fcgi_server = new_fcgi_server()) == NULL) {
+						perror("new_fcgi_server()");
+						return -1;
+					}
 					current_fcgi_server->next = config->fcgi_server;
 					config->fcgi_server = current_fcgi_server;
 					section = fcgi_server;
@@ -1974,14 +2090,17 @@ int read_main_configfile(char *configfile, t_config *config, bool config_check) 
 					while (current_host->next != NULL) {
 						current_host = current_host->next;
 					}
-					current_host->next = new_host();
+					if ((current_host->next = new_host()) == NULL) {
+						perror("new_host()");
+						return -1;
+					}
 					current_host = current_host->next;
 					section = virtual_host;
 #ifdef ENABLE_TOOLKIT
 				} else if (strcmp(key, "urltoolkit") == 0) {
 					if ((current_toolkit = new_url_toolkit()) == NULL) {
 						perror("new_url_toolkit()");
-						exit(EXIT_FAILURE);
+						return -1;
 					}
 					current_toolkit->next = config->url_toolkit;
 					config->url_toolkit = current_toolkit;

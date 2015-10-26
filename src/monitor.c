@@ -276,7 +276,7 @@ int monitor_stats_to_buffer(t_config *config, time_t now) {
 		}
 
 		if (host->monitor_host_stats->requests + (long)host->monitor_host_stats->bytes_sent + host->monitor_host_stats->bans +
-		    host->monitor_host_stats->exploit_attempts + host->monitor_host_stats->failed_logins + 
+		    host->monitor_host_stats->exploit_attempts + host->monitor_host_stats->failed_logins +
 			host->monitor_host_stats->result_forbidden + host->monitor_host_stats->result_not_found +
 			host->monitor_host_stats->result_internal_error > 0) {
 
@@ -295,10 +295,10 @@ int monitor_stats_to_buffer(t_config *config, time_t now) {
 		}
 
 		if (host->monitor_host_stats->time_0_1 + host->monitor_host_stats->time_1_3 +
-		    host->monitor_host_stats->time_3_10 + host->monitor_host_stats->time_10_x + 
+		    host->monitor_host_stats->time_3_10 + host->monitor_host_stats->time_10_x +
 			host->monitor_host_stats->timed_out + host->monitor_host_stats->cgi_errors > 0) {
 
-			len = snprintf(str, 255, "cgi\t%ld\t%ld\t%s\t%d\t%d\t%d\t%d\t%d\n", 
+			len = snprintf(str, 255, "cgi\t%ld\t%ld\t%s\t%d\t%d\t%d\t%d\t%d\n",
 				(long)timestamp_begin, (long)timestamp_end, host->hostname.item[0],
 				host->monitor_host_stats->time_0_1, host->monitor_host_stats->time_1_3,
 				host->monitor_host_stats->time_3_10, host->monitor_host_stats->time_10_x,

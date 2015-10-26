@@ -3,9 +3,8 @@
  *
  * \brief RFC 1521 base64 encoding/decoding
  *
- *  Copyright (C) 2006-2013, ARM Limited, All Rights Reserved
- *
- *  This file is part of mbed TLS (https://tls.mbed.org)
+ *  Copyright (C) 2006-2015, ARM Limited, All Rights Reserved
+ *  SPDX-License-Identifier: GPL-2.0
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,6 +19,8 @@
  *  You should have received a copy of the GNU General Public License along
  *  with this program; if not, write to the Free Software Foundation, Inc.,
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ *  This file is part of mbed TLS (https://tls.mbed.org)
  */
 #ifndef MBEDTLS_BASE64_H
 #define MBEDTLS_BASE64_H
@@ -45,6 +46,9 @@ extern "C" {
  * \return         0 if successful, or MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL.
  *                 *olen is always updated to reflect the amount
  *                 of data that has (or would have) been written.
+ *                 If that length cannot be represented, then no data is
+ *                 written to the buffer and *olen is set to the maximum
+ *                 length representable as a size_t.
  *
  * \note           Call this function with dlen = 0 to obtain the
  *                 required buffer size in *olen

@@ -1,9 +1,8 @@
 /*
  *  PKCS#12 Personal Information Exchange Syntax
  *
- *  Copyright (C) 2006-2014, ARM Limited, All Rights Reserved
- *
- *  This file is part of mbed TLS (https://tls.mbed.org)
+ *  Copyright (C) 2006-2015, ARM Limited, All Rights Reserved
+ *  SPDX-License-Identifier: GPL-2.0
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -18,6 +17,8 @@
  *  You should have received a copy of the GNU General Public License along
  *  with this program; if not, write to the Free Software Foundation, Inc.,
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ *  This file is part of mbed TLS (https://tls.mbed.org)
  */
 /*
  *  The PKCS #12 Personal Information Exchange Syntax Standard v1.1
@@ -87,6 +88,8 @@ static int pkcs12_parse_pbe_params( mbedtls_asn1_buf *params,
     return( 0 );
 }
 
+#define PKCS12_MAX_PWDLEN 128
+
 static int pkcs12_pbe_derive_key_iv( mbedtls_asn1_buf *pbe_params, mbedtls_md_type_t md_type,
                                      const unsigned char *pwd,  size_t pwdlen,
                                      unsigned char *key, size_t keylen,
@@ -95,7 +98,10 @@ static int pkcs12_pbe_derive_key_iv( mbedtls_asn1_buf *pbe_params, mbedtls_md_ty
     int ret, iterations;
     mbedtls_asn1_buf salt;
     size_t i;
-    unsigned char unipwd[258];
+    unsigned char unipwd[PKCS12_MAX_PWDLEN * 2 + 2];
+
+    if( pwdlen > PKCS12_MAX_PWDLEN )
+        return( MBEDTLS_ERR_PKCS12_BAD_INPUT_DATA );
 
     memset( &salt, 0, sizeof(mbedtls_asn1_buf) );
     memset( &unipwd, 0, sizeof(unipwd) );
@@ -125,6 +131,8 @@ static int pkcs12_pbe_derive_key_iv( mbedtls_asn1_buf *pbe_params, mbedtls_md_ty
     }
     return( 0 );
 }
+
+#undef PKCS12_MAX_PWDLEN
 
 int mbedtls_pkcs12_pbe_sha1_rc4_128( mbedtls_asn1_buf *pbe_params, int mode,
                              const unsigned char *pwd,  size_t pwdlen,

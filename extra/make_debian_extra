@@ -8,7 +8,9 @@ fi
 # Make Debian package
 #
 cd `dirname $0`/..
-extra/make_debian_package -b
+if [ ! -d build_debian_package ]; then
+	extra/make_debian_package -b
+fi
 version=`grep VERSION build_debian_package/config.h | cut -f2 -d'"'`
 arch="${arch-amd64}"
 if ! test -n "$arch" ; then
@@ -16,7 +18,9 @@ if ! test -n "$arch" ; then
 fi
 if [ ! -f hiawatha_${version}_${arch}.deb ]; then
 	echo "Error: Debian package hiawatha_${version}_${arch}.deb not found."
-	rm -rf build_debian_package
+	if [ "$1" != "-b" ]; then
+		rm -rf build_debian_package
+	fi
 	exit
 fi
 

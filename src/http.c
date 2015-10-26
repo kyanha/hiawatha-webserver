@@ -41,6 +41,8 @@ extern char *hs_chunked;
 extern char *hs_forwarded;
 extern char *hs_x_forwarded_for;
 
+char *upgrade_websocket = "Upgrade: websocket";
+
 /* Detect chunked upload progress
  */
 static int all_chunks_uploaded(char *buffer, int size, long *chunk_size_pos) {
@@ -836,7 +838,7 @@ int last_forwarded_ip(t_http_header *http_headers, t_ip_addr *ip_addr) {
 	size_t len;
 	int port;
 
-	if ((forwarded = get_http_header(hs_forwarded, http_headers)) != NULL) {	
+	if ((forwarded = get_http_header(hs_forwarded, http_headers)) != NULL) {
 		/* Forwarded header
 		 */
 		begin = NULL;

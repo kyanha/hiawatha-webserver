@@ -6,7 +6,7 @@ The Hiawatha webserver has been written by Hugo Leisink <hugo@leisink.net>. More
 
 Installation
 ------------
-If the CMake version installed on your system is lower than 2.8.4, remove it, download the latest version from http://www.cmake.org/cmake/resources/software.html and install it.
+If the CMake version installed on your system is lower than 2.8.2, remove it, download the latest version from http://www.cmake.org/cmake/resources/software.html and install it.
 
 	tar -xzf cmake-<version>.tar.gz
 	cd cmake-<version>

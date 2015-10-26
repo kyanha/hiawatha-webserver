@@ -155,7 +155,7 @@ static void secure_header(char *buffer, int size) {
 	}
 
 	header_length = eoh + 4 - buffer;
-	
+
 	/* Remove cookies
 	 */
 	if ((pos = strncasestr(buffer, "Set-Cookie:", header_length)) != NULL) {
@@ -488,10 +488,10 @@ void print_cache_list(FILE *fp) {
 
 		object = cache[i];
 		while (object != NULL) {
-			fprintf(fp, "  Filename  : %s\n", object->file);
-			fprintf(fp, "  File size : %.2f kB\n", (float)(object->header_length + object->content_length) / KILOBYTE);
+			fprintf(fp, "  Filename : %s\n", object->file);
+			fprintf(fp, "  File size: %.2f kB\n", (float)(object->header_length + object->content_length) / KILOBYTE);
 			if ((secs = object->deadline - now) > 0) {
-				fprintf(fp, "  Time left : %d seconds\n\n", secs);
+				fprintf(fp, "  Time left: %d seconds\n\n", secs);
 			} else {
 				fprintf(fp, "  File marked for removal from cache\n\n");
 			}

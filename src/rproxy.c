@@ -51,6 +51,8 @@ extern char *hs_x_forwarded_for;
 extern char *hs_conn;
 extern char *hs_concl;
 
+extern char *upgrade_websocket;
+
 typedef struct type_send_buffer {
 	char buffer[MAX_SEND_BUFFER];
 	int bytes_in_buffer;
@@ -373,7 +375,7 @@ static int send_to_webserver(t_rproxy_webserver *webserver, t_rproxy_result *res
 int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *options, t_rproxy *rproxy, t_rproxy_result *result, bool session_keep_alive) {
 	t_http_header *http_header;
 	char forwarded_for[20 + MAX_IP_STR_LEN], ip_addr[MAX_IP_STR_LEN], forwarded_port[32], *buffer, *referer, *uri;
-	bool forwarded_found = false;
+	bool forwarded_found = false, is_websocket = false;
 	t_send_buffer send_buffer;
 	int handle, bytes_read, skip_dir;
 #ifdef ENABLE_CACHE
@@ -424,11 +426,25 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 		return -1;
 	}
 
-	if ((rproxy->keep_alive == false) || (session_keep_alive == false)) {
+	/* Search for websocket upgrade
+	 */
+	for (http_header = options->http_headers; http_header != NULL; http_header = http_header->next) {
+		if (strcasecmp(http_header->data, upgrade_websocket) == 0) {
+			is_websocket = true;
+		}
+	}
+
+	if ((rproxy->keep_alive == false) || (session_keep_alive == false) || is_websocket) {
 		/* Send Connection: close
 		 */
 		if (send_to_webserver(webserver, result, &send_buffer, hs_conn, 12) == -1) {
 			return -1;
+		}
+
+		if (is_websocket) {
+			if (send_to_webserver(webserver, result, &send_buffer, "upgrade\r\n", 9) == -1) {
+				return -1;
+			}
 		} else if (send_to_webserver(webserver, result, &send_buffer, hs_concl, 7) == -1) {
 			return -1;
 		}
@@ -475,8 +491,8 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 			}
 		}
 
-		if ((rproxy->keep_alive == false) || (session_keep_alive == false)) {
-			if (strncasecmp(http_header->data, "Connection:", 11) == 0) {
+		if ((rproxy->keep_alive == false) || (session_keep_alive == false) || is_websocket) {
+			if (strncasecmp(http_header->data, hs_conn, 11) == 0) {
 				continue;
 			}
 		}

@@ -25,6 +25,14 @@ typedef struct {
 	unsigned char type;
 } t_fcgi_buffer;
 
+typedef struct {
+	int  socket;
+#ifdef ENABLE_TLS
+	bool use_tls;
+	mbedtls_ssl_context *tls_context;
+#endif
+} t_stream;
+
 void init_send_module(void);
 int send_buffer(t_session *session, const char *buffer, int size);
 int send_header(t_session *session);
@@ -34,5 +42,6 @@ int send_http_code_body(t_session *session);
 int send_fcgi_buffer(t_fcgi_buffer *fcgi_buffer, const char *buffer, long size);
 int send_basic_auth(t_session *session);
 int send_digest_auth(t_session *session);
+int link_streams(t_stream *stream1, t_stream *stream2, int poll_timeout);
 
 #endif

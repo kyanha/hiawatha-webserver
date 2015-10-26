@@ -272,7 +272,7 @@ int anonymized_ip_to_str(t_ip_addr *ip, char *str, int max_len) {
 		return -1;
 	}
 
-	return ip_to_str(&anonymized_ip, str, max_len); 
+	return ip_to_str(&anonymized_ip, str, max_len);
 }
 
 /* Convert hostname to an IP address

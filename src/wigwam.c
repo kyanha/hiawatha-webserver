@@ -103,7 +103,7 @@ t_line *search_key(t_line *config, char *key) {
 	while (config != NULL) {
 		if (strcasecmp(config->key, key) == 0) {
 			if (config->value == NULL) {
-				printf("'%s' on line %d in '"CONFIG_DIR"/%s' requires a parameter.\n", config->key, config->linenr, config->file);
+				printf("'%s' on line %d in '%s' requires a parameter.\n", config->key, config->linenr, config->file);
 				exit(EXIT_FAILURE);
 			} else {
 				add_result(&result, config->key, config->value, config->file, config->linenr);
@@ -667,7 +667,7 @@ int add_header(t_http_header **headers, char *env_key, char *header_key) {
 	new->next = *headers;
 
 	*headers = new;
-	
+
 	return 0;
 }
 

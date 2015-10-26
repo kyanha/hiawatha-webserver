@@ -20,6 +20,8 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include "global.h"
 #include "libfs.h"
 #include "libstr.h"
@@ -625,3 +627,23 @@ char *cygwin_to_windows(char *path) {
 	return path;
 }
 #endif
+
+int connect_to_unix_socket(char *unix_socket) {
+	struct sockaddr_un sunix;
+	int sock;
+
+	if (strlen(unix_socket) >= sizeof(sunix.sun_path)) {
+		return -1;
+	}
+
+	if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) != -1) {
+		sunix.sun_family = AF_UNIX;
+		strcpy(sunix.sun_path, unix_socket);
+		if (connect(sock, (struct sockaddr*)&sunix, sizeof(struct sockaddr_un)) != 0) {
+			close(sock);
+			sock = -1;
+		}
+	}
+
+	return sock;
+}

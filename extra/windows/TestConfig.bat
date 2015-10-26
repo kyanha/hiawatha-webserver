@@ -1,11 +1,14 @@
 @ECHO OFF
 
+SET INSTALL_DIR=%~dp0
+SET CYGWIN=nodosfilewarning
+
 ECHO Wigwam:
-"INSTALL_DIR\bin\wigwam.exe"
+"%INSTALL_DIR%program\wigwam.exe" -c "%INSTALL_DIR%config"
 IF ERRORLEVEL 1 GOTO ERROR
 ECHO.
 ECHO Hiawatha:
-"INSTALL_DIR\bin\hiawatha.exe" -k
+"%INSTALL_DIR%program\hiawatha.exe" -k -c "%INSTALL_DIR%config"
 
 :ERROR
 ECHO.

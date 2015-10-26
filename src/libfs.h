@@ -44,5 +44,6 @@ int write_buffer(int handle, const char *buffer, long size);
 #ifdef CYGWIN
 char *cygwin_to_windows(char *path);
 #endif
+int connect_to_unix_socket(char *unix_socket);
 
 #endif

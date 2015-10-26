@@ -80,6 +80,7 @@ typedef struct type_monitor_host_stats {
 typedef struct type_websocket {
 	t_ip_addr ip_address;
 	int port;
+	char *unix_socket;
 	t_charlist path;
 	int timeout;
 #ifdef ENABLE_TLS
@@ -158,7 +159,7 @@ typedef struct type_binding {
 
 #ifdef HAVE_ACCF
 	bool          enable_accf;
-#endif 
+#endif
 	bool          enable_trace;
 	bool          enable_alter;
 	int           max_keepalive;
@@ -197,7 +198,6 @@ typedef struct type_directory {
 	t_charlist    alter_group;
 	mode_t        alter_fmode;
 	char          *imgref_replacement;
-	t_keyvalue    *envir_str;
 	int           time_for_cgi;
 	char          *run_on_download;
 
@@ -326,6 +326,7 @@ typedef struct type_config {
 	int           total_connections;
 	int           connections_per_ip;
 	int           socket_send_timeout;
+	int           listen_backlog;
 	bool          kill_timedout_cgi;
 	bool          rotate_access_logs;
 	char          *system_logfile;
@@ -412,6 +413,7 @@ typedef struct type_config {
 #endif
 } t_config;
 
+int init_config_module(char *config_dir);
 t_config *default_config(void);
 int check_configuration(t_config *config);
 int read_main_configfile(char *configfile, t_config *config, bool config_check);

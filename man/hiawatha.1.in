@@ -61,7 +61,7 @@ where the word "Section" must be replaced with "Binding", "Directory", "FastCGIs
 The global configuration of the Hiawatha webserver.
 .TP
 .B set variable = value
-With 'set', you can declare a variable. Make sure the name of the variable doesn't conflict with any of the configuration options. The variables are case-sensitive and cannot be redeclared.
+With 'set', you can declare a variable. Make sure the name of the variable doesn't conflict with any of the configuration options. The variables are case-sensitive and cannot be redeclared. The variable CONFIG_DIR will be set by Hiawatha to the directory where hiawatha.conf is located.
 .br
 Example: set local_net = 192.168.1.0/24
          AccessList = allow local_net, deny 0.0.0.0/0 (see AccessList for more information about this option)
@@ -215,6 +215,11 @@ If a CGI process times out (see TimeForCGI for more information), Hiawatha will 
 .br
 Default = yes, example: KillTimedoutCGI = no
 .TP
+.B ListenBacklog = <value>
+The backlog value for the listen() system call. This value defines the size of the waiting queue for incoming connections.
+.br
+Default = 16, example: ListenBacklog = 128
+.TP
 .B LogfileMask = (allow|deny) <ip-address>[/netmask][, (allow|deny) <ip-address>[/netmask], ...]
 List of IPs from which HTTP requests will be logged. If an IP does not match an entry in the list, the request will be logged.
 .br
@@ -337,7 +342,7 @@ Example: Tomahawk = 81,41d0c72bd73afaa2c207064d81d5a3d9
 (requires that Hiawatha was compiled with -DENABLE_TOMAHAWK=on)
 .TP
 .B TunnelSSH = <ip-address>[, <ip-address>, ...]
-This option allows you to connect to the SSH daemon on your server when port 22 is not available. The parameter of this option is the IP address from where you want to connect to your server. In PuTTY and WinSCP, use the HTTP proxy type and enable the 'Consider proxying local host connections' option. Use 'localhost' as the hostname and your server's hostname as the proxy hostname.
+This option allows you to connect to the SSH daemon on your server when port 22 is blocked by a firewall. The parameter of this option is the IP address from where you want to connect to your server. In PuTTY and WinSCP, use the HTTP proxy type and enable the 'Consider proxying local host connections' option. Use 'localhost' as the hostname and your server's hostname as the proxy hostname.
 .br
 Example: TunnelSSH = 123.45.67.89
 .TP
@@ -709,7 +714,7 @@ Example: WrapCGI = test
 This chapter explains which options can be set for a specific directory. These options will override (virtual) host settings.
 .TP
 .B Path = <path|sub-path>
-The path to the directory. Path is a required field. Note that only the first Directory record that has a matching Path will be used. If Path ends with a slash (/), Hiawatha will seek anywhere in the path of the requested file for a match. If it does not end with a slash, Hiawatha will start matching from the beginning of the path.
+The path to the directory. Path is a required field. Note that only the first Directory record that has a matching Path will be used. If Path ends with a slash (/), Hiawatha will seek anywhere in the complete path of the requested file for a match. If it does not end with a slash, Hiawatha will start matching from the beginning of the path.
 .br
 Example: Path = /var/www/cgi-bin or Path = /public_html/
 .TP
@@ -991,9 +996,6 @@ A user can override the settings listed below for a certain directory. This can 
 ,
 .br
 .B RequiredGroup
-,
-.br
-.B Setenv
 ,
 .br
 .B ShowIndex
