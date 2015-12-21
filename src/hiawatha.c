@@ -90,7 +90,7 @@ char *version_string = "Hiawatha v"VERSION
 	", reverse proxy"
 #endif
 #ifdef ENABLE_TLS
-	", TLS (v"MBEDTLS_VERSION_STRING")"
+	", TLS v"MBEDTLS_VERSION_STRING
 #endif
 #ifdef ENABLE_TOMAHAWK
 	", Tomahawk"
@@ -733,9 +733,17 @@ int run_webserver(t_settings *settings) {
 		return -1;
 	}
 
+	/* Create gzipped work directory
+	 */
+	if (create_directory(config->gzipped_directory, S_IRWXU, config->server_uid, config->server_gid) == -1) {
+		fprintf(stderr, "Error creating gzip work directory '%s'\n", config->gzipped_directory);
+		return -1;
+	}
+
+	wipe_directory(config->gzipped_directory, ".gz");
+
 	/* Create the upload directory for PUT requests
 	 */
-
 	if ((getuid() == 0) || (geteuid() == 0)) {
 		access_rights = S_ISVTX | S_IRWXU | S_IWGRP | S_IXGRP | S_IWOTH | S_IXOTH;
 	} else {

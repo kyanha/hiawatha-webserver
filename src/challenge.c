@@ -30,9 +30,6 @@
 #define COOKIE_SIZE 20
 #define SECRET_SIZE 20
 
-#define SHA_HASH_SIZE 32
-#define HEX_HASH_SIZE SHA_HASH_SIZE * 2
-
 extern char *hs_conlen;
 extern char *hs_lctn;
 
@@ -77,22 +74,13 @@ int init_challenge_module(char *challenge_secret) {
 	return 0;
 }
 
-static void sha2_bin2hex(unsigned char bin[SHA_HASH_SIZE], char hex[HEX_HASH_SIZE + 1]) {
-	int i;
-
-	for (i = 0; i < SHA_HASH_SIZE; i++) {
-		sprintf(&hex[2 * i], "%02x", bin[i]);
-	}
-	hex[HEX_HASH_SIZE] = '\0';
-}
-
 static int generate_cookie(t_session *session, char *cookie, size_t size) {
 	char text[MAX_IP_STR_LEN + SECRET_SIZE + 1];
-	unsigned char bin_hash[SHA_HASH_SIZE];
-	char hex_hash[HEX_HASH_SIZE + 1];
+	unsigned char bin_hash[32];
+	char hex_hash[65];
 	size_t len;
 
-	if (size - 1 > HEX_HASH_SIZE) {
+	if (size - 1 > 64) {
 		return -1;
 	}
 
@@ -101,7 +89,7 @@ static int generate_cookie(t_session *session, char *cookie, size_t size) {
 	memcpy(text + len, secret, SECRET_SIZE);
 	*(text + len + SECRET_SIZE) = '\0';
 	mbedtls_sha256((unsigned char*)text, len + SECRET_SIZE, bin_hash, 0);
-	sha2_bin2hex(bin_hash, hex_hash);
+	sha256_bin2hex(bin_hash, hex_hash);
 
 	memcpy(cookie, hex_hash, size - 1);
 	*(cookie + size - 1) = '\0';

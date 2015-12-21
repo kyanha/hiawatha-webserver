@@ -91,6 +91,7 @@ typedef struct type_session {
 	char            *uploaded_file;
 	long            uploaded_size;
 	char            *location;
+	bool            send_expires;
 	int             expires;
 	bool            caco_private;
 	t_cause_of_301  cause_of_301;
@@ -152,7 +153,6 @@ int  get_target_extension(t_session *session);
 
 int  get_homedir(t_session *session, char *username);
 bool duplicate_host(t_session *session);
-bool is_volatile_object(t_session *session);
 int  load_user_root_config(t_session *session);
 int  load_user_config(t_session *session);
 int  copy_directory_settings(t_session *session);
@@ -163,5 +163,6 @@ int  prevent_sqli(t_session *session);
 int  prevent_csrf(t_session *session);
 void close_socket(t_session *session);
 int  handle_connection_not_allowed(t_session *session, int connections);
+bool file_can_be_compressed(t_session *session);
 
 #endif

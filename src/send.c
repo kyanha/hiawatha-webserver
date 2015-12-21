@@ -331,7 +331,7 @@ int send_header(t_session *session) {
 
 	/* Expires
 	 */
-	if ((session->expires > -1) && (session->return_code == 200)) {
+	if (session->send_expires && (session->expires > -1) && (session->return_code == 200)) {
 		if (time(&t) == -1) {
 			return -1;
 		}
@@ -463,8 +463,11 @@ int send_chunk(t_session *session, const char *chunk, int size) {
 			}
 			session->output_size = 0;
 		}
-		if (send_to_client(session, "0\r\n\r\n", 5) == -1) {
-			return -1;
+
+		if (size == 0) {
+			if (send_to_client(session, "0\r\n\r\n", 5) == -1) {
+				return -1;
+			}
 		}
 	} else {
 		if ((session->output_size + size > OUTPUT_BUFFER_SIZE) && (session->output_size > 0)) {

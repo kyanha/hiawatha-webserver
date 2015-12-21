@@ -4,21 +4,19 @@
  * \brief Elliptic curves over GF(p)
  *
  *  Copyright (C) 2006-2015, ARM Limited, All Rights Reserved
- *  SPDX-License-Identifier: GPL-2.0
+ *  SPDX-License-Identifier: Apache-2.0
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ *  Licensed under the Apache License, Version 2.0 (the "License"); you may
+ *  not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- *  You should have received a copy of the GNU General Public License along
- *  with this program; if not, write to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ *  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  *
  *  This file is part of mbed TLS (https://tls.mbed.org)
  */
@@ -349,6 +347,21 @@ int mbedtls_ecp_set_zero( mbedtls_ecp_point *pt );
 int mbedtls_ecp_is_zero( mbedtls_ecp_point *pt );
 
 /**
+ * \brief           Compare two points
+ *
+ * \note            This assumes the points are normalized. Otherwise,
+ *                  they may compare as "not equal" even if they are.
+ *
+ * \param P         First point to compare
+ * \param Q         Second point to compare
+ *
+ * \return          0 if the points are equal,
+ *                  MBEDTLS_ERR_ECP_BAD_INPUT_DATA otherwise
+ */
+int mbedtls_ecp_point_cmp( const mbedtls_ecp_point *P,
+                           const mbedtls_ecp_point *Q );
+
+/**
  * \brief           Import a non-zero point from two ASCII strings
  *
  * \param P         Destination point
@@ -570,6 +583,29 @@ int mbedtls_ecp_check_pubkey( const mbedtls_ecp_group *grp, const mbedtls_ecp_po
  *                  mbedtls_ecdh_context of mbedtls_ecdsa_context.
  */
 int mbedtls_ecp_check_privkey( const mbedtls_ecp_group *grp, const mbedtls_mpi *d );
+
+/**
+ * \brief           Generate a keypair with configurable base point
+ *
+ * \param grp       ECP group
+ * \param G         Chosen base point
+ * \param d         Destination MPI (secret part)
+ * \param Q         Destination point (public part)
+ * \param f_rng     RNG function
+ * \param p_rng     RNG parameter
+ *
+ * \return          0 if successful,
+ *                  or a MBEDTLS_ERR_ECP_XXX or MBEDTLS_MPI_XXX error code
+ *
+ * \note            Uses bare components rather than an mbedtls_ecp_keypair structure
+ *                  in order to ease use with other structures such as
+ *                  mbedtls_ecdh_context of mbedtls_ecdsa_context.
+ */
+int mbedtls_ecp_gen_keypair_base( mbedtls_ecp_group *grp,
+                     const mbedtls_ecp_point *G,
+                     mbedtls_mpi *d, mbedtls_ecp_point *Q,
+                     int (*f_rng)(void *, unsigned char *, size_t),
+                     void *p_rng );
 
 /**
  * \brief           Generate a keypair

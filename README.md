@@ -6,7 +6,7 @@ The Hiawatha webserver has been written by Hugo Leisink <hugo@leisink.net>. More
 
 Installation
 ------------
-If the CMake version installed on your system is lower than 2.8.2, remove it, download the latest version from http://www.cmake.org/cmake/resources/software.html and install it.
+If the CMake version installed on your system is lower than 2.8.2, remove it, download the latest version from https://cmake.org/download/#latest and install it.
 
 	tar -xzf cmake-<version>.tar.gz
 	cd cmake-<version>
@@ -50,7 +50,7 @@ Look inside the directory 'extra' for scripts to build packages for Debian, Red 
 
 Related projects
 ----------------
-The Hiawatha Monitor is a monitoring tool for Hiawatha. It helps you to keep track of all your Hiawatha installation. It's a PHP5 webapplication and requires a MySQL database and the cron daemon for periodic downloading of statistical information from the webservers it monitors. More information about the Hiawatha Monitor can be found at http://hiawatha-webserver.org/monitor.
+The Hiawatha Monitor is a monitoring tool for Hiawatha. It helps you to keep track of all your Hiawatha installation. It's a PHP5 webapplication and requires a MySQL database and the cron daemon for periodic downloading of statistical information from the webservers it monitors. More information about the Hiawatha Monitor can be found at https://www.hiawatha-webserver.org/monitor.
 
 The Banshee PHP framework has also been written with security in mind. It has a Model-View-Controller architecture (XSLT for the views) and requires a MySQL database. More information about Banshee can be found at http://www.banshee-php.org/.
 

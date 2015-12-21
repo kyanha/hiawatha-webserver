@@ -1,3 +1,18 @@
+hiawatha (10.0) stable; urgency=low
+
+  * Usage of Directory sections changed.
+  * Added support for RFC 5785.
+  * Added support for GZip compression. Removed the UseGZfile option.
+  * Added ECDSA support for TLS 1.0 and TLS 1.1.
+  * Replaced UrlToolkit Expire option with ExpirePeriod in Directory section.
+  * Replaced IgnoreDotHiawatha option with UseLocalConfig.
+  * Removed the VolatileObject option.
+  * Improved SQL injection detection.
+  * mbed TLS updated to 2.2.0.
+  * Small improvements.
+
+ -- Hugo Leisink <hugo@leisink.net>  Wed, 25 Nov 2015 19:13:39 +0100
+
 hiawatha (9.15) stable; urgency=low
 
   * Support for WebSockets via reverse proxy.
@@ -135,7 +150,7 @@ hiawatha (9.4) stable; urgency=low
   * RandomHeader option added.
   * Dropped support for RC4.
   * PolarSSL updated to version 1.3.4.
-  * Added support for Hyper Text Coffee Pot Control Protocol (RFC2324).
+  * Added support for Hyper Text Coffee Pot Control Protocol (RFC 2324).
   * Added SSL_CIPHER to CGI environment.
   * Added Public/Private to URL Toolkit expire option.
   * Small improvements.

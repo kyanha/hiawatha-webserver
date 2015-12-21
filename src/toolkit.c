@@ -80,7 +80,7 @@ t_url_toolkit *new_url_toolkit(void) {
 static bool parse_parameters(t_toolkit_rule *new_rule, char *value, char **operation) {
 	char *rest;
 	bool allowed = false;
-	int loop, time;
+	int loop;
 
 	split_string(value, &value, &rest, ' ');
 
@@ -127,67 +127,6 @@ static bool parse_parameters(t_toolkit_rule *new_rule, char *value, char **opera
 		/* Exit
 		 */
 		new_rule->flow = tf_exit;
-	} else if (strcasecmp(value, "expire") == 0) {
-		/* Expire
-		 */
-		new_rule->operation = to_expire;
-
-		if (split_string(rest, &value, &rest, ' ') == -1) {
-			return false;
-		}
-		if ((new_rule->value = str_to_int(value)) == -1) {
-			return false;
-		}
-
-		time = new_rule->value;
-
-		split_string(rest, &value, &rest, ' ');
-		if (strcasecmp(value, "minutes") == 0) {
-			new_rule->value *= MINUTE;
-		} else if (strcasecmp(value, "hours") == 0) {
-			new_rule->value *= HOUR;
-		} else if (strcasecmp(value, "days") == 0) {
-			new_rule->value *= DAY;
-		} else if (strcasecmp(value, "weeks") == 0) {
-			new_rule->value *= 7 * DAY;
-		} else if (strcasecmp(value, "months") == 0) {
-			new_rule->value *= 30.5 * DAY;
-		} else if (strcasecmp(value, "seconds") != 0) {
-			return false;
-		}
-
-		if (new_rule->value < time) {
-			return false;
-		}
-
-		/* public / private
-		 */
-		if (rest == NULL) {
-			return true;
-		}
-		split_string(rest, &value, &rest, ' ');
-		if (strcasecmp(value, "private") == 0) {
-			new_rule->caco_private = true;
-		} else if (strcasecmp(value, "public") == 0) {
-			new_rule->caco_private = false;
-		} else if (rest == NULL) {
-			rest = value;
-		} else {
-			return false;
-		}
-
-		/* exit / return
-		 */
-		if (rest == NULL) {
-			return true;
-		}
-		if (strcasecmp(rest, "exit") == 0) {
-			new_rule->flow = tf_exit;
-		} else if (strcasecmp(rest, "return") == 0) {
-			new_rule->flow = tf_return;
-		} else {
-			return false;
-		}
 	} else if (strcasecmp(value, "goto") == 0) {
 		/* Goto
 		 */
@@ -300,8 +239,8 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 		"ban", "call", "denyaccess", "exit", "goto", "return", "omitrequestlog",
 		"skip", "use", NULL};
 	char *match_operations[] = {
-		"ban", "call", "denyaccess", "exit", "expire", "goto", "redirect",
-		"return", "rewrite", "skip", "usefastcgi", NULL};
+		"ban", "call", "denyaccess", "exit", "goto", "redirect", "return",
+		"rewrite", "skip", "usefastcgi", NULL};
 	char *method_operations[] = {
 		"call", "denyaccess", "exit", "goto", "return", "skip", "use", NULL};
 	char *requesturi_operations[] = {
@@ -613,7 +552,6 @@ void init_toolkit_options(t_toolkit_options *options) {
 	options->website_root = NULL;
 	options->fastcgi_server = NULL;
 	options->ban = 0;
-	options->expire = -1;
 	options->caco_private = false;
 	options->total_connections = 0;
 #ifdef ENABLE_TLS
@@ -694,11 +632,10 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 						headers = headers->next;
 					}
 				} else {
-					if ((header = get_http_header(rule->header, options->http_headers)) == NULL) {
-						break;
-					}
-					if (regexec(&(rule->pattern), header, REGEXEC_NMATCH, pmatch, 0) == 0) {
-						condition_met = true;
+					if ((header = get_http_header(rule->header, options->http_headers)) != NULL) {
+						if (regexec(&(rule->pattern), header, REGEXEC_NMATCH, pmatch, 0) == 0) {
+							condition_met = true;
+						}
 					}
 					if (rule->neg_match) {
 						condition_met = (condition_met == false);
@@ -718,7 +655,7 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 			case tc_request_uri:
 				/* Request URI
 				 */
-				if (valid_uri(url, false) == false) {
+				if (valid_uri(url, options->allow_dot_files) == false) {
 					break;
 				}
 				if ((file = make_path(options->website_root, url)) == NULL) {
@@ -793,12 +730,6 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 				/* Omit requeest log
 				 */
 				options->log_request = false;
-				break;
-			case to_expire:
-				/* Send Expire HTTP header
-				 */
-				options->expire = rule->value;
-				options->caco_private = rule->caco_private;
 				break;
 			case to_fastcgi:
 				/* Use FastCGI server

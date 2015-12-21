@@ -157,8 +157,9 @@ static int handle_error(t_session *session, int error_code) {
 	session->handling_error = true;
 	session->mimetype = NULL;
 	session->vars = error_handler->parameters;
+	session->encode_gzip = false;
 
-	if ((new_fod = (char*)malloc(session->host->website_root_len + strlen(error_handler->handler) + 4)) == NULL) { /* + 3 for .gz (gzip encoding) */
+	if ((new_fod = (char*)malloc(session->host->website_root_len + strlen(error_handler->handler) + 1)) == NULL) {
 		log_error(session, "malloc() error while handling error");
 		return 500;
 	}
@@ -357,11 +358,6 @@ int process_url_toolkit(t_session *session, char *toolkit_id, t_toolkit_options 
 		return 403;
 	}
 
-	if (toolkit_options->expire > -1) {
-		session->expires = toolkit_options->expire;
-		session->caco_private = toolkit_options->caco_private;
-	}
-
 	if (result == UT_EXIT) {
 		return UT_EXIT;
 	}
@@ -524,6 +520,7 @@ static int serve_client(t_session *session) {
 	}
 	session->host->access_time = session->time;
 
+
 #ifdef ENABLE_TLS
 	/* TLS client authentication
 	 */
@@ -680,7 +677,7 @@ no_websocket:
 	}
 
 #ifdef ENABLE_TOOLKIT
-	if (session->host->ignore_dot_hiawatha == false) {
+	if (session->host->use_local_config) {
 		if (load_user_root_config(session) == -1) {
 			return 500;
 		}
@@ -807,7 +804,7 @@ no_websocket:
 
 	/* Load configfile from directories
 	 */
-	if (session->host->ignore_dot_hiawatha == false) {
+	if (session->host->use_local_config) {
 		if (load_user_config(session) == -1) {
 			return 500;
 		}
@@ -1017,7 +1014,9 @@ static void handle_request_result(t_session *session, int result) {
 			}
 			break;
 		case ec_FORCE_QUIT:
-			log_system(session, "Client kicked");
+			if (session->config->log_timeouts) {
+				log_system(session, "Client kicked");
+			}
 			break;
 		case ec_SQL_INJECTION:
 			if ((session->config->ban_on_sqli > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
@@ -1031,8 +1030,11 @@ static void handle_request_result(t_session *session, int result) {
 				}
 #endif
 			}
-			//session->return_code = 441;
+#ifdef ENABLE_DEBUG
+			session->return_code = 441;
+#else
 			session->return_code = 404;
+#endif
 			send_code(session);
 			if (session->log_request) {
 				log_request(session);

@@ -38,8 +38,6 @@ enum t_section { syntax_error = -1, none, binding, virtual_host, directory, fcgi
 #endif
 	};
 
-enum t_user_config { uc_only_root, uc_ignore_root, uc_non_root };
-
 static bool including = false;
 static t_keyvalue *variables = NULL;
 #ifdef ENABLE_XSLT
@@ -106,7 +104,6 @@ static t_host *new_host(void) {
 #endif
 	host->enforce_first_hostname = false;
 	host->allow_dot_files     = false;
-	host->use_gz_file         = false;
 	host->access_list         = NULL;
 	host->alter_list          = NULL;
 	host->alter_fmode         = S_IRUSR | S_IWUSR | S_IRGRP;
@@ -123,7 +120,6 @@ static t_host *new_host(void) {
 #endif
 	host->wrap_cgi            = NULL;
 	init_groups(&(host->groups));
-	init_charlist(&(host->volatile_object));
 	host->imgref_replacement  = NULL;
 	host->envir_str           = NULL;
 	host->alias               = NULL;
@@ -150,9 +146,10 @@ static t_host *new_host(void) {
 	host->follow_symlinks     = p_no;
 	host->enable_path_info    = false;
 	host->trigger_on_cgi_status = false;
+	init_charlist(&(host->directory));
 	init_charlist(&(host->fast_cgi));
 	host->secure_url          = true;
-	host->ignore_dot_hiawatha = false;
+	host->use_local_config    = false;
 	host->deny_body           = NULL;
 	host->webdav_app          = false;
 	host->http_auth_to_cgi    = false;
@@ -179,7 +176,8 @@ static t_directory *new_directory(void) {
 		return NULL;
 	}
 
-	directory->path                = NULL;
+	directory->dir_id              = NULL;
+	init_charlist(&(directory->path));
 	directory->wrap_cgi            = NULL;
 	directory->start_file          = NULL;
 	directory->execute_cgiset      = false;
@@ -187,7 +185,6 @@ static t_directory *new_directory(void) {
 	directory->show_index          = NULL;
 	directory->show_index_set      = false;
 #endif
-	directory->use_gz_file_set     = false;
 	directory->follow_symlinks_set = false;
 	directory->access_list         = NULL;
 	directory->alter_list          = NULL;
@@ -204,6 +201,8 @@ static t_directory *new_directory(void) {
 	directory->session_speed       = 0;
 	directory->time_for_cgi        = TIMER_OFF;
 	directory->run_on_download     = NULL;
+	directory->expires             = -1;
+	directory->caco_private        = true;
 	if (pthread_mutex_init(&(directory->client_mutex), NULL) != 0) {
 		return NULL;
 	}
@@ -349,6 +348,8 @@ t_config *default_config(void) {
 	config->work_directory     = WORK_DIR;
 	config->upload_directory   = NULL;
 	config->upload_directory_len = 0;
+	config->gzipped_directory  = NULL;
+	config->gzipped_directory_len = 0;
 
 #ifdef ENABLE_CHALLENGE
 	config->challenge_threshold = -1;
@@ -552,6 +553,53 @@ static int parse_credentialfiles(char *line, t_auth_method *auth_method, char **
 	return 0;
 }
 
+static int parse_expires(char *line, int *time, bool *caco_private) {
+	char *rest;
+	size_t last;
+
+	if (split_string(line, &line, &rest, ' ') == -1) {
+		return -1;
+	} else if ((*time = str_to_int(line)) == -1) {
+		return -1;
+	}
+
+	split_string(rest, &line, &rest, ',');
+
+	if ((last = strlen(line)) == 0) {
+		return -1;
+	}
+	last--;
+	if (line[last] == 's') {
+		line[last] = '\0';
+	}
+
+	if (strcasecmp(line, "minute") == 0) {
+		*time *= MINUTE;
+	} else if (strcasecmp(line, "hour") == 0) {
+		*time *= HOUR;
+	} else if (strcasecmp(line, "day") == 0) {
+		*time *= DAY;
+	} else if (strcasecmp(line, "week") == 0) {
+		*time *= 7 * DAY;
+	} else if (strcasecmp(line, "month") == 0) {
+		*time *= 30.5 * DAY;
+	} else if (strcasecmp(line, "second") != 0) {
+		return -1;
+	}
+
+	if (rest != NULL) {
+		if (strcasecmp(rest, "public") == 0) {
+			*caco_private = false;
+		} else if (strcasecmp(rest, "private") == 0) {
+			*caco_private = true;
+		} else {
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
 static bool replace_variables(char **line) {
 	bool replaced = false;
 	t_keyvalue *variable;
@@ -656,15 +704,19 @@ int check_configuration(t_config *config) {
 	if ((config->upload_directory = (char*)malloc(config->upload_directory_len + 1)) == NULL) {
 		return -1;
 	}
-	memcpy(config->upload_directory, config->work_directory, len);
-	strcpy(config->upload_directory + len, "/upload");
+	sprintf(config->upload_directory, "%s/upload", config->work_directory);
+
+	config->gzipped_directory_len = len + 8;
+	if ((config->gzipped_directory = (char*)malloc(config->gzipped_directory_len + 1)) == NULL) {
+		return -1;
+	}
+	sprintf(config->gzipped_directory, "%s/gzipped", config->work_directory);
 
 #ifdef ENABLE_MONITOR
 	if ((config->monitor_directory = (char*)malloc(len + 9)) == NULL) {
 		return -1;
 	}
-	memcpy(config->monitor_directory, config->work_directory, len);
-	strcpy(config->monitor_directory + len, "/monitor");
+	sprintf(config->monitor_directory, "%s/monitor", config->work_directory);
 
 	if ((config->monitor_enabled) && (config->first_host->next != NULL)) {
 		host = config->first_host->next;
@@ -1370,10 +1422,6 @@ static bool user_setting(char *key, char *value, t_host *host, t_tempdata **temp
 				}
 			}
 		}
-	} else if (strcmp(key, "usegzfile") == 0) {
-		if (parse_yesno(value, &(host->use_gz_file)) == 0) {
-			return true;
-		}
 	}
 
 	return false;
@@ -1503,10 +1551,6 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		if (parse_yesno(value, &(host->http_auth_to_cgi)) == 0) {
 			return true;
 		}
-	} else if (strcmp(key, "ignoredothiawatha") == 0) {
-		if (parse_yesno(value, &(host->ignore_dot_hiawatha)) == 0) {
-			return true;
-		}
 	} else if (strcmp(key, "noextensionas") == 0) {
 		if ((host->no_extension_as = strdup(value)) != NULL) {
 			return true;
@@ -1585,9 +1629,17 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		if (parse_yesno(value, &(host->trigger_on_cgi_status)) == 0) {
 			return true;
 		}
+	} else if (strcmp(key, "usedirectory") == 0) {
+		if (parse_charlist(value, &(host->directory)) != -1) {
+			return true;
+		}
 	} else if (strcmp(key, "usefastcgi") == 0) {
 		if (parse_charlist(value, &(host->fast_cgi)) != -1) {
 			host->execute_cgi = true;
+			return true;
+		}
+	} else if (strcmp(key, "uselocalconfig") == 0) {
+		if (parse_yesno(value, &(host->use_local_config)) == 0) {
 			return true;
 		}
 #ifdef ENABLE_RPROXY
@@ -1612,15 +1664,6 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			return true;
 		}
 #endif
-	} else if (strcmp(key, "volatileobject") == 0) {
-		if (valid_path(value)) {
-			host->volatile_object.size++;
-			if ((host->volatile_object.item = (char**)realloc(host->volatile_object.item, host->volatile_object.size * sizeof(char*))) != NULL) {
-				if ((*(host->volatile_object.item + host->volatile_object.size - 1) = strdup(value)) != NULL) {
-					return true;
-				}
-			}
-		}
 	} else if (strcmp(key, "webdavapp") == 0) {
 		if (parse_yesno(value, &(host->webdav_app)) == 0) {
 			if (host->webdav_app) {
@@ -1705,7 +1748,6 @@ static bool host_setting(char *key, char *value, t_host *host) {
 
 static bool directory_setting(char *key, char *value, t_directory *directory) {
 	char *maxclients;
-	size_t length;
 
 	if (strcmp(key, "accesslist") == 0) {
 		if ((directory->access_list = parse_accesslist(value, true, directory->access_list)) != NULL) {
@@ -1723,13 +1765,19 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 		if (parse_mode(value, &(directory->alter_fmode)) != -1) {
 			return true;
 		}
-	} else if (strcmp(key, "wrapcgi") == 0) {
-		if ((directory->wrap_cgi = strdup(value)) != NULL) {
-			return true;
+	} else if (strcmp(key, "directoryid") == 0) {
+		if (directory->dir_id == NULL) {
+			if ((directory->dir_id = strdup(value)) != NULL) {
+				return true;
+			}
 		}
 	} else if (strcmp(key, "executecgi") == 0) {
 		if (parse_yesno(value, &(directory->execute_cgi)) == 0) {
 			directory->execute_cgiset = true;
+			return true;
+		}
+	} else if (strcmp(key, "expireperiod") == 0) {
+		if (parse_expires(value, &(directory->expires), &(directory->caco_private)) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "followsymlinks") == 0) {
@@ -1742,28 +1790,8 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 			return true;
 		}
 	} else if (strcmp(key, "path") == 0) {
-		if (directory->path != NULL) {
-			return false;
-		}
-		length = strlen(value);
-		if ((length < 128) && valid_path(value)) {
-			if (*(value + length - 1) == '/') {
-				if (length >= 3) {
-					directory->path_match = part;
-					if ((directory->path = strdup(value)) != NULL) {
-						return true;
-					}
-				}
-			} else {
-				if (length >= 2) {
-					directory->path_match = root;
-					if ((directory->path = (char*)malloc(length + 2)) != NULL) {
-						memcpy(directory->path, value, length);
-						memcpy(directory->path + length, "/\0", 2);
-						return true;
-					}
-				}
-			}
+		if (parse_charlist(value, &(directory->path)) != -1) {
+			return true;
 		}
 	} else if (strcmp(key, "requiredgroup") == 0) {
 		if (parse_charlist(value, &(directory->required_group)) != -1) {
@@ -1809,9 +1837,8 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 				}
 			}
 		}
-	} else if (strcmp(key, "usegzfile") == 0) {
-		if (parse_yesno(value, &(directory->use_gz_file)) == 0) {
-			directory->use_gz_file_set = true;
+	} else if (strcmp(key, "wrapcgi") == 0) {
+		if ((directory->wrap_cgi = strdup(value)) != NULL) {
 			return true;
 		}
 	}
@@ -2122,7 +2149,7 @@ int read_main_configfile(char *configfile, t_config *config, bool config_check) 
 						}
 						break;
 					case directory:
-						if (config->directory->path == NULL) {
+						if (config->directory->path.size == 0) {
 							fprintf(stderr, "A Path is missing in a directory section in %s.\n", configfile);
 							retval = -1;
 						} else {

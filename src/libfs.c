@@ -19,6 +19,7 @@
 #include <time.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <zlib.h>
 #include <errno.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -46,21 +47,14 @@ off_t filesize(char *filename) {
 /* Combine two strings to one with a '/' in the middle.
  */
 char *make_path(char *dir, char *file) {
-	int dir_len, file_len;
 	char *path;
 
 	if ((dir == NULL) || (file == NULL)) {
 		return NULL;
 	}
 
-	dir_len = strlen(dir);
-	file_len = strlen(file);
-
-	if ((path = (char*)malloc(dir_len + file_len + 2)) != NULL) {
-		memcpy(path, dir, dir_len);
-		path[dir_len] = '/';
-		memcpy(path + dir_len + 1, file, file_len);
-		path[dir_len + 1 + file_len] = '\0';
+	if ((path = (char*)malloc(strlen(dir) + strlen(file) + 2)) != NULL) {
+		sprintf(path, "%s/%s", dir, file);
 	}
 
 	return path;
@@ -324,6 +318,103 @@ int create_directory(char *directory, mode_t mode, uid_t UNUSED(uid), gid_t UNUS
 	return 0;
 }
 
+/* Remove files from directory
+ */
+int wipe_directory(char *directory, char *filter) {
+	size_t dir_len, filter_len, name_len, file_len = 0, new_len;
+	struct dirent *dir_info;
+	char *file = NULL, *new;
+	DIR *dp;
+	int result = 0;
+
+	if (directory == NULL) {
+		return -1;
+	}
+
+	dir_len = strlen(directory);
+	filter_len = (filter != NULL) ? strlen(filter) : 0;
+
+	if ((dp = opendir(directory)) == NULL) {
+		return -1;
+	}
+
+	while ((dir_info = readdir(dp)) != NULL) {
+		if ((dir_info->d_name[0] == '.') || (strcmp(dir_info->d_name, "..") == 0)) {
+			continue;
+		}
+
+		name_len = strlen(dir_info->d_name);
+
+		if ((filter != NULL) && (name_len >= filter_len)) {
+			if (strcmp(dir_info->d_name + name_len - filter_len, filter) != 0) {
+				continue;
+			}
+		}
+
+		new_len = dir_len + name_len + 102;
+		if (new_len > file_len) {
+			if ((new = (char*)realloc(file, new_len)) == NULL) {
+				result = -1;
+				break;
+			}
+			file = new;
+			file_len = new_len;
+		}
+
+		sprintf(file, "%s/%s", directory, dir_info->d_name);
+		if (is_directory(file) == false) {
+			unlink(file);
+		}
+	}
+
+	check_free(file);
+	closedir(dp);
+
+	return result;
+}
+
+/* Make gzipped duplicate of file
+*/
+int gzip_file(char *src, char *dest) {
+	char buffer[8192];
+	ssize_t bytes_read;
+	int result = 0, f_in;
+	gzFile f_out;
+
+	if ((f_in = open(src, O_RDONLY)) == -1) {
+		return -1;
+	}
+
+	if ((f_out = gzopen(dest, "w9")) == NULL) {
+		return -1;
+	}
+
+	while ((bytes_read = read(f_in, buffer, 8192)) != 0) {
+		if (bytes_read == -1) {
+			if (errno == EINTR) {
+				continue;
+			}
+
+			result = -1;
+			break;
+		}
+
+		if (gzwrite(f_out, buffer, bytes_read) == -1) {
+			result = -1;
+			break;
+		}
+	}
+
+	close(f_in);
+	gzclose(f_out);
+
+	if (result == -1) {
+		unlink(dest);
+	}
+
+	return result;
+}
+
 /* Month number to month name.
  */
 static short month2int(char *month) {
@@ -409,14 +500,14 @@ parse_fail:
 
 /* Check wheter a file has been modified since a certain date or not.
  */
-int if_modified_since(int handle, char *datestr) {
+int if_modified_since(char *file, char *datestr) {
 	struct stat status;
 	struct tm date;
 	time_t file_date, req_date;
 
 	if (datestr == NULL) {
 		return -1;
-	} else if (fstat(handle, &status) == -1) {
+	} else if (stat(file, &status) == -1) {
 		return -1;
 	} else if (gmtime_r(&(status.st_mtime), &date) == NULL) {
 		return -1;

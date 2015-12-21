@@ -297,10 +297,12 @@ int hostname_to_ip(char *hostname, t_ip_addr *ip) {
 		memcpy(&ip->value, &((struct sockaddr_in6*)(addrinfo->ai_addr))->sin6_addr, ip->size);
 #endif
 	} else {
+		freeaddrinfo(addrinfo);
 		return -1;
 	}
 
 	ip->family = addrinfo->ai_family;
+	freeaddrinfo(addrinfo);
 
 	return 0;
 }

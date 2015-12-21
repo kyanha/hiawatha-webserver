@@ -142,9 +142,9 @@ typedef struct type_throttle {
 } t_throttle;
 
 typedef struct type_binding {
+	char          *binding_id;
 	int           port;
 	t_ip_addr     interface;
-	char          *binding_id;
 #ifdef ENABLE_TLS
 	bool          use_tls;
 	char          *key_cert_file;
@@ -160,22 +160,22 @@ typedef struct type_binding {
 #ifdef HAVE_ACCF
 	bool          enable_accf;
 #endif
-	bool          enable_trace;
 	bool          enable_alter;
+	bool          enable_trace;
 	int           max_keepalive;
 	long          max_request_size;
 	long          max_upload_size;
+	struct pollfd *poll_data;
+	int           socket;
 	int           time_for_1st_request;
 	int           time_for_request;
-	int           socket;
-	struct pollfd *poll_data;
 
 	struct type_binding *next;
 } t_binding;
 
 typedef struct type_directory {
-	char          *path;
-	t_pathmatch   path_match;
+	char          *dir_id;
+	t_charlist    path;
 	char          *wrap_cgi;
 	t_groups      groups;
 	char          *start_file;
@@ -187,8 +187,6 @@ typedef struct type_directory {
 #endif
 	bool          follow_symlinks;
 	bool          follow_symlinks_set;
-	bool          use_gz_file;
-	bool          use_gz_file_set;
 	t_auth_method auth_method;
 	char          *passwordfile;
 	char          *groupfile;
@@ -200,6 +198,8 @@ typedef struct type_directory {
 	char          *imgref_replacement;
 	int           time_for_cgi;
 	char          *run_on_download;
+	int           expires;
+	bool          caco_private;
 
 	/* Uploadspeed control
 	 */
@@ -237,7 +237,6 @@ typedef struct type_host {
 #endif
 	bool            enforce_first_hostname;
 	bool            allow_dot_files;
-	bool            use_gz_file;
 	char            *login_message;
 	char            *passwordfile;
 	t_auth_method   auth_method;
@@ -248,7 +247,6 @@ typedef struct type_host {
 	t_keyvalue      *custom_headers;
 	char            *wrap_cgi;
 	t_groups        groups;
-	t_charlist      volatile_object;
 	t_accesslist    *access_list;
 	t_accesslist    *alter_list;
 	mode_t          alter_fmode;
@@ -283,7 +281,8 @@ typedef struct type_host {
 	bool            enable_path_info;
 	bool            trigger_on_cgi_status;
 	bool            secure_url;
-	bool            ignore_dot_hiawatha;
+	bool            use_local_config;
+	t_charlist      directory;
 	t_charlist      fast_cgi;
 	t_deny_body     *deny_body;
 	bool            webdav_app;
@@ -375,6 +374,8 @@ typedef struct type_config {
 	char          *work_directory;
 	char          *upload_directory;
 	size_t        upload_directory_len;
+	char          *gzipped_directory;
+	size_t        gzipped_directory_len;
 
 #ifdef ENABLE_CHALLENGE
 	int           challenge_threshold;

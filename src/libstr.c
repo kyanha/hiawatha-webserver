@@ -297,7 +297,7 @@ bool valid_uri(char *uri, bool allow_dot_files) {
 	}
 
 #ifdef CYGWIN
-	// Deny trailing dots and spaces
+	/* Deny trailing dots and spaces */
 	last_pos = size - 1;
 	if (*(uri + last_pos) == '.') {
 		return false;
@@ -305,7 +305,7 @@ bool valid_uri(char *uri, bool allow_dot_files) {
 		return false;
 	}
 
-	// Deny 8.3 file format
+	/* Deny 8.3 file format */
 	if (last_pos >= 6) {
 		if ((*(uri + last_pos - 5) == '~') && (*(uri + last_pos - 4) >= '0') &&
 			(*(uri + last_pos - 4) <= '9') && (*(uri + last_pos - 3) == '.')) {
@@ -320,7 +320,16 @@ bool valid_uri(char *uri, bool allow_dot_files) {
 	}
 #endif
 
-	if ((pos = strstr(uri, "/.")) != NULL) {
+	/* RFC 5785 */
+	if (strncmp(uri, "/.well-known", 12) != 0) {
+		pos = uri;
+	} else if (*(uri + 12) == '/') {
+		pos = uri + 12;
+	} else {
+		return *(uri + 12) == '\0';
+	}
+
+	if ((pos = strstr(pos, "/.")) != NULL) {
 		if ((allow_dot_files == false) || (*(pos + 2) == '.')) {
 			return false;
 		}
@@ -627,6 +636,15 @@ void md5_bin2hex(unsigned char bin[16], char hex[33]) {
 		sprintf(&hex[2 * i], "%02x", bin[i]);
 	}
 	hex[32] = '\0';
+}
+
+void sha256_bin2hex(unsigned char bin[32], char hex[65]) {
+	int i;
+
+	for (i = 0; i < 32; i++) {
+		sprintf(&hex[2 * i], "%02x", bin[i]);
+	}
+	hex[64] = '\0';
 }
 
 bool hostname_match(char *hostname, char *pattern) {

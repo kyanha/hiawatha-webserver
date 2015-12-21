@@ -23,17 +23,14 @@ GarbageLogfile = @LOG_DIR@/garbage.log
 #
 Binding {
 	Port = 80
-#	Interface = 127.0.0.1
-#	MaxKeepAlive = 30
-#	TimeForRequest = 3,20
 }
 #
 #Binding {
 #	Port = 443
-#	Interface = ::1
-#	MaxKeepAlive = 30
-#	TimeForRequest = 3,20
-#	TLScertFile = hiawatha.pem
+#	TLScertFile = ssl/hiawatha.pem
+#	Interface = 127.0.0.1
+#	MaxRequestSize = 2048
+#	TimeForRequest = 30
 #}
 
 
@@ -59,22 +56,37 @@ Binding {
 #
 #FastCGIserver {
 #	FastCGIid = PHP5
-#	ConnectTo = 127.0.0.1:2005
+#	ConnectTo = /var/lib/hiawatha/php-fcgi.sock
 #	Extension = php
 #}
 
 
 # URL TOOLKIT
-# This URL toolkit rule was made for the Banshee PHP framework, which
-# can be downloaded from http://www.hiawatha-webserver.org/banshee
+# This URL toolkit rule was made for the Banshee PHP framework,
+# which can be downloaded from http://www.banshee-php.org/
 #
 #UrlToolkit {
 #	ToolkitID = banshee
 #	RequestURI isfile Return
-#	Match ^/(css|files|images|js|slimstat)($|/) Return
-#	Match ^/(favicon.ico|robots.txt|sitemap.xml)$ Return
-#	Match .*\?(.*) Rewrite /index.php?$1
-#	Match .* Rewrite /index.php
+#	Match ^/(css|files|fonts|images|js)($|/) Return
+#	Match ^/(favicon.ico|robots.txt)$ Return
+#	Match [^?]*(\?.*)? Rewrite /index.php$1
+#}
+
+
+# DIRECTORY SETTINGS
+# You can specify some settings per directory.
+#
+#Directory {
+#	DirectoryID = static
+#	Path = /css, /fonts, /images, /js
+#	ExpirePeriod = 2 weeks
+#}
+#
+#Directory {
+#	DirectoryID = files
+#	Path = /files
+#	ShowIndex = yes
 #}
 
 
@@ -88,29 +100,18 @@ WebsiteRoot = @WEBROOT_DIR@
 StartFile = index.html
 AccessLogfile = @LOG_DIR@/access.log
 ErrorLogfile = @LOG_DIR@/error.log
-#ErrorHandler = 404:/error.cgi
 
 
 # VIRTUAL HOSTS
-# Use a VirtualHost section to declare the websites you want to host.
+# Use a VirtualHost section for each website you want to host.
 #
 #VirtualHost {
 #	Hostname = www.my-domain.com
 #	WebsiteRoot = /var/www/my-domain/public
-#	StartFile = index.php
 #	AccessLogfile = /var/www/my-domain/log/access.log
 #	ErrorLogfile = /var/www/my-domain/log/error.log
 #	TimeForCGI = 5
 #	UseFastCGI = PHP5
 #	UseToolkit = banshee
-#}
-
-
-# DIRECTORY SETTINGS
-# You can specify some settings per directory.
-#
-#Directory {
-#	Path = /home/baduser
-#	ExecuteCGI = no
-#	UploadSpeed = 10,2
+#	UseDirectory = static, files
 #}

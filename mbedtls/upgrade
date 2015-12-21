@@ -19,13 +19,13 @@ cd `dirname $0`
 version=`curl -s https://tls.mbed.org/download/latest-stable-version`
 current=`grep "^=" ChangeLog | head -1 | cut -f4 -d' '`
 
-if [ ${version} = ${current} ]; then
+if [ "${version}" = "${current}" ]; then
 	echo "mbed TLS is already the latest version."
 	exit
 fi
 
 echo "Downloading mbed TLS version ${version}."
-wget --no-check-certificate -qO mbedtls.tgz "https://tls.mbed.org/download/mbedtls-${version}-gpl.tgz?do=yes"
+wget --no-check-certificate -qO mbedtls.tgz "https://tls.mbed.org/download/mbedtls-${version}-apache.tgz?do=yes"
 
 if [ ! -s mbedtls.tgz ]; then 
 	rm -f mbedtls.tgz

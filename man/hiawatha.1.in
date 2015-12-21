@@ -256,12 +256,15 @@ Specify the minimum TLS version Hiawatha accepts for HTTPS connections.
 Default = 1.0, Example: MinTLSversion = 1.1
 .br
 
-(requires that Hiawatha was compiled with -DENABLE_TLS=on)
+(requires that Hiawatha was not compiled with -DENABLE_TLS=off)
 .TP
 .B MonitorServer = <ip-address>
 Specify the IP address of the Hiawatha Monitor server. This enables logging of statistical information. Use a X-Hiawatha-Monitor CGI header to log an event. Use the value 'failed_login' to log a failed login or 'exploit_attempt' to log an exploit attempt.
 .br
 Example: MonitorServer = 192.168.1.2
+.br
+
+(requires that Hiawatha was compiled with -DENABLE_MONITOR=on)
 .TP
 .B PIDfile = <filename>
 The name of the file in which Hiawatha will write its process-ID. Don't change unless you know what you are doing (the CGI-wrapper and the MacOS X preference pane need the PID-file at its default location).
@@ -286,7 +289,7 @@ The number of seconds Hiawatha will remember the IP address of the connection an
 Default = 0, example: ReconnectDelay = 3
 .TP
 .B RequestLimitMask = (allow|deny) <ip-address>[/netmask][, (allow|deny) <ip-address>[/netmask], ...]
-Define for which clients the ConnectionsPerIP, MaxRequestSize and TimeForRequest setting should not be used. If an IP is allowed or not listed, the mentioned settings will be used.
+Define for which clients the ConnectionsPerIP, MaxRequestSize, TimeForRequest and PreventSQLi settings should not be used. If an IP is allowed or not listed, the mentioned settings will be used.
 .br
 Example: RequestLimitMask = deny 192.168.0.1
 .TP
@@ -297,7 +300,6 @@ Default = 65534:65534, example: ServerId = www-data
 .TP
 .B ServerString = <text>
 The text behind 'Server:' in the HTTP header of a response. Use 'none' to completely remove the Server string from the HTTP header.
-
 .br
 Default = Hiawatha v<version>, example: ServerString = myWebserver
 .TP
@@ -456,7 +458,7 @@ An alias is a virtual softlink to a directory. Every request to <websiteroot>/<s
 Example: Alias = /doc:/usr/share/doc
 .TP
 .B AllowDotFiles = <yes|no>
-Allow Hiawatha to upload files that start with a dot (hidden files for Unix). Requests for .hiawatha files are always blocked.
+Allow files that start with a dot (hidden files for Unix) to be downloaded by a client. Requests for .hiawatha files are always blocked. A requests URI that start with /.well-known/ is always accepted, as defined in RFC 5785.
 .br
 Default = no, example: AllowDotFiles = yes
 .TP
@@ -543,15 +545,10 @@ Place the HTTP Authorization header in the CGI's HTTP_AUTHORIZATION environment 
 .br
 Default = no, example: HTTPAuthToCGI = yes
 .TP
-.B IgnoreDotHiawatha = yes|no
-Specify if Hiawatha should ignore .hiawatha files or not.
-.br
-Default = no, example: IgnoreDotHiawatha = yes
-.TP
 .B LoginMessage = <text>
 Message that will be displayed in the login window in case of HTTP authentication (see PasswordFile for more information). When using Digest HTTP authentication, the LoginMessage should not contain a ':' sign.
 .br
-Default = Private page, example: LoginMessage = Hugo's MP3 collection
+Default = Private page, example: LoginMessage = My personal files
 .TP
 .B NoExtensionAs = <extension>
 If the requested file has no extension, treat it as if the extension was equal to <extension>.
@@ -573,7 +570,7 @@ Prevent Cross-site Request Forgery by ignoring all cookies sent by a browser whe
 Default = no, example: PreventCSRF = yes
 .TP
 .B PreventSQLi = yes|no
-Prevent SQL-injection by detecting injections and denying the request via a 409 response. It is important to understand that the detection of SQL injections is done by best effort. There is no 100% guarantee that all SQL injections are blocked. Note that using this feature can have a negative effect on the performance of your webserver. Use with caution. See also BanOnSQLi.
+Prevent SQL-injection by detecting injections and denying the request via a 404 response. It is important to understand that the detection of SQL injections is done by best effort. There is no 100% guarantee that all SQL injections are blocked. Note that using this feature can have a negative effect on the performance of your webserver. Use with caution. See also BanOnSQLi.
 .br
 Default = no, example: PreventSQLi = yes
 .TP
@@ -654,23 +651,28 @@ Print an HTTP error message or invoke the ErrorHandler when a CGI outputs a Stat
 .br
 Default = no, example: TriggerOnCGIstatus = yes
 .TP
+.B UseDirectory = <directory_id>[, <directory_id>, ...]
+The Directory sections to use for this virtual host. See chapter DIRECTORY CONFIGURATION for more information.
+.br
+Example: UseDirectory = my_dir
+.TP
+.B UseLocalConfig = yes|no
+Tell Hiawatha to use or ignore .hiawatha files.
+.br
+Default = no, example: UseLocalConfig = yes
+.TP
+.B UseFastCGI = <fcgi_server_id>[, <fcgi_server_id>, ...]
+The FastCGI server to use for this virtual host. The first FastCGI server record that matches (including extension), will be used. See chapter FASTCGI CONFIGURATION for more information. This option sets ExecuteCGI to 'yes' for this host.
+.br
+Example: UseFastCGI = PHP5
+.TP
 .B UserWebsites = yes|no
 Activates user websites for this (virtual) host (the /~user/ URL's) (see UserDirectory for more information).
 .br
 Default = no, example: UserWebsites = yes
 .TP
-.B UseFastCGI = <fcgi_server_id>[, <fcgi_server_id>, ...]
-The FastCGI server to use for this virtual host. The first FastCGI server record that matches (including extension), will be used (see chapter FASTCGI CONFIGURATION for more information). This option sets ExecuteCGI to 'yes' for this host.
-.br
-Example: UseFastCGI = PHP5
-.TP
-.B UseGZfile = yes|no
-If available, upload <requested file>.gz with gzip content encoding instead of the requested file.
-.br
-Default = no, example: UseGZfile = yes
-.TP
 .B UseToolkit = <toolkit_id>[, <toolkit_id>, ...]
-Perform special operations, like rewriting via regular expressions, on the URL (see chapter URL TOOLKIT for more information).
+Perform special operations, like rewriting via regular expressions, on the URL. See chapter URL TOOLKIT for more information.
 .br
 Example: UseToolkit = my_toolkit
 
@@ -683,11 +685,6 @@ Default = no, example: UseXSLT = yes
 .br
 
 (requires that Hiawatha was not compiled with -DENABLE_XSLT=off)
-.TP
-.B VolatileObject = <filename with full path>
-This file will be completely read into the memory before it is send. Because of this, the file can not be greater than 1MB. Use this option for files that change rapidly, such as webcam pictures.
-.br
-Example: VolatileObject = /var/www/webcam.gif
 .TP
 .B WebDAVapp = <yes|no>
 Enables support for WebDAV applications.
@@ -713,10 +710,21 @@ Example: WrapCGI = test
 .SH DIRECTORY CONFIGURATION
 This chapter explains which options can be set for a specific directory. These options will override (virtual) host settings.
 .TP
-.B Path = <path|sub-path>
-The path to the directory. Path is a required field. Note that only the first Directory record that has a matching Path will be used. If Path ends with a slash (/), Hiawatha will seek anywhere in the complete path of the requested file for a match. If it does not end with a slash, Hiawatha will start matching from the beginning of the path.
+.B DirectoryId = <directory_id>
+A unique ID for a directory section. Use this Id with the UseDirectory setting in a virtual host.
 .br
-Example: Path = /var/www/cgi-bin or Path = /public_html/
+Example: DirectoryId = my_dir
+.TP
+.B ExpirePeriod <time> seconds|minutes|hours|days|weeks|months[, public|private]
+.br
+Adds an Expires HTTP header with current timestamp + <time>. The public/private (default is private) option defines the value of the Cache-Control header.
+.br
+Example: ExpirePeriod = 2 weeks, public
+.TP
+.B Path = <path>[, <path>, ...]
+The path to the subdirectory, which may be virtual (not existing on disk). This is a required setting.
+.br
+Example: Path = /files
 .TP
 .B RunOnDownload = <path to program>
 Run a program when a client requests a static resource. This does not include CGI programs. Information about the request is placed in environment variables, just like CGI.
@@ -763,12 +771,9 @@ Example: UploadSpeed = 20,4
 ,
 .br
 .B StartFile
-,
-.br
-.B TimeForCGI
 and
 .br
-.B UseGZfile
+.B TimeForCGI
 
 .\" ==========[ FastCGI configuration ]========================================
 .SH FASTCGI CONFIGURATION
@@ -787,7 +792,7 @@ The extension of the script the FastCGI server is able to interpret. If no exten
 Example: Extension = php
 .TP
 .B FastCGIid = <fcgi_server_id>
-Give each FastCGI server an unique Id. Use this Id with the FastCGI setting in a virtual host.
+Give each FastCGI server an unique Id. Use this Id with the UseFastCGI setting in a virtual host.
 .br
 Example: FastCGIid = PHP5
 .TP
@@ -824,7 +829,7 @@ A negative pattern (leading exclamation mark) can't be used with the redirect ac
 .br
 Perform an action when the URL matches the regular expression <pattern>, where <action> can be one of the following:
 .br
-Ban, Call, DenyAccess, Exit, Expire, Goto, Redirect, Return, Rewrite, Skip or UseFastCGI.
+Ban, Call, DenyAccess, Exit, Goto, Redirect, Return, Rewrite, Skip or UseFastCGI.
 .br
 Use MatchCI to perform case insensitive URL matching. A negative pattern (leading exclamation mark) can't be used with the redirect and rewrite action.
 .TP
@@ -879,10 +884,6 @@ Deny access to the requested file (results in a 403 error) and terminate toolkit
 .B Exit
 .br
 Terminate toolkit processing.
-.TP
-.B Expire <time> seconds|minutes|hours|days|weeks|months [public|private] [Exit|Return]
-.br
-Adds an Expires HTTP header with current timestamp + <time>. The public/private (default is private) option defines the value of the Cache-Control header. The default behaviour for Hiawatha is to continue after an Expire action.
 .TP
 .B Goto <toolkit_id>
 .br
@@ -1002,9 +1003,6 @@ A user can override the settings listed below for a certain directory. This can 
 ,
 .br
 .B StartFile
-,
-.br
-.B UseGZfile
 and
 .br
 .B UseToolkit
@@ -1015,13 +1013,6 @@ Specify the mimetypes of files in /etc/hiawatha/mimetypes.conf.
 .TP
 .B <mimetype> <extension> [<extension> ...]
 Example: image/jpeg jpg jpeg jpe
-
-.SH EXTRA
-.TP
-.B gzip Content-Encoding support
-Hiawatha has gzip Content-Encoding support is a unique way. Other webservers with gzip Content-Encoding support will compress a file everytime this file is requested, over and over again. Compression is only usefull for large files. Since most of the large files on a website are JPEG files and JPEG files are hard to compress, most of the compression done by such webservers is a waste of CPU power.
-
-Hiawatha will do this in a more efficient way. When a file, say file.txt, is requested by a browser with gzip support and the UseGZfile option is set to 'yes', Hiawatha will search for a gzipped version of that file: file.txt.gz. If found, Hiawatha will upload this file instead of the original file.
 
 .SH SIGNALS
 .TP

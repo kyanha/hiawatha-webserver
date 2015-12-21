@@ -33,18 +33,16 @@
 static const struct {
 	const char *text;
 } sqli_detection[] = {
-	{"union\\s+(\\(\\s*)?select\\s+"},
 	{"'\\s*--\\s"},
-	{"'\\s*(and|or|xor|&&|\\|\\|)\\s*('|[0-9]|`?[a-z\\._-]+`?\\s*=|[a-z]+\\s*\\()"},
-	{"'\\s*like\\s*['a-z]"},
+	{"'\\s*(and|or|xor|&&|\\|\\|)\\s*\\(?\\s*('|[0-9]|`?[a-z\\._-]+`?\\s*(=|like)|[a-z]+\\s*\\()"},
 	{"'\\s*(not\\s+)?in\\s*\\(\\s*['0-9]"},
-	{"select\\s+`?(\\*|[a-z0-9_\\,]*)`?\\s+from\\s+`?[a-z0-9_\\.]*"},
-	{"update\\s+`?[a-z0-9_\\.]*`?\\s+set\\s+"},
-	{"delete\\s+from\\s+`?[a-z0-9_\\.]*`?"},
+	{"union(\\s+all)?(\\s*\\(\\s*|\\s+)select(`|\\s)"},
+	{"select(\\s*`|\\s+)(\\*|[a-z0-9_\\, ]*)(`\\s*|\\s+)from(\\s*`|\\s+)[a-z0-9_\\.]*"},
+	{"insert\\s+into(\\s*`|\\s+).*(`\\s*|\\s+)(values\\s*)?\\(.*\\)"},
+	{"update(\\s*`|\\s+)[a-z0-9_\\.]*(`\\s*|\\s+)set(\\s*`|\\s+).*="},
+	{"delete\\s+from(\\s*`|\\s+)[a-z0-9_\\.]*`?"},
 	{NULL}
 };
-
-char *GET_method = "GET";
 
 typedef struct type_sqli_pattern {
 	regex_t regex;
@@ -108,6 +106,7 @@ static void clear_session(t_session *session) {
 	session->uploaded_file = NULL;
 	session->uploaded_size = 0;
 	session->location = NULL;
+	session->send_expires = false;
 	session->expires = -1;
 	session->caco_private = true;
 #ifdef ENABLE_TOOLKIT
@@ -327,7 +326,7 @@ int get_homedir(t_session *session, char *username) {
 	return 200;
 }
 
-/* Dupliacte the active host-record. The duplicate can now savely be altered
+/* Duplicate the active host-record. The duplicate can now savely be altered
  * and will be used during the session.
  */
 bool duplicate_host(t_session *session) {
@@ -345,20 +344,6 @@ bool duplicate_host(t_session *session) {
 	}
 
 	return true;
-}
-
-/* Is the requested file marked as volatile?
- */
-bool is_volatile_object(t_session *session) {
-	int i;
-
-	for (i = 0; i < session->host->volatile_object.size; i++) {
-		if (strcmp(session->file_on_disk, *(session->host->volatile_object.item + i)) == 0) {
-			return true;
-		}
-	}
-
-	return false;
 }
 
 #ifdef ENABLE_TOOLKIT
@@ -437,7 +422,7 @@ int load_user_config(t_session *session) {
 int copy_directory_settings(t_session *session) {
 	size_t path_length;
 	t_directory *dir;
-	bool match;
+	int i;
 
 	if (session->file_on_disk == NULL) {
 		return 500;
@@ -445,14 +430,20 @@ int copy_directory_settings(t_session *session) {
 
 	dir = session->config->directory;
 	while (dir != NULL) {
-		path_length = strlen(dir->path);
-		if (strlen(session->file_on_disk) >= path_length) {
-			if (dir->path_match == root) {
-				match = (strncmp(session->file_on_disk, dir->path, path_length) == 0);
-			} else {
-				match = (strstr(session->file_on_disk, dir->path) != NULL);
-			}
-			if (match) {
+		if (in_charlist(dir->dir_id, &(session->host->directory))) {
+			for (i = 0; i < dir->path.size; i++) {
+				path_length = strlen(dir->path.item[i]);
+
+				if (strncmp(session->request_uri, dir->path.item[i], path_length) != 0) {
+					continue;
+				}
+
+				if (dir->path.item[i][strlen(dir->path.item[i]) - 1] != '/') {
+					if (*(session->request_uri + path_length) != '/') {
+						continue;
+					}
+				}
+
 				session->directory = dir;
 
 				if (dir->max_clients > -1) {
@@ -483,9 +474,6 @@ int copy_directory_settings(t_session *session) {
 				if (dir->follow_symlinks_set) {
 					session->host->follow_symlinks = dir->follow_symlinks;
 				}
-				if (dir->use_gz_file_set) {
-					session->host->use_gz_file = dir->use_gz_file;
-				}
 				if (dir->access_list != NULL) {
 					session->host->access_list = dir->access_list;
 				}
@@ -513,9 +501,14 @@ int copy_directory_settings(t_session *session) {
 				if (dir->time_for_cgi > TIMER_OFF) {
 					session->host->time_for_cgi = dir->time_for_cgi;
 				}
+				if (dir->expires > -1) {
+					session->expires = dir->expires;
+					session->caco_private = dir->caco_private;
+				}
 				break;
 			}
 		}
+
 		dir = dir->next;
 	}
 
@@ -653,6 +646,7 @@ static int prevent_sqli_str(t_session *session, char *str, int length) {
 	if ((data = (char*)malloc(length + 1)) == NULL) {
 		return -1;
 	}
+
 	memcpy(data, str, length);
 	data[length] = '\0';
 	url_decode(data);
@@ -676,6 +670,21 @@ static int prevent_sqli_str(t_session *session, char *str, int length) {
 		memset(begin, ' ', end - begin);
 	}
 
+	/* Remove double parenthesis
+	 */
+	end = data;
+	while ((begin = strchr(end, '(')) != NULL) {
+		end = begin + 1;
+		while (*end == ' ') {
+			end++;
+		}
+		if (*end == '(') {
+			*begin = ' ';
+		}
+	}
+
+	/* Match patterns
+	 */
 	pattern = sqli_patterns;
 	while (pattern != NULL) {
 		if (regexec(&(pattern->regex), data, 0, NULL, 0) != REG_NOMATCH) {
@@ -704,6 +713,10 @@ static int prevent_sqli_str(t_session *session, char *str, int length) {
 
 int prevent_sqli(t_session *session) {
 	int result;
+
+	if (session->request_limit == false) {
+		return 0;
+	}
 
 	if (session->request_uri != NULL) {
 		if ((result = prevent_sqli_str(session, session->request_uri, strlen(session->request_uri))) != 0) {
@@ -845,4 +858,32 @@ int handle_connection_not_allowed(t_session *session, int connections) {
 	}
 
 	return 500;
+}
+
+bool file_can_be_compressed(t_session *session) {
+	int i;
+	static const struct {
+		const char *value;
+	} extensions[] = {
+		{"cer"},{"crt"},{"doc"},{"pem"},{"ppt"},{"ttf"},
+		{"xls"},{"xml"},{"xsl"},{"xslt"},{NULL}
+	};
+
+	if (session->mimetype != NULL) {
+		if (strncmp(session->mimetype, "text/", 5) == 0) {
+			return true;
+		} else if (strcmp(session->mimetype, "image/svg+xml") == 0) {
+			return true;
+		}
+	}
+
+	if (session->extension != NULL) {
+		for (i = 0; extensions[i].value != NULL; i++) {
+			if (strcmp(session->extension, extensions[i].value) == 0) {
+				return true;
+			}
+		}
+	}
+
+	return false;
 }

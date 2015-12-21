@@ -4,21 +4,19 @@
  * \brief SSL ciphersuites for mbed TLS
  *
  *  Copyright (C) 2006-2015, ARM Limited, All Rights Reserved
- *  SPDX-License-Identifier: GPL-2.0
+ *  SPDX-License-Identifier: Apache-2.0
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ *  Licensed under the Apache License, Version 2.0 (the "License"); you may
+ *  not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- *  You should have received a copy of the GNU General Public License along
- *  with this program; if not, write to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ *  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  *
  *  This file is part of mbed TLS (https://tls.mbed.org)
  */
@@ -42,7 +40,7 @@
  *
  * Current rule (except rc4, weak and null which come last):
  * 1. By key exchange:
- *    Forward-secure non-PSK > forward-secure PSK > other non-PSK > other PSK
+ *    Forward-secure non-PSK > forward-secure PSK > ECJPAKE > other non-PSK > other PSK
  * 2. By key length and cipher:
  *    AES-256 > Camellia-256 > AES-128 > Camellia-128 > 3DES
  * 3. By cipher mode when relevant GCM > CCM > CBC > CCM_8
@@ -132,6 +130,9 @@ static const int ciphersuite_preference[] =
 
     MBEDTLS_TLS_ECDHE_PSK_WITH_3DES_EDE_CBC_SHA,
     MBEDTLS_TLS_DHE_PSK_WITH_3DES_EDE_CBC_SHA,
+
+    /* The ECJPAKE suite */
+    MBEDTLS_TLS_ECJPAKE_WITH_AES_128_CCM_8,
 
     /* All AES-256 suites */
     MBEDTLS_TLS_RSA_WITH_AES_256_GCM_SHA384,
@@ -1511,6 +1512,18 @@ static const mbedtls_ssl_ciphersuite_t ciphersuite_definitions[] =
 #endif /* MBEDTLS_SHA1_C */
 #endif /* MBEDTLS_ARC4_C */
 #endif /* MBEDTLS_KEY_EXCHANGE_RSA_PSK_ENABLED */
+
+#if defined(MBEDTLS_KEY_EXCHANGE_ECJPAKE_ENABLED)
+#if defined(MBEDTLS_AES_C)
+#if defined(MBEDTLS_CCM_C)
+    { MBEDTLS_TLS_ECJPAKE_WITH_AES_128_CCM_8, "TLS-ECJPAKE-WITH-AES-128-CCM-8",
+      MBEDTLS_CIPHER_AES_128_CCM, MBEDTLS_MD_SHA256, MBEDTLS_KEY_EXCHANGE_ECJPAKE,
+      MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_3,
+      MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_3,
+      MBEDTLS_CIPHERSUITE_SHORT_TAG },
+#endif /* MBEDTLS_CCM_C */
+#endif /* MBEDTLS_AES_C */
+#endif /* MBEDTLS_KEY_EXCHANGE_ECJPAKE_ENABLED */
 
 #if defined(MBEDTLS_ENABLE_WEAK_CIPHERSUITES)
 #if defined(MBEDTLS_CIPHER_NULL_CIPHER)

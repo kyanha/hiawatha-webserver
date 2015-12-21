@@ -322,6 +322,33 @@ int find_duplicates(t_line *config, char *key, char *config_dir) {
 	return errors;
 }
 
+static int check_id_link(t_line *config, char *config_dir, char *section_id, char *section_link, char *label) {
+	t_line *haystack, *needles, *needle;
+	char *item, *rest;
+	int errors = 0;
+
+	haystack = search_key(config, section_id);
+	needles = needle = search_key(config, section_link);
+	while (needle != NULL) {
+		if ((rest = strdup(needle->value)) == NULL) {
+			mem_error();
+		}
+		while (rest != NULL) {
+			split_string(rest, &item, &rest, ',');
+			if (in_result(item, haystack) == NULL) {
+				printf("Unknown %s ID '%s' in VirtualHost on line %d in '%s/%s'.\n", label, item, needle->linenr, config_dir, needle->file);
+				errors++;
+			}
+		}
+		free(rest);
+		needle = needle->next;
+	}
+	dispose_result(needles, false);
+	dispose_result(haystack, false);
+
+	return errors;
+}
+
 int check_main_config(char *config_dir) {
 	int errors = 0;
 	t_line *config = NULL, *haystack, *needles, *needle;
@@ -352,6 +379,7 @@ int check_main_config(char *config_dir) {
 	/* Find duplicate ids
 	 */
 	//errors += find_duplicates(config, "BindingId", config_dir);
+	errors += find_duplicates(config, "DirectoryId", config_dir);
 	errors += find_duplicates(config, "FastCGIid", config_dir);
 #ifdef ENABLE_TOOLKIT
 	errors += find_duplicates(config, "ToolkitId", config_dir);
@@ -388,45 +416,17 @@ int check_main_config(char *config_dir) {
 
 	/* Binding ID check
 	 */
-	haystack = search_key(config, "bindingid");
-	needles = needle = search_key(config, "requiredbinding");
-	while (needle != NULL) {
-		if ((rest = strdup(needle->value)) == NULL) {
-			mem_error();
-		}
-		while (rest != NULL) {
-			split_string(rest, &item, &rest, ',');
-			if (in_result(item, haystack) == NULL) {
-				printf("Unknown Binding ID '%s' in VirtualHost on line %d in '%s/%s'.\n", item, needle->linenr, config_dir, needle->file);
-				errors++;
-			}
-		}
-		free(rest);
-		needle = needle->next;
-	}
-	dispose_result(needles, false);
-	dispose_result(haystack, false);
+	errors += check_id_link(config, config_dir, "bindingid", "requiredbinding", "Binding");
+
+	/* Directory ID check
+	 */
+	errors += check_id_link(config, config_dir, "directoryid", "usedirectory", "Directory");
 
 	/* FastCGI ID check
 	 */
-	haystack = search_key(config, "fastcgiid");
-	needles = needle = search_key(config, "usefastcgi");
-	while (needle != NULL) {
-		if ((rest = strdup(needle->value)) == NULL) {
-			mem_error();
-		}
-		while (rest != NULL) {
-			split_string(rest, &item, &rest, ',');
-			if (in_result(item, haystack) == NULL) {
-				printf("Unknown FastCGI server ID '%s' in VirtualHost on line %d in '%s/%s'.\n", needle->value, needle->linenr, config_dir, needle->file);
-				errors++;
-			}
-		}
-		free(rest);
-		needle = needle->next;
-	}
-	dispose_result(needles, false);
+	errors += check_id_link(config, config_dir, "fastcgiid", "usefastcgi", "FastCGI server");
 
+	haystack = search_key(config, "fastcgiid");
 	needle = config;
 	while (needle != NULL) {
 		if (strcmp(needle->key, "match") == 0) {
@@ -448,50 +448,16 @@ int check_main_config(char *config_dir) {
 
 	dispose_result(haystack, false);
 
+#ifdef ENABLE_TOOLKIT
 	/* Toolkit ID check
 	 */
-#ifdef ENABLE_TOOLKIT
-	haystack = search_key(config, "toolkitid");
-	needles = needle = search_key(config, "usetoolkit");
-	while (needle != NULL) {
-		if ((rest = strdup(needle->value)) == NULL) {
-			mem_error();
-		}
-		while (rest != NULL) {
-			split_string(rest, &item, &rest, ',');
-			if (in_result(item, haystack) == NULL) {
-				printf("Unknown UrlToolkit ID '%s' in VirtualHost on line %d in '%s/%s'.\n", item, needle->linenr, config_dir, needle->file);
-				errors++;
-			}
-		}
-		free(rest);
-		needle = needle->next;
-	}
-	dispose_result(needles, false);
-	dispose_result(haystack, false);
+	errors += check_id_link(config, config_dir, "toolkitid", "usetoolkit", "UrlToolkit");
 #endif
 
+#ifdef ENABLE_RPROXY
 	/* Reverse Proxy ID check
 	 */
-#ifdef ENABLE_RPROXY
-	haystack = search_key(config, "proxyid");
-	needles = needle = search_key(config, "userproxy");
-	while (needle != NULL) {
-		if ((rest = strdup(needle->value)) == NULL) {
-			mem_error();
-		}
-		while (rest != NULL) {
-			split_string(rest, &item, &rest, ',');
-			if (in_result(item, haystack) == NULL) {
-				printf("Unknown ReverseProxy ID '%s' in VirtualHost on line %d in '%s/%s'.\n", item, needle->linenr, config_dir, needle->file);
-				errors++;
-			}
-		}
-		free(rest);
-		needle = needle->next;
-	}
-	dispose_result(needles, false);
-	dispose_result(haystack, false);
+	errors += check_id_link(config, config_dir, "proxyid", "userproxy", "Reverse Proxy");
 #endif
 
 	/* Extension check
@@ -610,7 +576,7 @@ int check_main_config(char *config_dir) {
 		 */
 		mbedtls_pk_init(&private_key);
 		if (mbedtls_pk_parse_keyfile(&private_key, needle->value, NULL) != 0) {
-			printf("Error loading RSA private key from %s.\n", needle->value);
+			printf("Error loading private key from %s.\n", needle->value);
 			errors++;
 			goto next_crt;
 		}
@@ -815,10 +781,6 @@ void check_url_toolkit(char *config_dir, char **toolkit_id) {
 			}
 			if (options.ban > 0) {
 				url = "(Client banned. BanlistMask not applied!)";
-				break;
-			}
-			if (options.expire > -1) {
-				printf("Expire time: %d (%s)\n", options.expire, options.caco_private ? "private" : "public");
 				break;
 			}
 			if (options.fastcgi_server != NULL) {

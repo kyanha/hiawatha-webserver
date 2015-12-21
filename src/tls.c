@@ -56,8 +56,16 @@ typedef struct type_sni_list {
 } t_sni_list;
 
 static int ciphersuites_tls10[] = {
+	MBEDTLS_TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_CBC_SHA384,
+	MBEDTLS_TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_CBC_SHA256,
+	MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+	MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
 	MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
 	MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+	MBEDTLS_TLS_ECDH_ECDSA_WITH_CAMELLIA_256_CBC_SHA384,
+	MBEDTLS_TLS_ECDH_ECDSA_WITH_CAMELLIA_128_CBC_SHA256,
+	MBEDTLS_TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA,
+	MBEDTLS_TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA,
 	MBEDTLS_TLS_DHE_RSA_WITH_AES_256_CBC_SHA,
 	MBEDTLS_TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA,
 	MBEDTLS_TLS_DHE_RSA_WITH_AES_128_CBC_SHA,
@@ -396,7 +404,7 @@ int tls_load_key_cert(char *file, mbedtls_pk_context **private_key, mbedtls_x509
 	mbedtls_pk_init(*private_key);
 
 	if ((result = mbedtls_pk_parse_keyfile(*private_key, file, NULL)) != 0) {
-		print_tls_error(result, "Error loading RSA private key from %s", file);
+		print_tls_error(result, "Error loading private key from %s", file);
 		return -1;
 	}
 

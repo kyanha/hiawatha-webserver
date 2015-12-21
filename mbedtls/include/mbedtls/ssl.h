@@ -4,21 +4,19 @@
  * \brief SSL/TLS functions.
  *
  *  Copyright (C) 2006-2015, ARM Limited, All Rights Reserved
- *  SPDX-License-Identifier: GPL-2.0
+ *  SPDX-License-Identifier: Apache-2.0
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ *  Licensed under the Apache License, Version 2.0 (the "License"); you may
+ *  not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- *  You should have received a copy of the GNU General Public License along
- *  with this program; if not, write to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ *  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  *
  *  This file is part of mbed TLS (https://tls.mbed.org)
  */
@@ -55,26 +53,6 @@
 
 #if defined(MBEDTLS_HAVE_TIME)
 #include <time.h>
-#endif
-
-/* For convenience below and in programs */
-#if defined(MBEDTLS_KEY_EXCHANGE_PSK_ENABLED) ||                           \
-    defined(MBEDTLS_KEY_EXCHANGE_RSA_PSK_ENABLED) ||                       \
-    defined(MBEDTLS_KEY_EXCHANGE_DHE_PSK_ENABLED) ||                       \
-    defined(MBEDTLS_KEY_EXCHANGE_ECDHE_PSK_ENABLED)
-#define MBEDTLS_KEY_EXCHANGE__SOME__PSK_ENABLED
-#endif
-
-#if defined(MBEDTLS_KEY_EXCHANGE_ECDHE_RSA_ENABLED) ||                     \
-    defined(MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED) ||                   \
-    defined(MBEDTLS_KEY_EXCHANGE_ECDHE_PSK_ENABLED)
-#define MBEDTLS_KEY_EXCHANGE__SOME__ECDHE_ENABLED
-#endif
-
-#if defined(MBEDTLS_KEY_EXCHANGE_DHE_RSA_ENABLED) ||                       \
-    defined(MBEDTLS_KEY_EXCHANGE_ECDHE_RSA_ENABLED) ||                     \
-    defined(MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED)
-#define MBEDTLS_KEY_EXCHANGE__SOME__SIGNATURE_ENABLED
 #endif
 
 /*
@@ -354,6 +332,8 @@
 
 #define MBEDTLS_TLS_EXT_SESSION_TICKET              35
 
+#define MBEDTLS_TLS_EXT_ECJPAKE_KKPP               256 /* experimental */
+
 #define MBEDTLS_TLS_EXT_RENEGOTIATION_INFO      0xFF01
 
 /*
@@ -391,6 +371,9 @@ union mbedtls_ssl_premaster_secret
 #if defined(MBEDTLS_KEY_EXCHANGE_ECDHE_PSK_ENABLED)
     unsigned char _pms_ecdhe_psk[4 + MBEDTLS_ECP_MAX_BYTES
                                    + MBEDTLS_PSK_MAX_LEN];     /* RFC 5489 2 */
+#endif
+#if defined(MBEDTLS_KEY_EXCHANGE_ECJPAKE_ENABLED)
+    unsigned char _pms_ecjpake[32];     /* Thread spec: SHA-256 output */
 #endif
 };
 
@@ -544,6 +527,13 @@ struct mbedtls_ssl_config
     void *p_ticket;                 /*!< context for the ticket callbacks   */
 #endif /* MBEDTLS_SSL_SESSION_TICKETS && MBEDTLS_SSL_SRV_C */
 
+#if defined(MBEDTLS_SSL_EXPORT_KEYS)
+    /** Callback to export key block and master secret                      */
+    int (*f_export_keys)( void *, const unsigned char *,
+            const unsigned char *, size_t, size_t, size_t );
+    void *p_export_keys;            /*!< context for key export callback    */
+#endif
+
 #if defined(MBEDTLS_X509_CRT_PARSE_C)
     const mbedtls_x509_crt_profile *cert_profile; /*!< verification profile */
     mbedtls_ssl_key_cert *key_cert; /*!< own certificate/key pair(s)        */
@@ -551,7 +541,7 @@ struct mbedtls_ssl_config
     mbedtls_x509_crl *ca_crl;       /*!< trusted CAs CRLs                   */
 #endif /* MBEDTLS_X509_CRT_PARSE_C */
 
-#if defined(MBEDTLS_KEY_EXCHANGE__SOME__SIGNATURE_ENABLED)
+#if defined(MBEDTLS_KEY_EXCHANGE__WITH_CERT__ENABLED)
     const int *sig_hashes;          /*!< allowed signature hashes           */
 #endif
 
@@ -1071,6 +1061,35 @@ typedef int mbedtls_ssl_ticket_write_t( void *p_ticket,
                                         size_t *tlen,
                                         uint32_t *lifetime );
 
+#if defined(MBEDTLS_SSL_EXPORT_KEYS)
+/**
+ * \brief           Callback type: Export key block and master secret
+ *
+ * \note            This is required for certain uses of TLS, e.g. EAP-TLS
+ *                  (RFC 5216) and Thread. The key pointers are ephemeral and
+ *                  therefore must not be stored. The master secret and keys
+ *                  should not be used directly except as an input to a key
+ *                  derivation function.
+ *
+ * \param p_expkey  Context for the callback
+ * \param ms        Pointer to master secret (fixed length: 48 bytes)
+ * \param kb        Pointer to key block, see RFC 5246 section 6.3
+ *                  (variable length: 2 * maclen + 2 * keylen + 2 * ivlen).
+ * \param maclen    MAC length
+ * \param keylen    Key length
+ * \param ivlen     IV length
+ *
+ * \return          0 if successful, or
+ *                  a specific MBEDTLS_ERR_XXX code.
+ */
+typedef int mbedtls_ssl_export_keys_t( void *p_expkey,
+                                const unsigned char *ms,
+                                const unsigned char *kb,
+                                size_t maclen,
+                                size_t keylen,
+                                size_t ivlen );
+#endif /* MBEDTLS_SSL_EXPORT_KEYS */
+
 /**
  * \brief           Callback type: parse and load session ticket
  *
@@ -1119,6 +1138,22 @@ void mbedtls_ssl_conf_session_tickets_cb( mbedtls_ssl_config *conf,
         mbedtls_ssl_ticket_parse_t *f_ticket_parse,
         void *p_ticket );
 #endif /* MBEDTLS_SSL_SESSION_TICKETS && MBEDTLS_SSL_SRV_C */
+
+#if defined(MBEDTLS_SSL_EXPORT_KEYS)
+/**
+ * \brief           Configure key export callback.
+ *                  (Default: none.)
+ *
+ * \note            See \c mbedtls_ssl_export_keys_t.
+ *
+ * \param conf      SSL configuration context
+ * \param f_export_keys     Callback for exporting keys
+ * \param p_export_keys     Context for the callback
+ */
+void mbedtls_ssl_conf_export_keys_cb( mbedtls_ssl_config *conf,
+        mbedtls_ssl_export_keys_t *f_export_keys,
+        void *p_export_keys );
+#endif /* MBEDTLS_SSL_EXPORT_KEYS */
 
 /**
  * \brief          Callback type: generate a cookie
@@ -1387,6 +1422,10 @@ void mbedtls_ssl_conf_ciphersuites_for_version( mbedtls_ssl_config *conf,
 /**
  * \brief          Set the X.509 security profile used for verification
  *
+ * \note           The restrictions are enforced for all certificates in the
+ *                 chain. However, signatures in the handshake are not covered
+ *                 by this setting but by \b mbedtls_ssl_conf_sig_hashes().
+ *
  * \param conf     SSL configuration
  * \param profile  Profile to use
  */
@@ -1548,16 +1587,14 @@ void mbedtls_ssl_conf_dhm_min_bitlen( mbedtls_ssl_config *conf,
  *                 On client: this affects the list of curves offered for any
  *                 use. The server can override our preference order.
  *
- *                 Both sides: limits the set of curves used by peer to the
- *                 listed curves for any use ECDHE and the end-entity
- *                 certificate.
+ *                 Both sides: limits the set of curves accepted for use in
+ *                 ECDHE and in the peer's end-entity certificate.
  *
- * \note           This has no influence on which curve are allowed inside the
+ * \note           This has no influence on which curves are allowed inside the
  *                 certificate chains, see \c mbedtls_ssl_conf_cert_profile()
- *                 for that. For example, if the peer's certificate chain is
- *                 EE -> CA_int -> CA_root, then the allowed curves for EE are
- *                 controlled by \c mbedtls_ssl_conf_curves() but for CA_int
- *                 and CA_root it's \c mbedtls_ssl_conf_cert_profile().
+ *                 for that. For the end-entity certificate however, the key
+ *                 will be accepted only if it is allowed both by this list
+ *                 and by the cert profile.
  *
  * \note           This list should be ordered by decreasing preference
  *                 (preferred curve first).
@@ -1570,7 +1607,7 @@ void mbedtls_ssl_conf_curves( mbedtls_ssl_config *conf,
                               const mbedtls_ecp_group_id *curves );
 #endif /* MBEDTLS_ECP_C */
 
-#if defined(MBEDTLS_KEY_EXCHANGE__SOME__SIGNATURE_ENABLED)
+#if defined(MBEDTLS_KEY_EXCHANGE__WITH_CERT__ENABLED)
 /**
  * \brief          Set the allowed hashes for signatures during the handshake.
  *                 (Default: all available hashes.)
@@ -1591,7 +1628,7 @@ void mbedtls_ssl_conf_curves( mbedtls_ssl_config *conf,
  */
 void mbedtls_ssl_conf_sig_hashes( mbedtls_ssl_config *conf,
                                   const int *hashes );
-#endif /* MBEDTLS_KEY_EXCHANGE__SOME__SIGNATURE_ENABLED */
+#endif /* MBEDTLS_KEY_EXCHANGE__WITH_CERT__ENABLED */
 
 #if defined(MBEDTLS_X509_CRT_PARSE_C)
 /**
@@ -1680,6 +1717,29 @@ void mbedtls_ssl_conf_sni( mbedtls_ssl_config *conf,
                                size_t),
                   void *p_sni );
 #endif /* MBEDTLS_SSL_SERVER_NAME_INDICATION */
+
+#if defined(MBEDTLS_KEY_EXCHANGE_ECJPAKE_ENABLED)
+/**
+ * \brief          Set the EC J-PAKE password for current handshake.
+ *
+ * \note           An internal copy is made, and destroyed as soon as the
+ *                 handshake is completed, or when the SSL context is reset or
+ *                 freed.
+ *
+ * \note           The SSL context needs to be already set up. The right place
+ *                 to call this function is between \c mbedtls_ssl_setup() or
+ *                 \c mbedtls_ssl_reset() and \c mbedtls_ssl_handshake().
+ *
+ * \param ssl      SSL context
+ * \param pw       EC J-PAKE password (pre-shared secret)
+ * \param pw_len   length of pw in bytes
+ *
+ * \return         0 on success, or a negative error code.
+ */
+int mbedtls_ssl_set_hs_ecjpake_password( mbedtls_ssl_context *ssl,
+                                         const unsigned char *pw,
+                                         size_t pw_len );
+#endif /*MBEDTLS_KEY_EXCHANGE_ECJPAKE_ENABLED */
 
 #if defined(MBEDTLS_SSL_ALPN)
 /**

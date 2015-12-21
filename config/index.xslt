@@ -133,7 +133,7 @@
 <tbody>
 <xsl:for-each select="files/file">
 <tr onClick="javascript:window.location.href='{.}'">
-	<td class="{@type}"><a href="{.}"><xsl:value-of select="." /></a></td>
+	<td class="{@type}"><a href="{@url_encoded}"><xsl:value-of select="." /></a></td>
 	<td><xsl:value-of select="@timestamp" /></td>
 	<td class="size"><xsl:value-of select="@size" /></td>
 </tr>
@@ -147,7 +147,7 @@
 </tr>
 </tfoot>
 </table>
-<div class="powered">Powered by <a href="http://www.hiawatha-webserver.org/" target="_blank"><xsl:value-of select="software" /></a></div>
+<div class="powered">Powered by <a href="https://www.hiawatha-webserver.org/" target="_blank"><xsl:value-of select="software" /></a></div>
 </body>
 
 </html>

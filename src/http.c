@@ -820,7 +820,7 @@ const char *http_error(int code) {
 		{0,   NULL}
 	};
 
-	for (i=0; error[i].code != 0; i++) {
+	for (i = 0; error[i].code != 0; i++) {
 		if (error[i].code == code) {
 			return error[i].message;
 		}

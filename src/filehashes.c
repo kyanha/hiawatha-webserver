@@ -29,7 +29,7 @@
 
 #define BUFFER_SIZE 1024
 
-int sha256_file( const char *path, unsigned char output[32], int is224) {
+int sha256_file(const char *path, unsigned char output[32], int is224) {
 	FILE *fp;
 	size_t bytes_read;
 	mbedtls_sha256_context context;
@@ -57,15 +57,6 @@ int sha256_file( const char *path, unsigned char output[32], int is224) {
 	fclose(fp);
 
 	return 0;
-}
-
-static void sha2_bin2hex(unsigned char bin[SHA_HASH_SIZE], char hex[FILE_HASH_SIZE + 1]) {
-	int i;
-
-	for (i = 0; i < SHA_HASH_SIZE; i++) {
-		sprintf(&hex[2 * i], "%02x", bin[i]);
-	}
-	hex[FILE_HASH_SIZE] = '\0';
 }
 
 t_file_hash *read_file_hashes(char *hashes_file) {
@@ -165,7 +156,7 @@ bool file_hash_match(char *filename, t_file_hash *file_hashes) {
 	if (sha256_file(filename, bin_hash, 0) != 0) {
 		return false;
 	}
-	sha2_bin2hex(bin_hash, hex_hash);
+	sha256_bin2hex(bin_hash, hex_hash);
 
 	if (memcmp(file_hash->hash, hex_hash, SHA_HASH_SIZE) != 0) {
 		return false;
@@ -205,7 +196,7 @@ int print_file_hashes(char *directory) {
 				if (sha256_file(file, bin_hash, 0) != 0) {
 					goto hash_fail;
 				}
-				sha2_bin2hex(bin_hash, hex_hash);
+				sha256_bin2hex(bin_hash, hex_hash);
 
 				printf("%s : %s\n", hex_hash, file);
 				break;

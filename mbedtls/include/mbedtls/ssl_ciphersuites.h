@@ -4,21 +4,19 @@
  * \brief SSL Ciphersuites for mbed TLS
  *
  *  Copyright (C) 2006-2015, ARM Limited, All Rights Reserved
- *  SPDX-License-Identifier: GPL-2.0
+ *  SPDX-License-Identifier: Apache-2.0
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ *  Licensed under the Apache License, Version 2.0 (the "License"); you may
+ *  not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- *  You should have received a copy of the GNU General Public License along
- *  with this program; if not, write to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ *  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  *
  *  This file is part of mbed TLS (https://tls.mbed.org)
  */
@@ -231,8 +229,10 @@ extern "C" {
 #define MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8      0xC0AE  /**< TLS 1.2 */
 #define MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_CCM_8      0xC0AF  /**< TLS 1.2 */
 
+#define MBEDTLS_TLS_ECJPAKE_WITH_AES_128_CCM_8          0xC0FF  /**< experimental */
+
 /* Reminder: update mbedtls_ssl_premaster_secret when adding a new key exchange.
- * Reminder: update MBEDTLS_KEY_EXCHANGE__WITH_CERT__ENABLED below.
+ * Reminder: update MBEDTLS_KEY_EXCHANGE__xxx below
  */
 typedef enum {
     MBEDTLS_KEY_EXCHANGE_NONE = 0,
@@ -246,17 +246,33 @@ typedef enum {
     MBEDTLS_KEY_EXCHANGE_ECDHE_PSK,
     MBEDTLS_KEY_EXCHANGE_ECDH_RSA,
     MBEDTLS_KEY_EXCHANGE_ECDH_ECDSA,
+    MBEDTLS_KEY_EXCHANGE_ECJPAKE,
 } mbedtls_key_exchange_type_t;
 
-#if defined(MBEDTLS_KEY_EXCHANGE_RSA_ENABLED)          || \
-    defined(MBEDTLS_KEY_EXCHANGE_DHE_RSA_ENABLED)      || \
-    defined(MBEDTLS_KEY_EXCHANGE_ECDHE_RSA_ENABLED)    || \
-    defined(MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED)  || \
-    defined(MBEDTLS_KEY_EXCHANGE_RSA_PSK_ENABLED)      || \
-    defined(MBEDTLS_KEY_EXCHANGE_ECDHE_PSK_ENABLED)    || \
-    defined(MBEDTLS_KEY_EXCHANGE_ECDH_RSA_ENABLED)     || \
+/* Key exchanges using a certificate */
+#if defined(MBEDTLS_KEY_EXCHANGE_RSA_ENABLED)           || \
+    defined(MBEDTLS_KEY_EXCHANGE_DHE_RSA_ENABLED)       || \
+    defined(MBEDTLS_KEY_EXCHANGE_ECDHE_RSA_ENABLED)     || \
+    defined(MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED)   || \
+    defined(MBEDTLS_KEY_EXCHANGE_RSA_PSK_ENABLED)       || \
+    defined(MBEDTLS_KEY_EXCHANGE_ECDH_RSA_ENABLED)      || \
     defined(MBEDTLS_KEY_EXCHANGE_ECDH_ECDSA_ENABLED)
 #define MBEDTLS_KEY_EXCHANGE__WITH_CERT__ENABLED
+#endif
+
+/* Key exchanges using a PSK */
+#if defined(MBEDTLS_KEY_EXCHANGE_PSK_ENABLED)           || \
+    defined(MBEDTLS_KEY_EXCHANGE_RSA_PSK_ENABLED)       || \
+    defined(MBEDTLS_KEY_EXCHANGE_DHE_PSK_ENABLED)       || \
+    defined(MBEDTLS_KEY_EXCHANGE_ECDHE_PSK_ENABLED)
+#define MBEDTLS_KEY_EXCHANGE__SOME__PSK_ENABLED
+#endif
+
+/* Key exchanges using a ECDHE */
+#if defined(MBEDTLS_KEY_EXCHANGE_ECDHE_RSA_ENABLED)     || \
+    defined(MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED)   || \
+    defined(MBEDTLS_KEY_EXCHANGE_ECDHE_PSK_ENABLED)
+#define MBEDTLS_KEY_EXCHANGE__SOME__ECDHE_ENABLED
 #endif
 
 typedef struct mbedtls_ssl_ciphersuite_t mbedtls_ssl_ciphersuite_t;

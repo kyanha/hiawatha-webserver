@@ -99,7 +99,7 @@ man -P cat -t ../man/wigwam.1 | ps2pdf - > root/Hiawatha/documentation/wigwam.pd
 
 version=`grep VERSION config.h | cut -f2 -d'"'`
 cd root
-zip -r ../../hiawatha-${version}.zip .
+zip -r ../../"Hiawatha v${version}.zip" .
 cd ..
 
 # Done

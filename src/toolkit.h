@@ -35,7 +35,7 @@ typedef enum { tc_none, tc_header, tc_match, tc_method, tc_request_uri, tc_total
                , tc_use_tls
 #endif
                } t_toolkit_condition;
-typedef enum { to_none, to_ban, to_deny_access, to_expire, to_fastcgi, to_omit_request_log,
+typedef enum { to_none, to_ban, to_deny_access, to_fastcgi, to_omit_request_log,
                to_redirect, to_rewrite, to_skip, to_sub, to_use } t_toolkit_operation;
 typedef enum { tf_continue, tf_exit, tf_return } t_toolkit_flow;
 
@@ -70,7 +70,6 @@ typedef struct type_toolkit_options {
 	char *website_root;
 	char *fastcgi_server;
 	int  ban;
-	int  expire;
 	bool caco_private;
 	int  total_connections;
 	bool log_request;
