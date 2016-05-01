@@ -645,12 +645,6 @@ void tls_close(mbedtls_ssl_context *context) {
 	}
 }
 
-/* Clean up TLS library
- */
-void tls_shutdown(void) {
-	mbedtls_ssl_cache_free(&cache);
-}
-
 /* Connect to remote server via TLS
  */
 int tls_connect(mbedtls_ssl_context *context, int *sock, char *hostname) {

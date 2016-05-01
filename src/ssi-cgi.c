@@ -100,19 +100,6 @@ void close_pipe_end(int *pipe_end, int *count) {
 	}
 }
 
-/* Get parameter value based in key
- */
-char *get_parameter(t_parameter *param, char *key) {
-	while (param != NULL) {
-		if (strcmp(param->key, key) == 0) {
-			return param->value;
-		}
-		param = param->next;
-	}
-
-	return NULL;
-}
-
 /* Remove parameters
  */
 void *remove_parameters(t_parameter *param) {

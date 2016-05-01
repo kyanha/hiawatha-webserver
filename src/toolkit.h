@@ -86,7 +86,7 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit);
 t_url_toolkit *new_url_toolkit(void);
 bool toolkit_rules_oke(t_url_toolkit *url_toolkit);
 void init_toolkit_options(t_toolkit_options *options);
-int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options);
+int use_toolkit(char *url, t_url_toolkit *toolkit, t_toolkit_options *options);
 
 #endif
 

@@ -34,13 +34,23 @@ static const struct {
 	const char *text;
 } sqli_detection[] = {
 	{"'\\s*--\\s"},
-	{"'\\s*(and|or|xor|&&|\\|\\|)\\s*\\(?\\s*('|[0-9]|`?[a-z\\._-]+`?\\s*(=|like)|[a-z]+\\s*\\()"},
-	{"'\\s*(not\\s+)?in\\s*\\(\\s*['0-9]"},
+	{"\\s+(and|or|xor|&&|\\|\\|)\\s*\\(?\\s*('|[0-9]|`?[a-z\\._-]+`?\\s*(=|like)|[a-z]+\\s*\\()"},
+	{"\\s+(not\\s+)?in\\s*\\(\\s*['0-9]"},
 	{"union(\\s+all)?(\\s*\\(\\s*|\\s+)select(`|\\s)"},
 	{"select(\\s*`|\\s+)(\\*|[a-z0-9_\\, ]*)(`\\s*|\\s+)from(\\s*`|\\s+)[a-z0-9_\\.]*"},
 	{"insert\\s+into(\\s*`|\\s+).*(`\\s*|\\s+)(values\\s*)?\\(.*\\)"},
 	{"update(\\s*`|\\s+)[a-z0-9_\\.]*(`\\s*|\\s+)set(\\s*`|\\s+).*="},
 	{"delete\\s+from(\\s*`|\\s+)[a-z0-9_\\.]*`?"},
+	{NULL}
+};
+
+static const struct {
+	const char *text;
+} sql_operators[] = {
+	{"="}, {":="}, {"&"}, {"~"}, {"|"}, {"^"}, {"/"}, {"<"}, {"="}, {">"},
+	{"-"}, {"%"}, {"!"}, {"+"}, {"*"}, {"and"}, {"between"}, {"binary"},
+	{"case"}, {"div"}, {"in"}, {"is"}, {"like"}, {"mod"}, {"not"}, {"or"},
+	{"order"}, {"regexp"}, {"rlike"}, {"sounds"}, {"xor"},
 	{NULL}
 };
 
@@ -106,6 +116,7 @@ static void clear_session(t_session *session) {
 	session->uploaded_file = NULL;
 	session->uploaded_size = 0;
 	session->location = NULL;
+	session->send_date = true;
 	session->send_expires = false;
 	session->expires = -1;
 	session->caco_private = true;
@@ -177,6 +188,14 @@ void reset_session(t_session *session) {
 		}
 		pthread_mutex_unlock(&(session->directory->client_mutex));
 	}
+
+#ifdef ENABLE_TOOLKIT
+	if (session->host->toolkit_rules_user != NULL) {
+		free(session->host->toolkit_rules_user);
+	}
+
+	remove_charlist(&(session->host->toolkit_rules_user_str));
+#endif
 
 	/* HTTP pipelining
 	 */
@@ -270,6 +289,7 @@ int get_target_extension(t_session *session) {
 
 #ifdef CIFS
 	check_free(session->extension);
+	session->extension = NULL;
 #endif
 
 	if ((last_slash = strrchr(session->file_on_disk, '/')) == NULL) {
@@ -365,6 +385,10 @@ int load_user_root_config(t_session *session) {
 
 	free(conffile);
 
+	if (toolkit_rules_str_to_ptr(session->config->url_toolkit, &(session->host->toolkit_rules_user_str), &(session->host->toolkit_rules_user)) == -1) {
+		result = -1;
+	}
+
 	return result;
 }
 #endif
@@ -422,94 +446,101 @@ int load_user_config(t_session *session) {
 int copy_directory_settings(t_session *session) {
 	size_t path_length;
 	t_directory *dir;
-	int i;
+	int d, p;
 
-	if (session->file_on_disk == NULL) {
-		return 500;
+	if (session->host->directory == NULL) {
+		return 200;
 	}
 
-	dir = session->config->directory;
-	while (dir != NULL) {
-		if (in_charlist(dir->dir_id, &(session->host->directory))) {
-			for (i = 0; i < dir->path.size; i++) {
-				path_length = strlen(dir->path.item[i]);
+	d = 0;
+	while (session->host->directory[d] != NULL) {
+		dir = session->host->directory[d];
+		for (p = 0; p < dir->path.size; p++) {
+			path_length = strlen(dir->path.item[p]);
 
-				if (strncmp(session->request_uri, dir->path.item[i], path_length) != 0) {
+			if (strncmp(session->request_uri, dir->path.item[p], path_length) != 0) {
+				continue;
+			}
+
+			if (dir->path.item[p][strlen(dir->path.item[p]) - 1] != '/') {
+				if (*(session->request_uri + path_length) != '/') {
 					continue;
 				}
+			}
 
-				if (dir->path.item[i][strlen(dir->path.item[i]) - 1] != '/') {
-					if (*(session->request_uri + path_length) != '/') {
+			if ((session->extension != NULL) && dir->extensions.size > 0) {
+				if (session->uri_len > 0 ? session->uri[session->uri_len - 1] != '/' : false) {
+					if (in_charlist(session->extension, &(dir->extensions)) == false) {
 						continue;
 					}
 				}
-
-				session->directory = dir;
-
-				if (dir->max_clients > -1) {
-					pthread_mutex_lock(&(dir->client_mutex));
-					if (dir->nr_of_clients < dir->max_clients) {
-						session->throttle = dir->session_speed = dir->upload_speed / ++dir->nr_of_clients;
-						pthread_mutex_unlock(&(dir->client_mutex));
-						session->part_of_dirspeed = true;
-					} else {
-						pthread_mutex_unlock(&(dir->client_mutex));
-						return 503;
-					}
-				}
-				if (dir->wrap_cgi != NULL) {
-					session->host->wrap_cgi = dir->wrap_cgi;
-				}
-				if (dir->start_file != NULL) {
-					session->host->start_file = dir->start_file;
-				}
-				if (dir->execute_cgiset) {
-					session->host->execute_cgi = dir->execute_cgi;
-				}
-#ifdef ENABLE_XSLT
-				if (dir->show_index_set) {
-					session->host->show_index = dir->show_index;
-				}
-#endif
-				if (dir->follow_symlinks_set) {
-					session->host->follow_symlinks = dir->follow_symlinks;
-				}
-				if (dir->access_list != NULL) {
-					session->host->access_list = dir->access_list;
-				}
-				if (dir->alter_list != NULL) {
-					session->host->alter_list = dir->alter_list;
-				}
-				if (dir->alter_fmode != 0) {
-					session->host->alter_fmode = dir->alter_fmode;
-				}
-				if (dir->passwordfile != NULL) {
-					session->host->auth_method = dir->auth_method;
-					session->host->passwordfile = dir->passwordfile;
-					if (dir->groupfile != NULL) {
-						session->host->groupfile = dir->groupfile;
-					}
-				}
-				if (dir->required_group.size > 0) {
-					session->host->required_group.size = dir->required_group.size;
-					session->host->required_group.item = dir->required_group.item;
-				}
-				if (dir->alter_group.size > 0) {
-					session->host->alter_group.size = dir->alter_group.size;
-					session->host->alter_group.item = dir->alter_group.item;
-				}
-				if (dir->time_for_cgi > TIMER_OFF) {
-					session->host->time_for_cgi = dir->time_for_cgi;
-				}
-				if (dir->expires > -1) {
-					session->expires = dir->expires;
-					session->caco_private = dir->caco_private;
-				}
-				break;
 			}
+
+			session->directory = dir;
+
+			if (dir->max_clients > -1) {
+				pthread_mutex_lock(&(dir->client_mutex));
+				if (dir->nr_of_clients < dir->max_clients) {
+					session->throttle = dir->session_speed = dir->upload_speed / ++dir->nr_of_clients;
+					pthread_mutex_unlock(&(dir->client_mutex));
+					session->part_of_dirspeed = true;
+				} else {
+					pthread_mutex_unlock(&(dir->client_mutex));
+					return 503;
+				}
+			}
+			if (dir->wrap_cgi != NULL) {
+				session->host->wrap_cgi = dir->wrap_cgi;
+			}
+			if (dir->start_file != NULL) {
+				session->host->start_file = dir->start_file;
+			}
+			if (dir->execute_cgi_set) {
+				session->host->execute_cgi = dir->execute_cgi;
+			}
+#ifdef ENABLE_XSLT
+			if (dir->show_index_set) {
+				session->host->show_index = dir->show_index;
+			}
+#endif
+			if (dir->follow_symlinks_set) {
+				session->host->follow_symlinks = dir->follow_symlinks;
+			}
+			if (dir->access_list != NULL) {
+				session->host->access_list = dir->access_list;
+			}
+			if (dir->alter_list != NULL) {
+				session->host->alter_list = dir->alter_list;
+			}
+			if (dir->alter_fmode != 0) {
+				session->host->alter_fmode = dir->alter_fmode;
+			}
+			if (dir->passwordfile != NULL) {
+				session->host->auth_method = dir->auth_method;
+				session->host->passwordfile = dir->passwordfile;
+				if (dir->groupfile != NULL) {
+					session->host->groupfile = dir->groupfile;
+				}
+			}
+			if (dir->required_group.size > 0) {
+				session->host->required_group.size = dir->required_group.size;
+				session->host->required_group.item = dir->required_group.item;
+			}
+			if (dir->alter_group.size > 0) {
+				session->host->alter_group.size = dir->alter_group.size;
+				session->host->alter_group.item = dir->alter_group.item;
+			}
+			if (dir->time_for_cgi > TIMER_OFF) {
+				session->host->time_for_cgi = dir->time_for_cgi;
+			}
+			if (dir->expires > -1) {
+				session->expires = dir->expires;
+				session->caco_private = dir->caco_private;
+			}
+			break;
 		}
 
-		dir = dir->next;
+		d++;
 	}
 
 	return 200;
@@ -632,12 +663,25 @@ int init_sqli_detection(void) {
 	return 0;
 }
 
+static void log_sqli_attempt(t_session *session, char *str) {
+	log_exploit_attempt(session, "SQLi", str);
+#ifdef ENABLE_TOMAHAWK
+	increment_counter(COUNTER_EXPLOIT);
+#endif
+#ifdef ENABLE_MONITOR
+	if (session->config->monitor_enabled) {
+		monitor_count_exploit_attempt(session);
+		monitor_event("SQLi attempt for %s%s", session->host->hostname.item[0], session->uri);
+	}
+#endif
+}
+
 /* Prevent SQL injection
  */
 static int prevent_sqli_str(t_session *session, char *str, int length) {
 	char *data, *c, *begin, *end;
 	t_sqli_pattern *pattern;
-	int result = 0;
+	int result = 0, i;
 
 	if ((str == NULL) || (length <= 0)) {
 		return 0;
@@ -648,7 +692,15 @@ static int prevent_sqli_str(t_session *session, char *str, int length) {
 	}
 
 	memcpy(data, str, length);
+	for (i = 0; i < length; i++) {
+		if (data[i] == '\0') {
+			data[i] = ' ';
+		} else if (strncmp(data + i, "%00", 3) == 0) {
+			data[i + 1] = '2';
+		}
+	}
 	data[length] = '\0';
+
 	url_decode(data);
 
 	c = data;
@@ -682,30 +734,37 @@ static int prevent_sqli_str(t_session *session, char *str, int length) {
 			*begin = ' ';
 		}
 	}
+	
+	/* SQL operators
+	 */
+	if ((c = strchr(data, '\'')) != NULL) {
+		do {
+			c++;
+		} while ((*c == ' ') || (*c == '\t'));
+
+		for (i = 0; sql_operators[i].text != NULL; i++) {
+			if (strncasecmp(c, sql_operators[i].text, strlen(sql_operators[i].text)) == 0) {
+				log_sqli_attempt(session, str);
+				result = 1;
+				goto sqli_done;
+			}
+		}
+	}
 
 	/* Match patterns
 	 */
 	pattern = sqli_patterns;
 	while (pattern != NULL) {
 		if (regexec(&(pattern->regex), data, 0, NULL, 0) != REG_NOMATCH) {
-			log_exploit_attempt(session, "SQLi", str);
-#ifdef ENABLE_TOMAHAWK
-			increment_counter(COUNTER_EXPLOIT);
-#endif
-#ifdef ENABLE_MONITOR
-			if (session->config->monitor_enabled) {
-				monitor_count_exploit_attempt(session);
-				monitor_event("SQLi attempt for %s%s", session->host->hostname.item[0], session->uri);
-			}
-#endif
-
+			log_sqli_attempt(session, str);
 			result = 1;
-			break;
+			goto sqli_done;
 		}
 
 		pattern = pattern->next;
 	}
 
+sqli_done:
 	free(data);
 
 	return result;

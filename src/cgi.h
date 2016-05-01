@@ -45,7 +45,7 @@ typedef struct type_cgi_info {
 
 	char *input_buffer, *error_buffer;
 	int input_buffer_size, error_buffer_size;
-	size_t input_len, error_len;
+	unsigned long input_len, error_len;
 
 	/* Normal CGI
 	 */
@@ -65,7 +65,7 @@ char *find_cgi_header(char *buffer, int size, char *header);
  */
 int init_load_balancer(t_fcgi_server *fcgi_server);
 t_connect_to *select_connect_to(t_fcgi_server *fcgi_server, t_ip_addr *client_ip);
-t_fcgi_server *fcgi_server_match(t_fcgi_server *fcgi_server, t_charlist *fastcgi, char *extension);
+t_fcgi_server *fcgi_server_match(t_fcgi_server **fcgi_server, char *extension);
 t_fcgi_server *find_fcgi_server(t_fcgi_server *fcgi_server, char *id);
 void manage_load_balancer(t_config *config, time_t now);
 

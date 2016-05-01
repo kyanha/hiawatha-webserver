@@ -77,8 +77,7 @@ extern char *upgrade_websocket;
  */
 int send_file(t_session *session) {
 	char *buffer = NULL, value[VALUE_SIZE + 1], *pos, *date;
-	char *range, *range_begin, *range_end, gz_file[1024], gz_hex[65];
-	char *file_for_cache = NULL;
+	char *range = NULL, *range_begin, *range_end, gz_file[1024], gz_hex[65];
 	bool use_gz_file = false;
 	unsigned char gz_hash[32];
 	long bytes_read, speed;
@@ -87,6 +86,7 @@ int send_file(t_session *session) {
 	struct stat status, gz_status;
 	struct tm fdate;
 #ifdef ENABLE_CACHE
+	char *file_for_cache = NULL;
 	t_cached_object *cached_object;
 	int result;
 #endif
@@ -462,13 +462,6 @@ static int extract_http_code(char *data) {
 	int result = -1;
 	char *code, c;
 
-	if (strncmp(data, "HTTP/", 5) == 0) {
-		data += 5;
-		while ((*data != '\0') && (*data != ' ')) {
-			data++;
-		}
-	}
-
 	while (*data == ' ') {
 		data++;
 	}
@@ -488,11 +481,36 @@ static int extract_http_code(char *data) {
 	return result;
 }
 
+static int remove_header(char *buffer, char *header, int *header_length, unsigned long *size) {
+	char *pos;
+	size_t len;
+
+	if ((pos = find_cgi_header(buffer, *header_length, header)) == NULL) {
+		return 0;
+	}
+
+	len = strlen(header);
+	while (*(pos + len) != '\n') {
+		if (*(pos + len) == '\0') {
+			return 0;
+		}
+		len++;
+	}
+	len++;
+
+	memmove(pos, pos + len, *size - len - (pos - buffer));
+
+	*header_length -= len;
+	*size -= len;
+
+	return len;
+}
+
 /* Run a CGI program and send output to the client.
  */
 int execute_cgi(t_session *session) {
-	int retval = 200, result, handle, len, header_length, value, flush_after_send = false;
-	char *end_of_header, *str_begin, *str_end, *code, c, *str;
+	int retval = 200, result, handle, len, header_length, value, flush_after_send = false, delta, return_code;
+	char *end_of_header, *str_begin, *str_end, *code, c, *str, *sendfile = NULL;
 	bool in_body = false, send_in_chunks = true, wrap_cgi, check_file_exists;
 	t_cgi_result cgi_result;
 	t_connect_to *connect_to;
@@ -844,7 +862,40 @@ int execute_cgi(t_session *session) {
 						}
 
 						if (end_of_header != NULL) {
+							return_code = 200;
+
+							if ((strncmp(cgi_info.input_buffer, "HTTP/1.0 ", 9) == 0) || (strncmp(cgi_info.input_buffer, "HTTP/1.1 ", 9) == 0)) {
+								if ((str_end = strstr(cgi_info.input_buffer, "\r\n")) != NULL) {
+									return_code = extract_http_code(cgi_info.input_buffer + 9);
+
+									delta = str_end - cgi_info.input_buffer + 2;
+									memmove(cgi_info.input_buffer, cgi_info.input_buffer + delta, cgi_info.input_len - delta);
+									cgi_info.input_len -= delta;
+									end_of_header -= delta;
+								}
+							}
+							
 							header_length = end_of_header + 4 - cgi_info.input_buffer;
+
+							if (return_code == 200) {
+								if ((code = find_cgi_header(cgi_info.input_buffer, header_length, "Status:")) != NULL) {
+									return_code = extract_http_code(code + 7);
+								}
+							}
+
+							if ((return_code <= 0) || (return_code > 999)) {
+								log_error(session, "invalid status code received from CGI");
+							} else if (return_code != 200) {
+								session->return_code = return_code;
+
+								if (return_code == 500) {
+									log_error(session, "CGI returned 500 Internal Error");
+								}
+								if (session->host->trigger_on_cgi_status) {
+									retval = return_code;
+									break;
+								}
+							}
 
 							if (session->throttle == 0) {
 								if ((str_begin = find_cgi_header(cgi_info.input_buffer, header_length, hs_contyp)) != NULL) {
@@ -943,6 +994,25 @@ int execute_cgi(t_session *session) {
 								len = header_length - (str - cgi_info.input_buffer);
 							}
 #endif
+
+							/* Look for X-Sendfile header
+							 */
+							if ((sendfile = find_cgi_header(cgi_info.input_buffer, header_length, "X-Sendfile:")) != NULL) {
+								sendfile = sendfile + 11;
+								while (*sendfile == ' ') {
+									sendfile++;
+								}
+
+								if ((str = strstr(sendfile, "\r\n")) != NULL) {
+									*str = '\0';
+									sendfile = strdup(sendfile);
+									*str = '\r';
+								}
+
+								retval = rs_QUIT;
+								break;
+							}
+
 #ifdef ENABLE_CACHE
 							/* Look for store-in-cache CGI header
 							 */
@@ -972,34 +1042,23 @@ int execute_cgi(t_session *session) {
 								}
 							}
 
+							if (find_cgi_header(cgi_info.input_buffer, header_length, "Date:") != NULL) {
+								session->send_date = false;
+							}
+
 							if (find_cgi_header(cgi_info.input_buffer, header_length, "Location:") != NULL) {
 								if (session->return_code == 200) {
 									session->return_code = 302;
 								}
 							}
 
-							if ((code = find_cgi_header(cgi_info.input_buffer, header_length, "Status:")) != NULL) {
-								result = extract_http_code(code + 7);
-
-								if ((result <= 0) || (result > 999)) {
-									log_error(session, "invalid status code received from CGI");
-								} else if (result != 200) {
-									session->return_code = result;
-									if (result == 500) {
-										log_error(session, "CGI returned 500 Internal Error");
-									}
-									if (session->host->trigger_on_cgi_status) {
-										retval = result;
-										break;
-									}
-
-#ifdef ENABLE_CACHE
-									if (cache_buffer != NULL) {
-										clear_free(cache_buffer, cache_size);
-										cache_buffer = NULL;
-									}
-#endif
-								}
+							/* Remove headers from CGI output
+							 */
+							while ((delta = remove_header(cgi_info.input_buffer, "X-Hiawatha-", &header_length, &(cgi_info.input_len))) > 0) {
+								end_of_header -= delta;
+							}
+							if ((delta = remove_header(cgi_info.input_buffer, "Status:", &header_length, &(cgi_info.input_len))) > 0) {
+								end_of_header -= delta;
 							}
 
 							if (send_header(session) == -1) {
@@ -1139,6 +1198,19 @@ int execute_cgi(t_session *session) {
 
 	clear_free(cgi_info.input_buffer, cgi_info.input_len);
 	clear_free(cgi_info.error_buffer, cgi_info.error_len);
+
+	if (sendfile != NULL) {
+		str = session->file_on_disk;
+		session->file_on_disk = sendfile;
+
+		if (get_target_extension(session) != -1) {
+			retval = send_file(session);
+		}
+
+		session->file_on_disk = str;
+
+		free(sendfile);
+	}
 
 	return retval;
 }
@@ -1529,28 +1601,6 @@ int handle_xml_file(t_session *session, char *xslt_file) {
 #endif
 
 #ifdef ENABLE_RPROXY
-static int remove_header(char *buffer, char *header, int header_length, int size) {
-	char *pos;
-	size_t len;
-
-	if ((pos = find_cgi_header(buffer, header_length, header)) == NULL) {
-		return 0;
-	}
-
-	len = strlen(header);
-	while (*(pos + len) != '\n') {
-		if (*(pos + len) == '\0') {
-			return 0;
-		}
-		len++;
-	}
-	len++;
-
-	memmove(pos, pos + len, size - len - (pos - buffer));
-
-	return len;
-}
-
 static int find_chunk_size(char *buffer, int size, int *chunk_size, int *chunk_left) {
 	int total;
 	char *c;
@@ -1600,7 +1650,8 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	t_rproxy_result rproxy_result;
 	char buffer[RPROXY_BUFFER_SIZE + 1], *end_of_header, *str, *eol;
 	char *reverse_proxy, ip_address[MAX_IP_STR_LEN + 1];
-	int bytes_read, bytes_in_buffer = 0, result = 200, code, poll_result, send_result, delta;
+	unsigned long bytes_in_buffer = 0;
+	int bytes_read, result = 200, code, poll_result, send_result, delta;
 	int content_length = -1, content_read = 0, chunk_size = 0, chunk_left = 0, header_length;
 	bool header_read = false, keep_reading, keep_alive, upgraded_to_websocket = false;
 	bool chunked_transfer = false, send_in_chunks = false;
@@ -1832,11 +1883,18 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 							if ((end_of_header = strstr(buffer, "\r\n\r\n")) != NULL) {
 								header_length = end_of_header + 4 - buffer;
 
-								if (strncmp(buffer, "HTTP/1.0 ", 9) == 0) {
-									buffer[7] = '1';
+								if (strncmp(buffer, "HTTP/1.1 ", 9) != 0) {
+									if (strncmp(buffer, "HTTP/1.0 ", 9) != 0) {
+										result = 502;
+										keep_reading = false;
+										keep_alive = false;
+										break;
+									} else {
+										buffer[7] = '1';
+									}
 								}
 
-								if ((code = extract_http_code(buffer)) != -1) {
+								if ((code = extract_http_code(buffer + 9)) != -1) {
 									session->return_code = code;
 								}
 
@@ -1880,10 +1938,8 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 								}
 
 								if (upgraded_to_websocket == false) {
-									delta = remove_header(buffer, hs_conn, header_length, bytes_in_buffer);
-									bytes_in_buffer -= delta;
+									delta = remove_header(buffer, hs_conn, &header_length, &bytes_in_buffer);
 									end_of_header -= delta;
-									header_length -= delta;
 									bytes_read -= delta;
 								}
 

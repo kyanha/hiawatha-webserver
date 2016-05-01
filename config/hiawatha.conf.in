@@ -87,6 +87,8 @@ Binding {
 #	DirectoryID = files
 #	Path = /files
 #	ShowIndex = yes
+#	StartFile = index.html
+#	ExecuteCGI = no
 #}
 
 

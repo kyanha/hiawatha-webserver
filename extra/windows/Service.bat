@@ -12,7 +12,7 @@ GOTO END
 
 :INSTALL
 ECHO Installing Hiawatha as a Windows service...
-"%INSTALL_DIR%program\cygrunsrv.exe" -I hiawatha -d "Hiawatha webserver" -f "Secure and advanced webserver" -p "%INSTALL_DIR%program\hiawatha.exe" -a "-d"
+"%INSTALL_DIR%program\cygrunsrv.exe" -I hiawatha -d "Hiawatha webserver" -f "Secure and advanced webserver" -p "%INSTALL_DIR%program\hiawatha.exe" -a "-d -c '%INSTALL_DIR%config'"
 GOTO END
 
 :UNINSTALL

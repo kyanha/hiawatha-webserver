@@ -91,6 +91,7 @@ typedef struct type_session {
 	char            *uploaded_file;
 	long            uploaded_size;
 	char            *location;
+	bool            send_date;
 	bool            send_expires;
 	int             expires;
 	bool            caco_private;

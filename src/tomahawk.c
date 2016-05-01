@@ -23,6 +23,7 @@
 #include "global.h"
 #include "libstr.h"
 #include "tomahawk.h"
+#include "log.h"
 #include "client.h"
 #include "workers.h"
 #include "cache.h"
@@ -110,7 +111,7 @@ int init_tomahawk_module(void) {
 		return -1;
 	}
 
-	time(&t);
+	t = time(NULL);
 	localtime_r(&t, &s);
 	start_time[TIMESTAMP_SIZE - 1] = '\0';
 	strftime(start_time, TIMESTAMP_SIZE - 1, "%a %d %b %Y %T %z", &s);
@@ -258,7 +259,7 @@ static void show_thread_pool(FILE *fp) {
 static int run_tomahawk(char *line, t_admin *admin, t_config *config) {
 	char *cmd, *param, *param2;
 	t_ip_addr ip;
-	int retval = 0, time, id, count;
+	int retval = 0, timer, id, count;
 	FILE *fp;
 
 	fp = admin->fp;
@@ -272,13 +273,13 @@ static int run_tomahawk(char *line, t_admin *admin, t_config *config) {
 			fprintf(fp, "  ban what?\n");
 		} else {
 			if (split_string(param, &param, &param2, ' ') == 0) {
-				time = str_to_int(param2);
+				timer = str_to_int(param2);
 			} else {
-				time = TIMER_OFF;
+				timer = TIMER_OFF;
 			}
 			if (parse_ip(param, &ip) == -1) {
 				fprintf(fp, "  invalid IP!\n");
-			} else switch (count = ban_ip(&ip, time, config->kick_on_ban)) {
+			} else switch (count = ban_ip(&ip, timer, config->kick_on_ban)) {
 				case -1:
 					fprintf(fp, "  error while banning!\n");
 					break;

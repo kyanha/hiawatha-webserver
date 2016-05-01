@@ -17,6 +17,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <string.h>
+#include <time.h>
 #include <poll.h>
 #include <fcntl.h>
 #include <signal.h>

@@ -110,7 +110,7 @@ static t_cgi_type check_target_is_cgi(t_session *session) {
 		session->host->execute_cgi = true;
 	} else
 #endif
-	if ((session->fcgi_server = fcgi_server_match(session->config->fcgi_server, &(session->host->fast_cgi), session->extension)) != NULL) {
+	if ((session->fcgi_server = fcgi_server_match(session->host->fcgi_server, session->extension)) != NULL) {
 		session->cgi_type = fastcgi;
 	} else if (in_charlist(session->extension, &(session->config->cgi_extension))) {
 		session->cgi_type = binary;
@@ -173,7 +173,6 @@ static int handle_error(t_session *session, int error_code) {
 	strcpy(session->file_on_disk + session->host->website_root_len, error_handler->handler);
 
 	if (get_target_extension(session) == -1) {
-		log_error(session, "error getting extension while handing error");
 		return 500;
 	}
 	check_target_is_cgi(session);
@@ -311,10 +310,10 @@ static t_access allow_client(t_session *session) {
 }
 
 #ifdef ENABLE_TOOLKIT
-int process_url_toolkit(t_session *session, char *toolkit_id, t_toolkit_options *toolkit_options) {
+static int process_url_toolkit(t_session *session, t_url_toolkit *toolkit, t_toolkit_options *toolkit_options) {
 	int result;
 
-	if ((result = use_toolkit(session->uri, toolkit_id, toolkit_options)) == UT_ERROR) {
+	if ((result = use_toolkit(session->uri, toolkit, toolkit_options)) == UT_ERROR) {
 		return 500;
 	}
 
@@ -381,6 +380,7 @@ static int serve_client(t_session *session) {
 #endif
 #ifdef ENABLE_TOOLKIT
 	int i;
+	t_url_toolkit **toolkit_rules;
 	t_toolkit_options toolkit_options;
 #endif
 #ifdef ENABLE_RPROXY
@@ -430,9 +430,21 @@ static int serve_client(t_session *session) {
 	/* SSH tunneling
 	 */
 	if (session->request_method == CONNECT) {
-		if (in_iplist(session->config->tunnel_ssh, &(session->ip_address)) == false) {
-			return 405;
+		if (in_iplist(session->config->tunnel_ssh_iplist, &(session->ip_address)) != false) {
+			goto tunnel_ssh;
 		}
+
+		if (session->config->tunnel_ssh_credential != NULL) {
+			if ((header = get_http_header("Proxy-Authorization:", session->http_headers)) != NULL) {
+				if (strcmp(header, session->config->tunnel_ssh_credential) == 0) {
+					goto tunnel_ssh;
+				}
+			}
+		}
+
+		return 405;
+
+tunnel_ssh:
 
 #ifdef ENABLE_TLS
 		if (session->binding->use_tls) {
@@ -701,13 +713,20 @@ no_websocket:
 	toolkit_options.use_tls = session->binding->use_tls;
 #endif
 
-	result = 0;
-	for (i = 0; i < session->host->toolkit_rules.size; i++) {
-		result = process_url_toolkit(session, session->host->toolkit_rules.item[i], &toolkit_options);
-		if (result == UT_EXIT) {
-			break;
-		} else if (result != 0) {
-			return result;
+	toolkit_rules = (session->host->toolkit_rules_user != NULL) ? session->host->toolkit_rules_user : session->host->toolkit_rules;
+
+	if (toolkit_rules != NULL) {
+		result = 0;
+		i = 0;
+		while (toolkit_rules[i] != NULL) {
+			result = process_url_toolkit(session, toolkit_rules[i], &toolkit_options);
+			if (result == UT_EXIT) {
+				break;
+			} else if (result != 0) {
+				return result;
+			}
+
+			i++;
 		}
 	}
 #endif
@@ -802,6 +821,10 @@ no_websocket:
 		return result;
 	}
 
+	if (get_target_extension(session) == -1) {
+		return 500;
+	}
+
 	/* Load configfile from directories
 	 */
 	if (session->host->use_local_config) {
@@ -838,6 +861,10 @@ no_websocket:
 				if ((result = get_path_info(session)) != 200) {
 					return result;
 				}
+
+				if (get_target_extension(session) == -1) {
+					return 500;
+				}
 			}
 			break;
 		case no_access:
@@ -857,14 +884,13 @@ no_websocket:
 		length = strlen(session->file_on_disk);
 		if (*(session->file_on_disk + length - 1) == '/') {
 			strcpy(session->file_on_disk + length, session->host->start_file);
+
+			if (get_target_extension(session) == -1) {
+				return 500;
+			}
 		} else {
 			return 301;
 		}
-	}
-
-	if (get_target_extension(session) == -1) {
-		log_error(session, "error getting extension");
-		return 500;
 	}
 
 	if (((session->request_method != PUT) && (session->request_method != DELETE)) || session->host->webdav_app) {
@@ -1030,11 +1056,7 @@ static void handle_request_result(t_session *session, int result) {
 				}
 #endif
 			}
-#ifdef ENABLE_DEBUG
-			session->return_code = 441;
-#else
-			session->return_code = 404;
-#endif
+			session->return_code = session->host->sqli_return_code;
 			send_code(session);
 			if (session->log_request) {
 				log_request(session);

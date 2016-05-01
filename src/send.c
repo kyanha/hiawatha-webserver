@@ -265,16 +265,18 @@ int send_header(t_session *session) {
 
 	/* Date
 	 */
-	if (time(&t) == -1) {
-		return -1;
-	} else if (gmtime_r(&t, &s) == NULL) {
-		return -1;
-	} else if (strftime(timestr, TIMESTR_SIZE, "%a, %d %b %Y %X GMT\r\n", &s) == 0) {
-		return -1;
-	} else if (send_buffer(session, "Date: ", 6) == -1) {
-		return -1;
-	} else if (send_buffer(session, timestr, strlen(timestr)) == -1) {
-		return -1;
+	if (session->send_date) {
+		if (time(&t) == -1) {
+			return -1;
+		} else if (gmtime_r(&t, &s) == NULL) {
+			return -1;
+		} else if (strftime(timestr, TIMESTR_SIZE, "%a, %d %b %Y %X GMT\r\n", &s) == 0) {
+			return -1;
+		} else if (send_buffer(session, "Date: ", 6) == -1) {
+			return -1;
+		} else if (send_buffer(session, timestr, strlen(timestr)) == -1) {
+			return -1;
+		}
 	}
 
 	/* Server

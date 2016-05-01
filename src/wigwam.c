@@ -766,7 +766,10 @@ void check_url_toolkit(char *config_dir, char **toolkit_id) {
 
 		id = toolkit_id;
 		while (*id != NULL) {
-			if ((result = use_toolkit(url, *id, &options)) == UT_ERROR) {
+			if ((toolkit = select_toolkit(*id, url_toolkit)) == NULL) {
+				printf("Unknown UrlToolkit ID: %s\n", *id);
+			}
+			if ((result = use_toolkit(url, toolkit, &options)) == UT_ERROR) {
 				perror("use_toolkit()");
 			}
 			if (options.new_url != NULL) {

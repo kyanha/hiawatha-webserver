@@ -562,8 +562,8 @@ void init_toolkit_options(t_toolkit_options *options) {
 	options->http_headers = NULL;
 }
 
-int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
-	t_url_toolkit *toolkit;
+int use_toolkit(char *url, t_url_toolkit *toolkit, t_toolkit_options *options) {
+	t_url_toolkit *sub_toolkit;
 	t_toolkit_rule *rule;
 	bool condition_met, url_replaced = false;
 	int result, skip = 0;
@@ -577,10 +577,6 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 	}
 
 	options->new_url = NULL;
-
-	if ((toolkit = select_toolkit(toolkit_id, options->url_toolkit)) == NULL) {
-		return UT_ERROR;
-	}
 
 	rule = toolkit->toolkit_rule;
 	while (rule != NULL) {
@@ -616,6 +612,8 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 				/* Header
 				 */
 				if (rule->header == NULL) {
+					/* Check all headers (wildcard)
+					 */
 					headers = options->http_headers;
 					while (headers != NULL) {
 						if (regexec(&(rule->pattern), headers->data + headers->value_offset, REGEXEC_NMATCH, pmatch, 0) == 0) {
@@ -632,6 +630,8 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 						headers = headers->next;
 					}
 				} else {
+					/* Check specific header
+					 */
 					if ((header = get_http_header(rule->header, options->http_headers)) != NULL) {
 						if (regexec(&(rule->pattern), header, REGEXEC_NMATCH, pmatch, 0) == 0) {
 							condition_met = true;
@@ -793,9 +793,11 @@ int use_toolkit(char *url, char *toolkit_id, t_toolkit_options *options) {
 				 */
 				if (++(options->sub_depth) > MAX_SUB_DEPTH) {
 					return UT_ERROR;
+				} else if ((sub_toolkit = select_toolkit(rule->parameter, options->url_toolkit)) == NULL) {
+					return UT_ERROR;
 				}
 
-				if ((result = use_toolkit(url, rule->parameter, options)) == UT_ERROR) {
+				if ((result = use_toolkit(url, sub_toolkit, options)) == UT_ERROR) {
 					if (options->new_url != NULL) {
 						free(options->new_url);
 						options->new_url = NULL;

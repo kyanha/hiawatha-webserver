@@ -158,7 +158,7 @@ static void secure_header(char *buffer, int size) {
 
 	/* Remove cookies
 	 */
-	if ((pos = strncasestr(buffer, "Set-Cookie:", header_length)) != NULL) {
+	while ((pos = strncasestr(buffer, "Set-Cookie:", header_length)) != NULL) {
 		strcpy(pos, "X-Empty: ");
 		pos += 9;
 		do {

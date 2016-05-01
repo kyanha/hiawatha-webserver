@@ -583,52 +583,6 @@ int strpcmp(char *str, regex_t *regexp) {
 	return (regexec(regexp, str, 0, NULL, 0) == 0) ? 0 : -1;
 }
 
-int strcmp_rtap(const char *s1, const char *s2) {
-	size_t l1, l2, len, extra, i;
-	int result;
-
-	if ((s1 == NULL) || (s2 == NULL)) {
-		return -1;
-	}
-
-	l1 = strlen(s1);
-	l2 = strlen(s2);
-
-	if (l1 < l2) {
-		result = -1;
-		len = l1;
-		extra = 0;
-	} else if (l1 > l2) {
-		result = 1;
-		len = l2;
-		extra = l1 - l2;
-	} else {
-		result = 0;
-		len = l1;
-		extra = 0;
-	}
-
-	for (i = 0; i < len; i++) {
-		if ((s1[i] < s2[i]) && (result == 0)) {
-			result = -1;
-		}
-		if ((s1[i] > s2[i]) && (result == 0)) {
-			result = 1;
-		}
-	}
-
-	for (i = 0; i < extra; i++) {
-		if ((s1[i] < s1[i]) && (result == 0)) {
-			result = -1;
-		}
-		if ((s1[i] > s1[i]) && (result == 0)) {
-			result = 1;
-		}
-	}
-
-	return result;
-}
-
 void md5_bin2hex(unsigned char bin[16], char hex[33]) {
 	int i;
 

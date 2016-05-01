@@ -43,18 +43,18 @@ See chapter MIMETYPES for more information.
 .B .hiawatha
 See chapter USER SETTINGS PER DIRECTORY for more information.
 
-.\" ==========[ Sections ]=====================================================
-.SH SECTIONS
-The binding, directory, FastCGI, virtual host and URL toolkit configuration must be placed inside sections. A section is defined as follows:
+.\" ==========[ Records ]=====================================================
+.SH RECORDS
+The binding, directory, FastCGI, virtual host and URL toolkit configuration must be placed inside a record. A record is defined as follows:
 .br
 
-Section {
+Record {
 .br
 	...
 .br
 }
 
-where the word "Section" must be replaced with "Binding", "Directory", "FastCGIserver", "VirtualHost" or "UrlToolkit".
+where the word "Record" must be replaced with "Binding", "Directory", "FastCGIserver", "VirtualHost" or "UrlToolkit".
 
 .\" ==========[ Server configuration ]=========================================
 .SH SERVER CONFIGURATION
@@ -171,7 +171,7 @@ Challenge the client to verify that it's a real web browser and not an HTTP bot.
 Example: ChallengeClient = 200, httpheader, 60
 .TP
 .B ConnectionsPerIP = <number>
-Maximum number of simultaneous connections per IP address.
+Maximum number of simultaneous connections per IP address. See also RequestLimitMask.
 .br
 Default = 15, example: ConnectionsPerIP = 50
 .TP
@@ -253,7 +253,7 @@ Default = mimetype.conf, example: MimetypeConfig = /etc/mime.types
 .B MinTLSversion = 1.0|1.1|1.2
 Specify the minimum TLS version Hiawatha accepts for HTTPS connections.
 .br
-Default = 1.0, Example: MinTLSversion = 1.1
+Default = 1.1, Example: MinTLSversion = 1.2
 .br
 
 (requires that Hiawatha was not compiled with -DENABLE_TLS=off)
@@ -343,8 +343,9 @@ Example: Tomahawk = 81,41d0c72bd73afaa2c207064d81d5a3d9
 
 (requires that Hiawatha was compiled with -DENABLE_TOMAHAWK=on)
 .TP
-.B TunnelSSH = <ip-address>[, <ip-address>, ...]
+.B TunnelSSH = <ip-address>[, <ip-address>, ...][; <authentication code>]
 This option allows you to connect to the SSH daemon on your server when port 22 is blocked by a firewall. The parameter of this option is the IP address from where you want to connect to your server. In PuTTY and WinSCP, use the HTTP proxy type and enable the 'Consider proxying local host connections' option. Use 'localhost' as the hostname and your server's hostname as the proxy hostname.
+Optionally, you can set an authentication code, which is base64(<username>:<password>). The username and password are for in the PuTTY proxy page. When set, you can connect from any IP address you want.
 .br
 Example: TunnelSSH = 123.45.67.89
 .TP
@@ -403,7 +404,7 @@ Maximum number of stay-alives after the first request. After that, the connectio
 Default = 50, example: MaxKeepAlive = 100
 .TP
 .B MaxRequestSize = <size>
-The maximum size of a request in kilobytes the webserver is allowed to receive. This does not include PUT requests.
+The maximum size of a request in kilobytes the webserver is allowed to receive. This does not include PUT requests. See also RequestLimitMask.
 .br
 Default = 64, example: MaxRequestSize = 256
 .TP
@@ -434,13 +435,13 @@ Example: TLScertFile = my_domain.pem
 (requires that Hiawatha was not compiled with -DENABLE_TLS=off)
 .TP
 .B TimeForRequest = [<time1>, ]<time2>
-Maximum time in seconds for a client to send its HTTP request. time1 is for the first request, time2 is for the following requests (Keep-Alive time). If time2 is omitted, time1 is used for all requests.
+Maximum time in seconds for a client to send its HTTP request. time1 is for the first request, time2 is for the following requests (Keep-Alive time). If time2 is omitted, time1 is used for all requests. See also RequestLimitMask.
 .br
 Default = 5, 30, example: TimeForRequest = 2, 45
 
 .\" ==========[ Host configuration ]===========================================
 .SH VIRTUAL HOST CONFIGURATION
-The (virtual) hosts the webserver will be serving. The first host must NOT be placed inside a section. This is the default host and therefor not virtual. It is wise to have the IP-address of the webserver as the Hostname of the default host and give it a blank page. Automated vulnerable-website scanners will not find your possible vulnerable website if you do so.
+The (virtual) hosts the webserver will be serving. The first host must NOT be placed inside a record. This is the default host and therefor not virtual. It is wise to have the IP-address of the webserver as the Hostname of the default host and give it a blank page. Automated vulnerable-website scanners will not find your possible vulnerable website if you do so.
 .TP
 .B AccessList = (allow|deny|pwd) <ip-address>[/netmask][, (allow|deny|pwd) <ip-address>[/netmask], ...]
 Define which IPs have access to the website. If an IP does not match an entry in the list, access is granted. 'all' is an alias for 0.0.0.0/0. The IP address of the machine that connects and the IP address specified in the X-Forwarded-For header field (deny only) will be used to find a match. 'allow' gives access, 'deny' denies access and 'pwd' gives access if a valid password has been given (see PasswordFile for more information).
@@ -468,7 +469,7 @@ The <groupname> is the name of the group a user must be a member of to use the P
 Example: AlterGroup = publishers
 .TP
 .B AlterList = (allow|deny|pwd) <ip-address>[/netmask][, (allow|deny|pwd) <ip-address>[/netmask], ...]
-Define which IPs are allowed to use the PUT and DELETE HTTP request method. If an IP does not match an entry in the list, usage is denied. 'all' is an alias for 0.0.0.0/0. The IP address of the machine that connects and the IP address specified in the X-Forwarded-For header field (deny only) will be used to find a match. Look out for the uploading of CGI scripts! Use "ExecuteCGI = no" in a Directory section to disable CGI execution (see EnableAlter, AlterGroup and AlterMode for more information).
+Define which IPs are allowed to use the PUT and DELETE HTTP request method. If an IP does not match an entry in the list, usage is denied. 'all' is an alias for 0.0.0.0/0. The IP address of the machine that connects and the IP address specified in the X-Forwarded-For header field (deny only) will be used to find a match. Look out for the uploading of CGI scripts! Use "ExecuteCGI = no" in a Directory record to disable CGI execution (see EnableAlter, AlterGroup and AlterMode for more information).
 .br
 Example: AlterList = deny 10.0.0.13, allow 10.0.0.0/24, deny all
 .TP
@@ -569,10 +570,10 @@ Prevent Cross-site Request Forgery by ignoring all cookies sent by a browser whe
 .br
 Default = no, example: PreventCSRF = yes
 .TP
-.B PreventSQLi = yes|no
-Prevent SQL-injection by detecting injections and denying the request via a 404 response. It is important to understand that the detection of SQL injections is done by best effort. There is no 100% guarantee that all SQL injections are blocked. Note that using this feature can have a negative effect on the performance of your webserver. Use with caution. See also BanOnSQLi.
+.B PreventSQLi = yes|no[, 403|404|441]
+Prevent SQL-injection by detecting injections and denying the request via a 403, 404 or 441 response. It is important to understand that the detection of SQL injections is done by best effort. There is no 100% guarantee that all SQL injections are blocked. Note that using this feature can have a negative effect on the performance of your webserver. Use with caution. See also BanOnSQLi and RequestLimitMask.
 .br
-Default = no, example: PreventSQLi = yes
+Default = no,404, example: PreventSQLi = yes,441
 .TP
 .B PreventXSS = yes|no
 Prevent cross-site scripting via the URL by replacing a less-then, greater-then, quote or double-quote in the URL with an underscore.
@@ -597,10 +598,10 @@ The <groupname> is the name of the group a user must be a member of to have acce
 .br
 Example: RequiredGroup = webadmins,staff
 .TP
-.B RequireTLS = yes|no[,HSTS time]
+.B RequireTLS = yes|no[, HSTS time]
 Specify that a domain must be visited with a TLS connection. If it is visited via HTTP, Hiawatha will send a redirect (301) with an HTTPS URL. The HSTS time is the max-age value of the Strict-Transport-Security HTTP header.
 .br
-Default = no, example: RequireTLS = yes,2678400
+Default = no, example: RequireTLS = yes, 2678400
 .br
 
 (requires that Hiawatha was not compiled with -DENABLE_TLS=off)
@@ -652,7 +653,7 @@ Print an HTTP error message or invoke the ErrorHandler when a CGI outputs a Stat
 Default = no, example: TriggerOnCGIstatus = yes
 .TP
 .B UseDirectory = <directory_id>[, <directory_id>, ...]
-The Directory sections to use for this virtual host. See chapter DIRECTORY CONFIGURATION for more information.
+The Directory records to use for this virtual host. See chapter DIRECTORY CONFIGURATION for more information.
 .br
 Example: UseDirectory = my_dir
 .TP
@@ -692,7 +693,7 @@ Enables support for WebDAV applications.
 Default: WebDAVapp = no, example: WebDAVapp = yes
 .TP
 .B WebsiteRoot = <directory>
-Rootdirectory for this virtual host.
+Root directory for this virtual host. It's not allowed to use the root of a disk as the website root directory.
 .br
 Example: WebsiteRoot = /home/webmaster/website
 .TP
@@ -711,7 +712,7 @@ Example: WrapCGI = test
 This chapter explains which options can be set for a specific directory. These options will override (virtual) host settings.
 .TP
 .B DirectoryId = <directory_id>
-A unique ID for a directory section. Use this Id with the UseDirectory setting in a virtual host.
+A unique ID for a directory record. Use this Id with the UseDirectory setting in a virtual host.
 .br
 Example: DirectoryId = my_dir
 .TP
@@ -720,6 +721,11 @@ Example: DirectoryId = my_dir
 Adds an Expires HTTP header with current timestamp + <time>. The public/private (default is private) option defines the value of the Cache-Control header.
 .br
 Example: ExpirePeriod = 2 weeks, public
+.TP
+.B Extensions = <extension>[, <extension>, ...]
+When set, settings that affect files will only be used when the extension of the requested file matches with the supplied list.
+.br
+Example: Extensions = png, jpg, gif
 .TP
 .B Path = <path>[, <path>, ...]
 The path to the subdirectory, which may be virtual (not existing on disk). This is a required setting.
@@ -875,7 +881,7 @@ Ban the client for <seconds> seconds.
 .TP
 .B Call <toolkit_id>
 .br
-Execute toolkit section <toolkit_id> and continue in the current section afterwards.
+Execute toolkit record <toolkit_id> and continue in the current record afterwards.
 .TP
 .B DenyAccess
 .br
@@ -899,7 +905,7 @@ Redirect (301) the browser to the specified URL and terminate toolkit processing
 .TP
 .B Return
 .br
-Return from the current UrlToolkit section.
+Return from the current UrlToolkit record.
 .TP
 .B Rewrite <replacement> [<max_loop>] [Continue|Return]
 .br

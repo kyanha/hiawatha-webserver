@@ -265,40 +265,37 @@ void manage_load_balancer(t_config *config, time_t now) {
  * ======================
  */
 
-t_fcgi_server *fcgi_server_match(t_fcgi_server *fcgi_server, t_charlist *fastcgi, char *extension) {
-	t_fcgi_server *fcgi;
+t_fcgi_server *fcgi_server_match(t_fcgi_server **fcgi_server, char *extension) {
 	int i;
 
-	if ((fastcgi == NULL) || (extension == NULL)) {
+	if ((fcgi_server == NULL) || (extension == NULL)) {
 		return NULL;
 	}
 
-	for (i = 0; i < fastcgi->size; i++) {
-		fcgi = fcgi_server;
-		while (fcgi != NULL) {
-			if (strcmp(fastcgi->item[i], fcgi->fcgi_id) == 0) {
-				if (fcgi->extension.size == 0) {
-					return fcgi;
-				} else if (in_charlist(extension, &(fcgi->extension))) {
-					return fcgi;
-				}
-			}
-			fcgi = fcgi->next;
+	i = 0;
+	while (fcgi_server[i] != NULL) {
+		if (fcgi_server[i]->extension.size == 0) {
+			return fcgi_server[i];
+		} else if (in_charlist(extension, &(fcgi_server[i]->extension))) {
+			return fcgi_server[i];
 		}
+
+		i++;
 	}
 
 	return NULL;
 }
 
-t_fcgi_server *find_fcgi_server(t_fcgi_server *fcgi_server, char *id) {
-	if (id == NULL) {
+t_fcgi_server *find_fcgi_server(t_fcgi_server *fcgi_server, char *fcgi_id) {
+	if (fcgi_id == NULL) {
 		return NULL;
 	}
 
 	while (fcgi_server != NULL) {
-		if (strcasecmp(fcgi_server->fcgi_id, id) == 0) {
+		if (strcasecmp(fcgi_server->fcgi_id, fcgi_id) == 0) {
 			return fcgi_server;
 		}
+
 		fcgi_server = fcgi_server->next;
 	}
 

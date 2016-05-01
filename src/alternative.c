@@ -67,8 +67,6 @@ void clearenv(void) {
 
 #ifndef HAVE_STRCASECMP
 int strcasecmp(const char *str1, const char *str2) {
-	char c1, c2;
-
 	if ((str1 == NULL) || (str2 == NULL)) {
 		return -1;
 	}

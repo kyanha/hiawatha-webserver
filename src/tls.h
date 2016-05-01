@@ -56,7 +56,6 @@ int  tls_get_peer_cert_info(mbedtls_ssl_context *context, char *subject_dn, char
 char *tls_version_string(mbedtls_ssl_context *context);
 char *tls_cipher_string(mbedtls_ssl_context *context);
 void tls_close(mbedtls_ssl_context *context);
-void tls_shutdown(void);
 int  tls_connect(mbedtls_ssl_context *context, int *sock, char *hostname);
 int  tls_send_buffer(mbedtls_ssl_context *context, const char *buffer, int size);
 

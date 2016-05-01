@@ -330,11 +330,11 @@ static int basic_http_authentication(t_session *session, char *auth_str) {
 	crypt_data.initialized = 0;
 	encrypted = crypt_r(auth_passwd, salt, &crypt_data);
 
-	if (strcmp_rtap(encrypted, passwd) == 0) {
+	if (strcmp(encrypted, passwd) == 0) {
 #else
 	pthread_mutex_lock(&crypt_mutex);
 	encrypted = crypt(auth_passwd, salt);
-	cmp_result = strcmp_rtap(encrypted, passwd);
+	cmp_result = strcmp(encrypted, passwd);
 	pthread_mutex_unlock(&crypt_mutex);
 
 	if (cmp_result == 0) {
@@ -481,7 +481,7 @@ static int digest_http_authentication(t_session *session, char *auth_str) {
 
 	/* Password match?
 	 */
-	if (strcmp_rtap(response, result) != 0) {
+	if (strcmp(response, result) != 0) {
 		register_wrong_password(session);
 		return ha_DENIED;
 	}

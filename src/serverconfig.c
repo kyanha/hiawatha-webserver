@@ -116,7 +116,10 @@ static t_host *new_host(void) {
 	init_charlist(&(host->alter_group));
 	host->custom_headers      = NULL;
 #ifdef ENABLE_TOOLKIT
-	init_charlist(&(host->toolkit_rules));
+	init_charlist(&(host->toolkit_rules_str));
+	host->toolkit_rules       = NULL;
+	init_charlist(&(host->toolkit_rules_user_str));
+	host->toolkit_rules_user  = NULL;
 #endif
 	host->wrap_cgi            = NULL;
 	init_groups(&(host->groups));
@@ -141,13 +144,16 @@ static t_host *new_host(void) {
 	init_charlist(&(host->use_rproxy));
 #endif
 	host->prevent_sqli        = false;
+	host->sqli_return_code    = 404;
 	host->prevent_xss         = false;
 	host->prevent_csrf        = p_no;
 	host->follow_symlinks     = p_no;
 	host->enable_path_info    = false;
 	host->trigger_on_cgi_status = false;
-	init_charlist(&(host->directory));
-	init_charlist(&(host->fast_cgi));
+	init_charlist(&(host->directory_str));
+	host->directory           = NULL;
+	init_charlist(&(host->fcgi_server_str));
+	host->fcgi_server         = NULL;
 	host->secure_url          = true;
 	host->use_local_config    = false;
 	host->deny_body           = NULL;
@@ -178,9 +184,10 @@ static t_directory *new_directory(void) {
 
 	directory->dir_id              = NULL;
 	init_charlist(&(directory->path));
+	init_charlist(&(directory->extensions));
 	directory->wrap_cgi            = NULL;
 	directory->start_file          = NULL;
-	directory->execute_cgiset      = false;
+	directory->execute_cgi_set     = false;
 #ifdef ENABLE_XSLT
 	directory->show_index          = NULL;
 	directory->show_index_set      = false;
@@ -372,7 +379,8 @@ t_config *default_config(void) {
 	config->cache_max_filesize = 256 * KILOBYTE;
 #ifdef ENABLE_RPROXY
 	init_charlist(&(config->cache_rproxy_extensions));
-	config->tunnel_ssh         = NULL;
+	config->tunnel_ssh_iplist  = NULL;
+	config->tunnel_ssh_credential = NULL;
 #endif
 #endif
 
@@ -680,13 +688,54 @@ void close_bindings(t_binding *binding) {
 	}
 }
 
+#ifdef ENABLE_TOOLKIT
+int toolkit_rules_str_to_ptr(t_url_toolkit *toolkit_rules, t_charlist *rules_str, t_url_toolkit ***rules_ptr) {
+	t_url_toolkit *rule;
+	bool found;
+	int i;
+
+	if (rules_str == NULL) {
+		return 0;
+	} else if (rules_str->size == 0) {
+		return 0;
+	} else if ((*rules_ptr = (t_url_toolkit**)malloc(sizeof(t_url_toolkit*) * (rules_str->size + 1))) == NULL) {
+		return -1;
+	}
+
+	for (i = 0; i < rules_str->size; i++) {
+		rule = toolkit_rules;
+		found = false;
+
+		while (rule != NULL) {
+			if (strcmp(rules_str->item[i], rule->toolkit_id) == 0) {
+				(*rules_ptr)[i] = rule;
+				found = true;
+				break;
+			}
+
+			rule = rule->next;
+		}
+
+		if (found == false) {
+			return -1;
+		}
+	}
+
+	(*rules_ptr)[rules_str->size] = NULL;
+
+	return 0;
+}
+#endif
+
 int check_configuration(t_config *config) {
 	t_fcgi_server *fcgi_server;
 	t_connect_to *connect_to;
+	t_directory *directory;
 	t_host *host;
 	char c;
 	int i;
 	size_t len;
+	bool found;
 
 	if (config->first_host->hostname.size == 0) {
 		fprintf(stderr, "The default website has no hostname.\n");
@@ -743,6 +792,8 @@ int check_configuration(t_config *config) {
 		host = host->next;
 	}
 
+	/* FastCGI configuration
+	 */
 	fcgi_server = config->fcgi_server;
 	while (fcgi_server != NULL) {
 		fcgi_server->localhost = true;
@@ -764,8 +815,8 @@ int check_configuration(t_config *config) {
 		host = config->first_host;
 		if ((fcgi_server->chroot != NULL) && (fcgi_server->chroot_len > 0)) {
 			while (host != NULL) {
-				if (host->fast_cgi.size != 0) {
-					if (in_charlist(fcgi_server->fcgi_id, &(host->fast_cgi))) {
+				if (host->fcgi_server_str.size != 0) {
+					if (in_charlist(fcgi_server->fcgi_id, &(host->fcgi_server_str))) {
 						/* FastCGIid match
 						 */
 						if (strncmp(fcgi_server->chroot, host->website_root, fcgi_server->chroot_len) == 0) {
@@ -788,9 +839,88 @@ next_host:
 		fcgi_server = fcgi_server->next;
 	}
 
+	host = config->first_host;
+	while (host != NULL) {
+		if (host->fcgi_server_str.size > 0) {
+			if ((host->fcgi_server = (t_fcgi_server**)malloc(sizeof(t_fcgi_server*) * (host->fcgi_server_str.size + 1))) == NULL) {
+				return -1;
+			}
+
+			for (i = 0; i < host->fcgi_server_str.size; i++) {
+				fcgi_server = config->fcgi_server;
+				found = false;
+
+				while (fcgi_server != NULL) {
+					if (strcmp(host->fcgi_server_str.item[i], fcgi_server->fcgi_id) == 0) {
+						host->fcgi_server[i] = fcgi_server;
+						found = true;
+						break;
+					}
+
+					fcgi_server = fcgi_server->next;
+				}
+
+				if (found == false) {
+					fprintf(stderr, "FastCGI server '%s' not found.\n", host->fcgi_server_str.item[i]);
+					return -1;
+				}
+			}
+
+			host->fcgi_server[host->fcgi_server_str.size] = NULL;
+		}
+
+		host = host->next;
+	}
+
+	/* Directory configration
+	 */
+	host = config->first_host;
+	while (host != NULL) {
+		if (host->directory_str.size > 0) {
+			if ((host->directory = (t_directory**)malloc(sizeof(t_directory*) * (host->directory_str.size + 1))) == NULL) {
+				return -1;
+			}
+
+			for (i = 0; i < host->directory_str.size; i++) {
+				directory = config->directory;
+				found = false;
+
+				while (directory != NULL) {
+					if (strcmp(host->directory_str.item[i], directory->dir_id) == 0) {
+						host->directory[i] = directory;
+						found = true;
+						break;
+					}
+
+					directory = directory->next;
+				}
+
+				if (found == false) {
+					fprintf(stderr, "Directory '%s' not found.\n", host->directory_str.item[i]);
+					return -1;
+				}
+			}
+
+			host->directory[host->directory_str.size] = NULL;
+		}
+
+		host = host->next;
+	}
+
+	/* URL Toolkit configuration
+	 */
 #ifdef ENABLE_TOOLKIT
 	if (toolkit_rules_oke(config->url_toolkit) == false) {
 		return -1;
+	}
+
+	host = config->first_host;
+	while (host != NULL) {
+		if (toolkit_rules_str_to_ptr(config->url_toolkit, &(host->toolkit_rules_str), &(host->toolkit_rules)) == -1) {
+			return -1;
+		}
+
+		host = host->next;
 	}
 #endif
 
@@ -893,7 +1023,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		}
 #ifdef ENABLE_RPROXY
 	} else if (strcmp(key, "cacherproxyextensions") == 0) {
-		if (parse_charlist(value, &(config->cache_rproxy_extensions)) != -1) {
+		if (parse_charlist(value, &(config->cache_rproxy_extensions)) == 0) {
 			return true;
 		}
 #endif
@@ -909,7 +1039,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 #ifdef CIFS
 		strlower(value);
 #endif
-		if (parse_charlist(value, &(config->cgi_extension)) != -1) {
+		if (parse_charlist(value, &(config->cgi_extension)) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "cgihandler") == 0) {
@@ -931,7 +1061,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 						strlower(rest);
 #endif
 						init_charlist(&(config->cgi_handler->extension));
-						if (parse_charlist(rest, &(config->cgi_handler->extension)) != -1) {
+						if (parse_charlist(rest, &(config->cgi_handler->extension)) == 0) {
 							return true;
 						}
 					}
@@ -1057,7 +1187,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			return true;
 		}
 #ifdef ENABLE_TLS
-	} else if ((strcmp(key, "mintlsversion") == 0) || (strcmp(key, "minsslversion") == 0)) {
+	} else if (strcmp(key, "mintlsversion") == 0) {
 		if ((strcmp(value, "1.0") == 0) || (strcmp(value, "TLS1.0") == 0)) {
 			config->min_tls_version = MBEDTLS_SSL_MINOR_VERSION_1;
 			return true;
@@ -1083,13 +1213,8 @@ static bool system_setting(char *key, char *value, t_config *config) {
 
 		monitor_host->website_root = config->monitor_directory;
 		monitor_host->website_root_len = strlen(monitor_host->website_root);
-
-		if ((monitor_host->access_logfile = strdup(LOG_DIR"/monitor-access.log")) == NULL) {
-			return false;
-		} else if ((monitor_host->error_logfile = strdup(LOG_DIR"/monitor-error.log")) == NULL) {
-			return false;
-		}
-
+		monitor_host->access_logfile = NULL;
+		monitor_host->error_logfile = NULL;
 
 		rest = "allow %s, deny all";
 		if ((alist = (char*)malloc(strlen(rest) + strlen(value) + 1)) == NULL) {
@@ -1236,9 +1361,24 @@ static bool system_setting(char *key, char *value, t_config *config) {
 #endif
 #ifdef ENABLE_RPROXY
 	} else if (strcmp(key, "tunnelssh") == 0) {
-		if (parse_iplist(value, &(config->tunnel_ssh)) != -1) {
+		split_string(value, &value, &rest, ';');
+		if (parse_iplist(value, &(config->tunnel_ssh_iplist)) == -1) {
+			if (rest != NULL) {
+				return false;
+			}
+		} else if (rest == NULL) {
 			return true;
+		} else {
+			value = rest;
 		}
+
+		if ((config->tunnel_ssh_credential = (char*)malloc(7 + strlen(value))) == NULL) {
+			return false;
+		}
+		sprintf(config->tunnel_ssh_credential, "Basic %s", value);
+
+		return true;
+	
 #endif
 	} else if (strcmp(key, "userdirectory") == 0) {
 		if ((*value != '/') && (strchr(value, '.') == NULL)) {
@@ -1279,7 +1419,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 #ifdef ENABLE_TOOLKIT
 static bool user_root_setting(char *key, char *value, t_host *host) {
 	if (strcmp(key, "usetoolkit") == 0) {
-		if (parse_charlist(value, &(host->toolkit_rules)) != 0) {
+		if (parse_charlist(value, &(host->toolkit_rules_user_str)) != 0) {
 			return false;
 		}
 	}
@@ -1302,7 +1442,7 @@ static bool user_setting(char *key, char *value, t_host *host, t_tempdata **temp
 			return true;
 		}
 	} else if (strcmp(key, "altergroup") == 0) {
-		if (parse_charlist(value, &(host->alter_group)) != -1) {
+		if (parse_charlist(value, &(host->alter_group)) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "alterlist") == 0) {
@@ -1360,11 +1500,11 @@ static bool user_setting(char *key, char *value, t_host *host, t_tempdata **temp
 			return true;
 		}
 	} else if (strcmp(key, "requiredgroup") == 0) {
-		if (parse_charlist(value, &(host->required_group)) != -1) {
+		if (parse_charlist(value, &(host->required_group)) == 0) {
 			return true;
 		}
 #ifdef ENABLE_TLS
-	} else if ((strcmp(key, "requiretls") == 0) || (strcmp(key, "requiressl") == 0)) {
+	} else if (strcmp(key, "requiretls") == 0) {
 		split_string(value, &value, &rest, ',');
 		if (parse_yesno(value, &(host->require_tls)) != 0) {
 			return false;
@@ -1560,8 +1700,16 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			return true;
 		}
 	} else if (strcmp(key, "preventsqli") == 0) {
+		split_string(value, &value, &rest, ',');
 		if (parse_yesno(value, &(host->prevent_sqli)) == 0) {
-			return true;
+			if (rest != NULL) {
+				host->sqli_return_code = str_to_int(rest);
+				if ((host->sqli_return_code == 403) || (host->sqli_return_code == 404) || (host->sqli_return_code == 441)) {
+					return true;
+				}
+			} else {
+				return true;
+			}
 		}
 	} else if (strcmp(key, "preventxss") == 0) {
 		if (parse_prevent(value, &(host->prevent_xss)) == 0) {
@@ -1616,7 +1764,7 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			return true;
 		}
 #ifdef ENABLE_TLS
-	} else if ((strcmp(key, "tlscertfile") == 0) || (strcmp(key, "sslcertfile") == 0)) {
+	} else if (strcmp(key, "tlscertfile") == 0) {
 		if ((host->key_cert_file = strdup(value)) != NULL) {
 			return true;
 		}
@@ -1630,11 +1778,11 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			return true;
 		}
 	} else if (strcmp(key, "usedirectory") == 0) {
-		if (parse_charlist(value, &(host->directory)) != -1) {
+		if (parse_charlist(value, &(host->directory_str)) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "usefastcgi") == 0) {
-		if (parse_charlist(value, &(host->fast_cgi)) != -1) {
+		if (parse_charlist(value, &(host->fcgi_server_str)) == 0) {
 			host->execute_cgi = true;
 			return true;
 		}
@@ -1650,7 +1798,7 @@ static bool host_setting(char *key, char *value, t_host *host) {
 #endif
 #ifdef ENABLE_TOOLKIT
 	} else if (strcmp(key, "usetoolkit") == 0) {
-		if (parse_charlist(value, &(host->toolkit_rules)) == 0) {
+		if (parse_charlist(value, &(host->toolkit_rules_str)) == 0) {
 			return true;
 		}
 #endif
@@ -1754,7 +1902,7 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 			return true;
 		}
 	} else if (strcmp(key, "altergroup") == 0) {
-		if (parse_charlist(value, &(directory->alter_group)) != -1) {
+		if (parse_charlist(value, &(directory->alter_group)) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "alterlist") == 0) {
@@ -1773,11 +1921,15 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 		}
 	} else if (strcmp(key, "executecgi") == 0) {
 		if (parse_yesno(value, &(directory->execute_cgi)) == 0) {
-			directory->execute_cgiset = true;
+			directory->execute_cgi_set = true;
 			return true;
 		}
 	} else if (strcmp(key, "expireperiod") == 0) {
 		if (parse_expires(value, &(directory->expires), &(directory->caco_private)) == 0) {
+			return true;
+		}
+	} else if (strcmp(key, "extensions") == 0) {
+		if (parse_charlist(value, &(directory->extensions)) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "followsymlinks") == 0) {
@@ -1790,11 +1942,11 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 			return true;
 		}
 	} else if (strcmp(key, "path") == 0) {
-		if (parse_charlist(value, &(directory->path)) != -1) {
+		if (parse_charlist(value, &(directory->path)) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "requiredgroup") == 0) {
-		if (parse_charlist(value, &(directory->required_group)) != -1) {
+		if (parse_charlist(value, &(directory->required_group)) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "runondownload") == 0) {
@@ -1907,7 +2059,7 @@ static bool binding_setting(char *key, char *value, t_binding *binding) {
 			}
 			return true;
 		}
-	} else if ((strcmp(key, "tlscertfile") == 0) || (strcmp(key, "sslcertfile") == 0)) {
+	} else if (strcmp(key, "tlscertfile") == 0) {
 		if ((binding->key_cert_file = strdup(value)) != NULL) {
 			binding->use_tls = true;
 			return true;
@@ -1963,7 +2115,7 @@ static bool fcgi_server_setting(char *key, char *value, t_fcgi_server *fcgi_serv
 #ifdef CIFS
 		strlower(value);
 #endif
-		if (parse_charlist(value, &(fcgi_server->extension)) != -1) {
+		if (parse_charlist(value, &(fcgi_server->extension)) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "fastcgiid") == 0) {
@@ -2314,9 +2466,6 @@ int read_user_configfile(char *configfile, t_host *host, t_tempdata **tempdata, 
 	char line[MAX_LENGTH_CONFIGLINE + 1], *key, *value;
 	t_accesslist *acs_list = NULL, *alt_list = NULL;
 	t_charlist req_grp, alt_grp;
-#ifdef ENABLE_TOOLKIT
-	t_charlist toolkit;
-#endif
 
 	if ((fp = fopen(configfile, "r")) == NULL) {
 		return 0;
@@ -2325,23 +2474,16 @@ int read_user_configfile(char *configfile, t_host *host, t_tempdata **tempdata, 
 	line[MAX_LENGTH_CONFIGLINE] = '\0';
 	counter = retval = 0;
 
-	if (tempdata != NULL) {
-		if (read_mode == only_root_config) {
-#ifdef ENABLE_TOOLKIT
-			copy_charlist(&toolkit, &(host->toolkit_rules));
-			init_charlist(&(host->toolkit_rules));
-#endif
-		} else {
-			acs_list = host->access_list;
-			host->access_list = NULL;
-			alt_list = host->alter_list;
-			host->alter_list = NULL;
+	if ((tempdata != NULL) && (read_mode != only_root_config)) {
+		acs_list = host->access_list;
+		host->access_list = NULL;
+		alt_list = host->alter_list;
+		host->alter_list = NULL;
 
-			copy_charlist(&alt_grp, &(host->alter_group));
-			init_charlist(&(host->alter_group));
-			copy_charlist(&req_grp, &(host->required_group));
-			init_charlist(&(host->required_group));
-		}
+		copy_charlist(&alt_grp, &(host->alter_group));
+		init_charlist(&(host->alter_group));
+		copy_charlist(&req_grp, &(host->required_group));
+		init_charlist(&(host->required_group));
 	}
 
 	while ((lines_read = fgets_multi(line, MAX_LENGTH_CONFIGLINE, fp)) != 0) {
@@ -2387,47 +2529,35 @@ int read_user_configfile(char *configfile, t_host *host, t_tempdata **tempdata, 
 
 	fclose(fp);
 
-	if (tempdata != NULL) {
-		if (read_mode == only_root_config) {
-#ifdef ENABLE_TOOLKIT
-			if (host->toolkit_rules.size == 0) {
-				copy_charlist(&(host->toolkit_rules), &toolkit);
-			} else if (register_tempdata(tempdata, &(host->toolkit_rules), tc_charlist) == -1) {
-				remove_charlist(&(host->toolkit_rules));
-				copy_charlist(&(host->toolkit_rules), &toolkit);
-				retval = -1;
-			}
-#endif
-		} else {
-			if (host->access_list == NULL) {
-				host->access_list = acs_list;
-			} else if (register_tempdata(tempdata, host->access_list, tc_accesslist) == -1) {
-				remove_accesslist(host->access_list);
-				host->access_list = acs_list;
-				retval = -1;
-			}
-			if (host->alter_list == NULL) {
-				host->alter_list = alt_list;
-			} else if (register_tempdata(tempdata, host->alter_list, tc_accesslist) == -1) {
-				remove_accesslist(host->alter_list);
-				host->alter_list = alt_list;
-				retval = -1;
-			}
+	if ((tempdata != NULL) && (read_mode != only_root_config)) {
+		if (host->access_list == NULL) {
+			host->access_list = acs_list;
+		} else if (register_tempdata(tempdata, host->access_list, tc_accesslist) == -1) {
+			remove_accesslist(host->access_list);
+			host->access_list = acs_list;
+			retval = -1;
+		}
+		if (host->alter_list == NULL) {
+			host->alter_list = alt_list;
+		} else if (register_tempdata(tempdata, host->alter_list, tc_accesslist) == -1) {
+			remove_accesslist(host->alter_list);
+			host->alter_list = alt_list;
+			retval = -1;
+		}
 
-			if (host->alter_group.size == 0) {
-				copy_charlist(&(host->alter_group), &alt_grp);
-			} else if (register_tempdata(tempdata, &(host->alter_group), tc_charlist) == -1) {
-				remove_charlist(&(host->alter_group));
-				copy_charlist(&(host->alter_group), &alt_grp);
-				retval = -1;
-			}
-			if (host->required_group.size == 0) {
-				copy_charlist(&(host->required_group), &req_grp);
-			} else if (register_tempdata(tempdata, &(host->required_group), tc_charlist) == -1) {
-				remove_charlist(&(host->required_group));
-				copy_charlist(&(host->required_group), &req_grp);
-				retval = -1;
-			}
+		if (host->alter_group.size == 0) {
+			copy_charlist(&(host->alter_group), &alt_grp);
+		} else if (register_tempdata(tempdata, &(host->alter_group), tc_charlist) == -1) {
+			remove_charlist(&(host->alter_group));
+			copy_charlist(&(host->alter_group), &alt_grp);
+			retval = -1;
+		}
+		if (host->required_group.size == 0) {
+			copy_charlist(&(host->required_group), &req_grp);
+		} else if (register_tempdata(tempdata, &(host->required_group), tc_charlist) == -1) {
+			remove_charlist(&(host->required_group));
+			copy_charlist(&(host->required_group), &req_grp);
+			retval = -1;
 		}
 	}
 

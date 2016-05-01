@@ -61,9 +61,6 @@ static void log_alloc(void *ptr, size_t size, char *filename, int line_nr) {
  */
 static void log_free(void *ptr, char *filename, int line_nr) {
 	t_alloc_log *log, *prev = NULL;
-	pthread_t self;
-
-	self = pthread_self();
 
 	pthread_mutex_lock(&alloc_log_mutex);
 

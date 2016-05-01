@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <string.h>
+#include <signal.h>
 #include <pthread.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -43,25 +44,24 @@ void tomahawk_reader(int *sock) {
 		if ((bytes_read = read(*sock, buffer, 1023)) > 0) {
 			buffer[bytes_read] = '\0';
 			printf("%s", buffer);
+		} else {
+			quit = true;
 		}
 	}
 
 	pthread_exit(NULL);
 }
 
-int start_reader_thread(int *socket) {
+int start_reader_thread(int *socket, pthread_t *child_thread) {
 	int result = -1;
 	pthread_attr_t child_attr;
-	pthread_t      child_thread;
 
 	if (pthread_attr_init(&child_attr) != 0) {
 		printf("pthread init error\n");
 	} else {
-		if (pthread_attr_setdetachstate(&child_attr, PTHREAD_CREATE_DETACHED) != 0) {
-			printf("pthread set detach state error");
-		} else if (pthread_attr_setstacksize(&child_attr, PTHREAD_STACK_SIZE) != 0) {
+		if (pthread_attr_setstacksize(&child_attr, PTHREAD_STACK_SIZE) != 0) {
 			printf("pthread set stack size error");
-		} else if (pthread_create(&child_thread, &child_attr, (void*)tomahawk_reader, (void*)socket) != 0) {
+		} else if (pthread_create(child_thread, &child_attr, (void*)tomahawk_reader, (void*)socket) != 0) {
 			printf("pthread create error");
 		} else {
 			result = 0;
@@ -82,11 +82,14 @@ int send_command(int sock, char *command) {
 	return 0;
 }
 
+void TERM_handler() {
+	quit = true;
+}
+
 int main(int argc, char *argv[]) {
 	int sock, port, delay = 3;
+	pthread_t child_thread;
 	char *password;
-	char *clear_screen = "clear screen\n";
-	char *show_status = "show status\n";
 
 	if (argc <= 2) {
 		printf("Usage: %s <Tomahawk port> <password> [<seconds=%d>]\n", argv[0], delay);
@@ -111,7 +114,9 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	if (start_reader_thread(&sock) == -1) {
+	signal(SIGINT, TERM_handler);
+
+	if (start_reader_thread(&sock, &child_thread) == -1) {
 		fprintf(stderr, "Error starting reader thread.\n");
 		return EXIT_FAILURE;
 	}
@@ -119,14 +124,16 @@ int main(int argc, char *argv[]) {
 	send(sock, password, strlen(password), 0);
 	send(sock, "\n", 1, 0);
 
-	while (true) {
-		send_command(sock, clear_screen);
+	while (quit == false) {
+		send_command(sock, "clear screen\n");
 		usleep(50000);
-		send_command(sock, show_status);
+		send_command(sock, "show status\n");
 		sleep(delay);
 	}
 
-	quit = true;
+	send_command(sock, "quit\n");
+
+	pthread_join(child_thread, NULL);
 
 	return EXIT_SUCCESS;
 }

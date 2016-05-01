@@ -49,7 +49,9 @@ static int all_chunks_uploaded(char *buffer, int size, long *chunk_size_pos) {
 	int chunk_size, len;
 	char *end;
 
-	if (*chunk_size_pos >= size) {
+	if (size == 0) {
+		return 0;
+	} else if (*chunk_size_pos >= size) {
 		return -1;
 	}
 
@@ -802,6 +804,7 @@ const char *http_error(int code) {
 		{442, "Cross-Site Scripting Detected"},
 		{443, "Cross-Site Request Forgery Detected"},
 		{444, "Banned Due To Misconduct"},
+		{451, "Unavailable For Legal Reasons"},
 
 		/* Server error
 		 */

@@ -6,5 +6,5 @@
 	missingok
 	create 640 www-data www-data
 	sharedscripts
-	/usr/sbin/killall -HUP hiawatha
+	/usr/bin/killall -HUP hiawatha
 }

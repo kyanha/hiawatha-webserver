@@ -554,6 +554,8 @@ int show_index(t_session *session) {
 		}
 	}
 
+	session->mimetype = "text/html";
+
     /* HTTP/1.0 has no knowledge about chunked Transfer-Encoding.
 	 */
 	if (*(session->http_version + 7) == '0') {

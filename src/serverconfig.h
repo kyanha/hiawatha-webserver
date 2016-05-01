@@ -176,11 +176,12 @@ typedef struct type_binding {
 typedef struct type_directory {
 	char          *dir_id;
 	t_charlist    path;
+	t_charlist    extensions;
 	char          *wrap_cgi;
 	t_groups      groups;
 	char          *start_file;
 	bool          execute_cgi;
-	bool          execute_cgiset;
+	bool          execute_cgi_set;
 #ifdef ENABLE_XSLT
 	char          *show_index;
 	bool          show_index_set;
@@ -256,7 +257,10 @@ typedef struct type_host {
 	t_keyvalue      *alias;
 	t_keyvalue      *script_alias;
 #ifdef ENABLE_TOOLKIT
-	t_charlist      toolkit_rules;
+	t_charlist      toolkit_rules_str;
+	t_url_toolkit   **toolkit_rules;
+	t_charlist      toolkit_rules_user_str;
+	t_url_toolkit   **toolkit_rules_user;
 #endif
 #ifdef ENABLE_TLS
     bool            require_tls;
@@ -275,6 +279,7 @@ typedef struct type_host {
 	t_charlist      use_rproxy;
 #endif
 	bool            prevent_sqli;
+	int             sqli_return_code;
 	t_prevent       prevent_xss;
 	t_prevent       prevent_csrf;
 	bool            follow_symlinks;
@@ -282,8 +287,10 @@ typedef struct type_host {
 	bool            trigger_on_cgi_status;
 	bool            secure_url;
 	bool            use_local_config;
-	t_charlist      directory;
-	t_charlist      fast_cgi;
+	t_charlist      directory_str;
+	t_directory     **directory;
+	t_charlist      fcgi_server_str;
+	t_fcgi_server   **fcgi_server;
 	t_deny_body     *deny_body;
 	bool            webdav_app;
 	bool            http_auth_to_cgi;
@@ -394,7 +401,8 @@ typedef struct type_config {
 #endif
 #ifdef ENABLE_RPROXY
 	t_charlist    cache_rproxy_extensions;
-	t_iplist      *tunnel_ssh;
+	t_iplist      *tunnel_ssh_iplist;
+	char          *tunnel_ssh_credential;
 #endif
 
 #ifdef ENABLE_TOMAHAWK
@@ -421,6 +429,9 @@ int read_main_configfile(char *configfile, t_config *config, bool config_check);
 int read_user_configfile(char *configfile, t_host *host, t_tempdata **tempdata, t_user_config_mode read_mode);
 t_host *get_hostrecord(t_host *host, char *hostname, t_binding *binding);
 unsigned short get_throttlespeed(char *type, t_throttle *throttle);
+#ifdef ENABLE_TOOLKIT
+int toolkit_rules_str_to_ptr(t_url_toolkit *toolkit_rules, t_charlist *rules_str, t_url_toolkit ***rules_ptr);
+#endif
 void close_bindings(t_binding *binding);
 
 #endif

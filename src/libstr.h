@@ -43,7 +43,6 @@ int  header_to_variable(char *header, char *variable, int size);
 int  filesize2str(char *buffer, int len, off_t fsize);
 int  add_str(char **buffer, int *size, int extra_size, int *len, char *str);
 int  strpcmp(char *str, regex_t *regexp);
-int  strcmp_rtap(const char *s1, const char *s2);
 void md5_bin2hex(unsigned char bin[16], char hex[33]);
 void sha256_bin2hex(unsigned char bin[32], char hex[65]);
 bool hostname_match(char *hostname, char *pattern);

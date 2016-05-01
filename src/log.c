@@ -124,7 +124,7 @@ void log_string(char *logfile, char *mesg, ...) {
 	va_list args;
 	char str[TIMESTAMP_SIZE];
 
-	if (mesg == NULL) {
+	if ((logfile == NULL) || (mesg == NULL)) {
 		return;
 	} else if ((fp = fopen(logfile, "a")) == NULL) {
 		return;
@@ -179,8 +179,14 @@ void log_file_error(t_session *session, char *file, char *mesg, ...) {
 	}
 
 	if (session->host == NULL) {
+		if (session->config->first_host->error_logfile == NULL) {
+			return;
+		}
 		fp = fopen(session->config->first_host->error_logfile, "a");
 	} else {
+		if (session->host->error_logfile == NULL) {
+			return;
+		}
 		fp = fopen(session->host->error_logfile, "a");
 	}
 	if (fp == NULL) {
@@ -451,7 +457,7 @@ void log_cgi_error(t_session *session, char *mesg) {
 	char *c, str[TIMESTAMP_SIZE + IP_ADDRESS_SIZE];
 	int len = 0;
 
-	if (mesg == NULL) {
+	if ((session->host->error_logfile == NULL) || (mesg == NULL)) {
 		return;
 	}
 
@@ -469,24 +475,28 @@ void log_cgi_error(t_session *session, char *mesg) {
 		c++;
 	}
 
-	if (len > 0) {
-		if ((fp = fopen(session->host->error_logfile, "a")) != NULL) {
-			if (session->config->anonymize_ip) {
-				anonymized_ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
-			} else {
-				ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
-			}
-
-			strcat(str, "|");
-			print_timestamp(str + strlen(str));
-			if (session->file_on_disk == NULL) {
-				fprintf(fp, "%s-|%s"EOL, str, secure_string(mesg));
-			} else {
-				fprintf(fp, "%s%s|%s"EOL, str, session->file_on_disk, secure_string(mesg));
-			}
-			fclose(fp);
-		}
+	if (len == 0) {
+		return;
 	}
+
+	if ((fp = fopen(session->host->error_logfile, "a")) == NULL) {
+		return;
+	}
+
+	if (session->config->anonymize_ip) {
+		anonymized_ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
+	} else {
+		ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
+	}
+
+	strcat(str, "|");
+	print_timestamp(str + strlen(str));
+	if (session->file_on_disk == NULL) {
+		fprintf(fp, "%s-|%s"EOL, str, secure_string(mesg));
+	} else {
+		fprintf(fp, "%s%s|%s"EOL, str, session->file_on_disk, secure_string(mesg));
+	}
+	fclose(fp);
 }
 
 /* Close open access logfiles.
