@@ -845,8 +845,8 @@ int last_forwarded_ip(t_http_header *http_headers, t_ip_addr *ip_addr) {
 		/* Forwarded header
 		 */
 		begin = NULL;
-		while ((forwarded = strcasestr(forwarded, "for=")) == NULL) {
-			begin = forwarded;
+		while ((forwarded = strcasestr(forwarded, "for=")) != NULL) {
+			begin = forwarded + 4;
 			forwarded++;
 		}
 

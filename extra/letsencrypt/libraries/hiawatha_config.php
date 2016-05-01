@@ -1,0 +1,92 @@
+<?php
+	class Hiawatha_config {
+		private $website_root = array();
+		private $website_hostnames = array();
+
+		public function __construct($config_dir) {
+			$this->read_config_file($config_dir."/hiawatha.conf");
+		}
+
+		public function get_website_root($hostname) {
+			return $this->website_root[$hostname];
+		}
+
+		public function get_website_hostnames($hostname) {
+			return $this->website_hostnames[$hostname];
+		}
+
+		private function read_config_dir($config_dir) {
+			if (($dp = opendir($config_dir)) === false) {
+				printf("Can't find directory %s.\n", $config_dir);
+				return false;
+			}
+
+			while (($file = readdir($dp)) !== false) {
+				if (substr($file, 0, 1) == ".") {
+					continue;
+				}
+
+				$this->read_config_file($config_dir."/".$file);
+			}
+
+			closedir($dp);
+
+			return true;
+		}
+
+		private function read_config_file($config_file) {
+			if (($fp = fopen($config_file, "r")) === false) {
+				printf("Can't find file %s.\n", $config_file);
+				return false;
+			}
+
+			$inside_virtual_host = false;
+			while (($line = fgets($fp)) !== false) {
+				list($command, $param) = explode(" ", strtolower(trim($line)), 2);
+				$param = trim($param, " =");
+
+				if ($inside_virtual_host) {
+					if ($command == "hostname") {
+						$hostnames = explode(",", $param);
+						foreach ($hostnames as $key => $value) {
+							$hostnames[$key] = trim($value);
+						}
+						if ($hostname == null) {
+							$hostname = array_shift($hostnames);
+							$this->website_hostnames[$hostname] = $hostnames;
+						} else {
+							$this->website_hostnames[$hostname] = array_merge($this->website_hostnames[$hostname], $hostnames);
+						}
+					} else if ($command == "websiteroot") {
+						$websiteroot = $param;
+					} else if ($command == "}") {
+						if (($hostname != null) && ($websiteroot != null)) {
+							$this->website_root[$hostname] = $websiteroot;
+						}
+						$hostname = $websiteroot = null;
+						$inside_virtual_host = false;
+					}
+				} else if ($command == "virtualhost") {
+					$inside_virtual_host = true;
+				} else if ($command == "include") {
+					if (substr($param, 0, 1) != "/") {
+						if (($last_slash = strrpos($config_file, "/")) !== false) {
+							$config_dir = substr($config_file, 0, $last_slash + 1);
+							$param = $config_dir.$param;
+						}
+					}
+
+					if (is_dir($param)) {
+						$this->read_config_dir($param);
+					} else {
+						$this->read_config_file($param);
+					}
+				}
+			}
+
+			fclose($fp);
+
+			return true;
+		}
+	}
+?>

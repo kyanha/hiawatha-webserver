@@ -165,5 +165,6 @@ int  prevent_csrf(t_session *session);
 void close_socket(t_session *session);
 int  handle_connection_not_allowed(t_session *session, int connections);
 bool file_can_be_compressed(t_session *session);
+bool is_letsencrypt_authentication_request(t_session *session);
 
 #endif

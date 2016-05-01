@@ -18,11 +18,13 @@ fi
 # Checking for tools required for building a Windows package
 #
 echo "-- Checking for required tools"
-tools="/usr/bin/cmake /usr/bin/make /usr/bin/cat /usr/bin/gcc /usr/bin/man /usr/bin/ps2pdf /usr/bin/unix2dos /usr/bin/zip /usr/bin/cygrunsrv"
+tools="cmake:/usr/bin/cmake make:/usr/bin/make gcc-g++:/usr/bin/gcc libcrypt-devel:/usr/include/crypt.h man-db:/usr/bin/man ghostscript:/usr/bin/ps2pdf dos2unix:/usr/bin/unix2dos zip:/usr/bin/zip cygrunsrv:/usr/bin/cygrunsrv"
 missing=""
 for tool in ${tools}; do
-	if [ ! -f ${tool} ]; then
-		missing="${missing} ${tool}"
+	package=`echo ${tool} | cut -f1 -d:`
+	file=`echo ${tool} | cut -f2 -d:`
+	if [ ! -f ${file} ]; then
+		missing="${missing} ${package}"
 	fi
 done
 if [ "${missing}" != "" ]; then

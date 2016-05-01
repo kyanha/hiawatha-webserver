@@ -139,7 +139,7 @@ int send_file(t_session *session) {
 	} else {
 		/* GZipped file exists
 		 */
-		if (status.st_mtime > gz_status.st_mtime) {
+		if ((status.st_mtime > gz_status.st_mtime) || (status.st_ctime > gz_status.st_ctime)) {
 			unlink(gz_file);
 			if (gzip_file(session->file_on_disk, gz_file) == -1) {
 				goto no_gzip;
@@ -1055,6 +1055,9 @@ int execute_cgi(t_session *session) {
 							/* Remove headers from CGI output
 							 */
 							while ((delta = remove_header(cgi_info.input_buffer, "X-Hiawatha-", &header_length, &(cgi_info.input_len))) > 0) {
+								end_of_header -= delta;
+							}
+							if ((delta = remove_header(cgi_info.input_buffer, "X-Sendfile:", &header_length, &(cgi_info.input_len))) > 0) {
 								end_of_header -= delta;
 							}
 							if ((delta = remove_header(cgi_info.input_buffer, "Status:", &header_length, &(cgi_info.input_len))) > 0) {

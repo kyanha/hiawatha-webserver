@@ -339,7 +339,7 @@ int execute_ssi_command(t_config *config, char *command, t_parameter *param) {
 				}
 			}
 
-			param = param ->next;
+			param = param->next;
 		}
 	} else if (strcmp(command, "echo") == 0) {
 		/* ECHO

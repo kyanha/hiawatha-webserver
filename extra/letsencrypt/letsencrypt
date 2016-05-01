@@ -1,0 +1,137 @@
+#!/usr/bin/php
+<?php
+	chdir(dirname($argv[0]));
+	error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
+
+	define("DAY", 86400);
+
+	function __autoload($class_name) {
+		$library = "libraries/".strtolower($class_name).".php";
+		if (file_exists($library)) {
+			include($library);
+		}
+	}
+
+	/* Configuration
+	 */
+	$config = new config("letsencrypt.conf");
+	foreach ($config->content as $key => $value) {
+		define($key, $value);
+	}
+
+	/* Show help information
+	 */
+	function show_help($executable) {
+		printf("Usage: %s <command>\n", $executable);
+		printf("Commands: register: Register your account key at the Let's Encrypt CA.\n");
+		printf("          request <hostname> [<cert.pem>]: Request new certificate for website.\n");
+		printf("          renew [restart]: Renew the almost expired Let's Encrypt certificates\n");
+		printf("                           in Hiawatha's certificate directory.\n");
+		printf("\n");
+	}
+
+	/* Check configuration
+	 */
+	if (ACCOUNT_EMAIL_ADDRESS == "info@example.org") {
+		exit("Read README.txt before using this tool.\n");
+	}
+
+	/* Account key
+	 */
+	if (file_exists("account.key") == false) {
+		printf("Generating account key.\n");
+		$account_key = new RSA(ACCOUNT_RSA_KEY_SIZE);
+		if (($fp = fopen("account.key", "w")) === false) {
+			exit(" - Error writing account.key.\n");
+		}
+		fputs($fp, $account_key->private_key);
+		fclose($fp);
+	} else {
+		$account_key = new RSA("account.key");
+	}
+
+	/* Let's Encrypt
+	 */
+	$lets_encrypt = new LetsEncrypt($account_key);
+
+	/* Execute commands
+	 */
+	switch ($argv[1]) {
+		case "register":
+			/* Account registration
+			 */
+			printf("Registering account.\n");
+			$lets_encrypt->register_account(ACCOUNT_EMAIL_ADDRESS, LE_CA_TERMS);
+			break;
+		case "request":
+			/* Request certificate
+			 */
+			if (count($argv) < 3) {
+				show_help($argv[0]);
+				break;
+			}
+
+			$lets_encrypt->request_certificate($argv[2], $argv[3]);
+			break;
+		case "renew":
+			/* Renew certificates
+			 */
+			if (($dp = opendir(HIAWATHA_CERT_DIR)) == false) {
+				printf(" - Can't read Hiawatha certificate directory.\n");
+				break;
+			}
+
+			$lets_encrypt_issuers = explode("|", LE_ISSUERS);
+
+			$now = time();
+			$restart = false;
+
+			while (($file = readdir($dp)) !== false) {
+				if (substr($file, 0, 1) == ".") {
+					continue;
+				}
+
+				/* Read certificate
+				 */
+				$cert_file = HIAWATHA_CERT_DIR."/".$file;
+				if (($cert = file_get_contents($cert_file)) == false) {
+					printf(" - Error reading %s.\n", $cert_file);
+					continue;
+				}
+				if (($x509 = openssl_x509_parse($cert)) == false) {
+					continue;
+				}
+
+				/* Check if certificate is ready to be renewed
+				 */
+				if (in_array($x509["issuer"]["CN"], $lets_encrypt_issuers) == false) {
+					continue;
+				} else if ($x509["validTo_time_t"] - RENEWAL_EXPIRE_THRESHOLD * DAY > $now) {
+					continue;
+				}
+
+				/* Renew certificate
+				 */
+				printf("Renewing certificate for %s.\n", $x509["subject"]["CN"]);
+				if ($lets_encrypt->request_certificate($x509["subject"]["CN"], $cert_file) == false) {
+					break;
+				}
+
+				$restart = true;
+			}
+
+			closedir($dp);
+
+			if ($restart) {
+				if ($argv[2] == "restart") {
+					system(HIAWATHA_RESTART_COMMAND);
+				}
+
+				exit(1);
+			}
+			break;
+		default:
+			show_help($argv[0]);
+			break;
+	}
+?>

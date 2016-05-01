@@ -277,7 +277,9 @@ void determine_request_method(t_session *session) {
 		session->request_method = unsupported;
 	} else if (strncmp(session->request, "REPORT ", 7) == 0) {
 		session->request_method = unsupported;
-	} else if (strncmp(session->request, "PATCH ", 5) == 0) {
+	} else if (strncmp(session->request, "PATCH ", 6) == 0) {
+		session->request_method = unsupported;
+	} else if (strncmp(session->request, "MKCALENDAR ", 11) == 0) {
 		session->request_method = unsupported;
 	}
 }
@@ -452,9 +454,9 @@ int copy_directory_settings(t_session *session) {
 		return 200;
 	}
 
-	d = 0;
-	while (session->host->directory[d] != NULL) {
+	for (d = 0; session->host->directory[d] != NULL; d++) {
 		dir = session->host->directory[d];
+
 		for (p = 0; p < dir->path.size; p++) {
 			path_length = strlen(dir->path.item[p]);
 
@@ -537,10 +539,9 @@ int copy_directory_settings(t_session *session) {
 				session->expires = dir->expires;
 				session->caco_private = dir->caco_private;
 			}
+
 			break;
 		}
-
-		d++;
 	}
 
 	return 200;
@@ -945,4 +946,8 @@ bool file_can_be_compressed(t_session *session) {
 	}
 
 	return false;
+}
+
+bool is_letsencrypt_authentication_request(t_session *session) {
+	return strncmp(session->request_uri, "/.well-known/acme-challenge/", 28) == 0;
 }

@@ -34,7 +34,7 @@ include(cmake/CopyIfNotExists.cmake)
 
 # Settings
 set(HIAWATHA_VERSION_MAJOR 10)
-set(HIAWATHA_VERSION_MINOR 1)
+set(HIAWATHA_VERSION_MINOR 2)
 set(HIAWATHA_VERSION_PATCH 0)
 set(HIAWATHA_VERSION_TWEAK 0)
 string(TOLOWER ${CMAKE_PROJECT_NAME} PROJECT_NAME)
@@ -72,7 +72,7 @@ check_function_exists(strncasestr HAVE_STRNCASESTR)
 
 check_library_exists(crypt crypt_r "" HAVE_CRYPT_R)
 check_library_exists(crypt crypt "" HAVE_CRYPT_LIBRARY)
-check_library_exists(z gzdopen "" HAVE_Z_LIBRARY)
+check_library_exists(${ZLIB_LIBRARY} gzdopen "" HAVE_Z_LIBRARY)
 
 check_symbol_exists("SO_ACCEPTFILTER" "sys/socket.h" HAVE_ACCF)
 
@@ -80,7 +80,8 @@ if(HAVE_CRYPT_LIBRARY)
 	set(CRYPT_LIBRARY "crypt")
 endif()
 if(HAVE_Z_LIBRARY)
-	set(Z_LIBRARY "z")
+	set(Z_LIBRARY ${ZLIB_LIBRARY})
+	include_directories(${ZLIB_INCLUDE_DIR})
 endif()
 if(APPLE OR CYGWIN)
 	set(CIFS 1)

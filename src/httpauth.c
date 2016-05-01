@@ -22,9 +22,7 @@
 #include <rpcsvc/crypt.h>
 #endif
 #include <errno.h>
-#ifndef HAVE_CRYPT_R
 #include <pthread.h>
-#endif
 #include "libstr.h"
 #include "liblist.h"
 #include "client.h"
@@ -494,6 +492,10 @@ static int digest_http_authentication(t_session *session, char *auth_str) {
 int http_authentication_result(t_session *session, bool access_on_pwdfile_missing) {
 	char *auth_str;
 	int result = ha_DENIED;
+
+	if (is_letsencrypt_authentication_request(session)) {
+		return ha_ALLOWED;
+	}
 
 	if (session->host->passwordfile == NULL) {
 		return access_on_pwdfile_missing ? ha_ALLOWED : ha_DENIED;

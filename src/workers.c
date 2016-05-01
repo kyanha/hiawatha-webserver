@@ -298,6 +298,10 @@ static t_access allow_client(t_session *session) {
 	t_ip_addr forwarded_ip;
 	t_access access;
 
+	if (is_letsencrypt_authentication_request(session)) {
+		return allow;
+	}
+
 	if ((access = ip_allowed(&(session->ip_address), session->host->access_list)) != allow) {
 		return access;
  	} else if (last_forwarded_ip(session->http_headers, &forwarded_ip) == -1) {

@@ -862,7 +862,7 @@ void create_basic_password(char *username, char *password) {
 	strcpy(salt + 19, "$");
 	encrypted = crypt(password, salt);
 
-	printf("%s:%s\n", username, encrypted);
+	fprintf(stderr, "%s:%s\n", username, encrypted);
 }
 
 void create_digest_password(char *username, char *realm, char *password) {
@@ -884,7 +884,7 @@ void create_digest_password(char *username, char *realm, char *password) {
 
 	clear_free(data, strlen(data));
 
-	printf("%s:%s:%s\n", username, realm, encrypted);
+	fprintf(stderr, "%s:%s:%s\n", username, realm, encrypted);
 }
 
 void show_help(char *wigwam) {

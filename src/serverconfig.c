@@ -1101,11 +1101,11 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		}
 #endif
 	} else if (strcmp(key, "connectionsperip") == 0) {
-		if ((config->connections_per_ip = str_to_int(value)) != -1) {
+		if ((config->connections_per_ip = str_to_int(value)) > 0) {
 			return true;
 		}
 	} else if (strcmp(key, "connectionstotal") == 0) {
-		if ((config->total_connections = str_to_int(value)) != -1) {
+		if ((config->total_connections = str_to_int(value)) > 0) {
 			return true;
 		}
 

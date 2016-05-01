@@ -65,7 +65,7 @@ static int forward_ssh_data(int from_sock, int to_sock) {
 		return -1;
 	}
 
-	if (write(to_sock, buffer, bytes_read) == -1) {
+	if (write_buffer(to_sock, buffer, bytes_read) == -1) {
 		return -1;
 	}
 

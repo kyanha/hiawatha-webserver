@@ -117,7 +117,7 @@ Number of seconds to ban an IP in case of a timeout before the first request has
 Default = 0, example: BanOnTimeout = 30
 .TP
 .B BanOnWrongPassword = <number>:<ban-time>
-Number of seconds to ban an IP in case of <number> wrong passwords for HTTP authentication.
+Number of seconds to ban an IP in case of <number> wrong passwords for HTTP authentication within a minute.
 .br
 Default = -:0, Example: BanOnWrongPassword = 3:120
 .TP
@@ -444,7 +444,7 @@ Default = 5, 30, example: TimeForRequest = 2, 45
 The (virtual) hosts the webserver will be serving. The first host must NOT be placed inside a record. This is the default host and therefor not virtual. It is wise to have the IP-address of the webserver as the Hostname of the default host and give it a blank page. Automated vulnerable-website scanners will not find your possible vulnerable website if you do so.
 .TP
 .B AccessList = (allow|deny|pwd) <ip-address>[/netmask][, (allow|deny|pwd) <ip-address>[/netmask], ...]
-Define which IPs have access to the website. If an IP does not match an entry in the list, access is granted. 'all' is an alias for 0.0.0.0/0. The IP address of the machine that connects and the IP address specified in the X-Forwarded-For header field (deny only) will be used to find a match. 'allow' gives access, 'deny' denies access and 'pwd' gives access if a valid password has been given (see PasswordFile for more information).
+Define which IPs have access to the website. If an IP does not match an entry in the list, access is granted. 'all' is an alias for 0.0.0.0/0. The IP address of the machine that connects and the IP address specified in the X-Forwarded-For header field (deny only) will be used to find a match. 'allow' gives access, 'deny' denies access and 'pwd' gives access if a valid password has been given (see PasswordFile for more information). Hiawatha will ignore this setting for files in /.well-known/acme-challenge/, which are used for authentication in the Let's Encrypt certificate request process.
 .br
 Example: AccessList = deny 10.0.0.13, allow 10.0.0.0/24, deny all
 .TP
@@ -562,6 +562,8 @@ When this option is set, HTTP authentication is enabled. Use the full path to th
 The <groupfile> contains the groupnames followed by the names of the users that are a member of that group. The format of the lines in the groupfile is:
 .br
 	<groupname>:<username>[ <username> ...]
+.br
+Hiawatha will ignore this setting for files in /.well-known/acme-challenge/, which are used for authentication in the Let's Encrypt certificate request process.
 .br
 Example: PasswordFile = basic:/var/www/.passwords,/var/www/.groups
 .TP
