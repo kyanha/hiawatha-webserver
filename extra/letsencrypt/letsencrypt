@@ -27,6 +27,7 @@
 		printf("          request <hostname> [<cert.pem>]: Request new certificate for website.\n");
 		printf("          renew [restart]: Renew the almost expired Let's Encrypt certificates\n");
 		printf("                           in Hiawatha's certificate directory.\n");
+		printf("          revoke <cert.pem>: Revoke the certificate.\n");
 		printf("\n");
 	}
 
@@ -130,7 +131,20 @@
 				exit(1);
 			}
 			break;
+		case "revoke":
+			/* Revoke certificate
+			 */
+			if (count($argv) < 3) {
+				show_help($argv[0]);
+				break;
+			}
+
+			printf("Revoking certificate.\n");
+			$lets_encrypt->revoke_certificate($argv[2]);
+			break;
 		default:
+			/* Show help
+			 */
 			show_help($argv[0]);
 			break;
 	}

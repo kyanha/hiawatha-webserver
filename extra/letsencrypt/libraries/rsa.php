@@ -1,4 +1,11 @@
 <?php
+	/* libraries/rsa.php
+	 *
+	 * Copyright (C) by Hugo Leisink <hugo@leisink.net>
+	 * This file is part of the Banshee PHP framework
+	 * http://www.banshee-php.org/
+	 */
+
 	class RSA {
 		private $private_key = null;
 		private $public_key = null;

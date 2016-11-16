@@ -69,6 +69,7 @@ fakeroot dh_installdocs
 cp ../ChangeLog debian/changelog
 fakeroot dh_installchangelogs
 gzip -9 debian/hiawatha/usr/share/doc/hiawatha/changelog*
+tar -czf debian/hiawatha/usr/share/doc/hiawatha/letsencrypt.tar.gz -C ../extra letsencrypt
 dh_installinit -o
 fakeroot dh_installdeb
 dh_shlibdeps -l/usr/lib/hiawatha

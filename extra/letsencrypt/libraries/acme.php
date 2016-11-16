@@ -138,6 +138,7 @@
 			}
 
 			printf(" - No HTTP authentication challenge received.\n");
+
 			return false;
 		}
 
@@ -211,7 +212,6 @@
 
 			if ($body["status"] != "valid") {
 				printf(" - No valid authorization key received.\n");
-print_r($body);
 				return false;
 			}
 
@@ -266,6 +266,26 @@ print_r($body);
 			}
 
 			return $result["body"];
+		}
+
+		/* Revoke certificate
+		 */
+		public function revoke_certificate($cert) {
+			$payload = array(
+				"resource"    => "revoke-cert",
+				"certificate" => $this->b64u_encode($cert));
+			$result = $this->request("/acme/revoke-cert", $payload);
+
+			if ($result === false) {
+				printf(" - HTTP error while revoking certificate.\n");
+				return false;
+			} else if ($result["status"] != 200) {
+				$body = json_decode($result["body"], true);
+				printf(" - %s.\n", $body["detail"]);
+				return false;
+			}
+
+			return true;
 		}
 	}
 ?>

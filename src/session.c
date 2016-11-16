@@ -41,6 +41,7 @@ static const struct {
 	{"insert\\s+into(\\s*`|\\s+).*(`\\s*|\\s+)(values\\s*)?\\(.*\\)"},
 	{"update(\\s*`|\\s+)[a-z0-9_\\.]*(`\\s*|\\s+)set(\\s*`|\\s+).*="},
 	{"delete\\s+from(\\s*`|\\s+)[a-z0-9_\\.]*`?"},
+	{"extractvalue\\s*\\(\\s*[0-9'\"@]"},
 	{NULL}
 };
 
@@ -604,6 +605,7 @@ int prevent_xss(t_session *session) {
 	bool logged = false;
 	short low, high;
 	char *str, value;
+	char tag[22];
 
 	if ((str = session->vars) == NULL) {
 		return 0;
@@ -614,28 +616,40 @@ int prevent_xss(t_session *session) {
 			if ((high = hex_char_to_int(*(str + 1))) != -1) {
 				if ((low = hex_char_to_int(*(str + 2))) != -1) {
 					value = (char)(high<<4) + low;
+					str += 2;
 				}
 			}
 		}
 
-		if ((value == '\"') || (value == '<') || (value == '>') || (value == '\'')) {
-			if (logged == false) {
-				log_exploit_attempt(session, "XSS", session->vars);
+		if (value == '<') {
+			str++;
+			strncpy(tag, str, 21);
+			tag[21] = '\0';
+			url_decode(tag);
+			strlower(tag);
+
+			if ((memcmp(tag, "script", 6) == 0) && ((tag[6] == ' ') || (tag[6] == '>'))) {
+				if (session->host->prevent_xss == p_prevent) {
+					*str = '_';
+				}
+				result = 1;
+
+				if (logged == false) {
+					log_exploit_attempt(session, "XSS", session->vars);
 #ifdef ENABLE_TOMAHAWK
-				increment_counter(COUNTER_EXPLOIT);
+					increment_counter(COUNTER_EXPLOIT);
 #endif
 #ifdef ENABLE_MONITOR
-				if (session->config->monitor_enabled) {
-					monitor_count_exploit_attempt(session);
-					monitor_event("XSS attempt for %s%s", session->host->hostname.item[0], session->uri);
-				}
+					if (session->config->monitor_enabled) {
+						monitor_count_exploit_attempt(session);
+						monitor_event("XSS attempt for %s%s", session->host->hostname.item[0], session->uri);
+					}
 #endif
-				logged = true;
+					logged = true;
+				}
 			}
-
-			*str = '_';
-			result = 1;
 		}
+
 		str++;
 	}
 
@@ -720,7 +734,9 @@ static int prevent_sqli_str(t_session *session, char *str, int length) {
 			break;
 		}
 		end += 2;
-		memset(begin, ' ', end - begin);
+		if (*(begin + 2) != '!') {
+			memset(begin, ' ', end - begin);
+		}
 	}
 
 	/* Remove double parenthesis
@@ -735,7 +751,7 @@ static int prevent_sqli_str(t_session *session, char *str, int length) {
 			*begin = ' ';
 		}
 	}
-	
+
 	/* SQL operators
 	 */
 	if ((c = strchr(data, '\'')) != NULL) {
@@ -827,9 +843,9 @@ int prevent_csrf(t_session *session) {
 	} else if (strncmp(referer, "https://", 8) == 0) {
 		referer += 8;
 	} else {
-		session->cookie = NULL;
+		session->request_method = GET;
 		session->body = NULL;
-		session->content_length = 0;
+		session->cookie = NULL;
 
 		log_error(session, "invalid referer while checking for CSRF");
 
@@ -848,8 +864,6 @@ int prevent_csrf(t_session *session) {
 		}
 	}
 
-	session->cookie = NULL;
-
 	if (session->body != NULL) {
 		prev = *(session->body + session->content_length);
 		*(session->body + session->content_length) = '\0';
@@ -861,8 +875,11 @@ int prevent_csrf(t_session *session) {
 		*(session->body + session->content_length) = prev;
 	}
 
-	session->body = NULL;
-	session->content_length = 0;
+	if (session->host->prevent_csrf == p_prevent) {
+		session->request_method = GET;
+		session->body = NULL;
+		session->cookie = NULL;
+	}
 
 #ifdef ENABLE_TOMAHAWK
 	increment_counter(COUNTER_EXPLOIT);

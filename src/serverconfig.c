@@ -143,11 +143,10 @@ static t_host *new_host(void) {
 	host->rproxy              = NULL;
 	init_charlist(&(host->use_rproxy));
 #endif
-	host->prevent_sqli        = false;
-	host->sqli_return_code    = 404;
-	host->prevent_xss         = false;
+	host->prevent_sqli        = p_no;
+	host->prevent_xss         = p_no;
 	host->prevent_csrf        = p_no;
-	host->follow_symlinks     = p_no;
+	host->follow_symlinks     = false;
 	host->enable_path_info    = false;
 	host->trigger_on_cgi_status = false;
 	init_charlist(&(host->directory_str));
@@ -509,12 +508,16 @@ static int parse_mode(char *line, mode_t *mode) {
 	return 0;
 }
 
-static int parse_prevent(char *prevent, t_prevent *result) {
+static int parse_prevent(char *prevent, t_prevent *result, t_prevent yes) {
 	if ((strcmp(prevent, "no") == 0) || (strcmp(prevent, "false") == 0)) {
 		*result = p_no;
 	} else if ((strcmp(prevent, "yes") == 0) || (strcmp(prevent, "true") == 0)) {
-		*result = p_yes;
-	} else if (strcmp(prevent, "block") == 0) {
+		*result = yes;
+	} else if (strcmp(prevent, "detect") == 0) {
+		*result = p_detect;
+	} else if (strcmp(prevent, "prevent") == 0) {
+		*result = p_prevent;
+	} else if (strcmp(prevent, "block") == 0) { 
 		*result = p_block;
 	} else {
 		return -1;
@@ -1432,10 +1435,6 @@ static bool user_setting(char *key, char *value, t_host *host, t_tempdata **temp
 	char *pwd = NULL, *grp = NULL;
 	t_error_handler *handler;
 	t_keyvalue *kv;
-#ifdef ENABLE_TLS
-	char *rest;
-	int time;
-#endif
 
 	if (strcmp(key, "accesslist") == 0) {
 		if ((host->access_list = parse_accesslist(value, true, host->access_list)) != NULL) {
@@ -1503,24 +1502,6 @@ static bool user_setting(char *key, char *value, t_host *host, t_tempdata **temp
 		if (parse_charlist(value, &(host->required_group)) == 0) {
 			return true;
 		}
-#ifdef ENABLE_TLS
-	} else if (strcmp(key, "requiretls") == 0) {
-		split_string(value, &value, &rest, ',');
-		if (parse_yesno(value, &(host->require_tls)) != 0) {
-			return false;
-		}
-		if (rest != NULL) {
-			if ((time = str_to_int(rest)) < 0) {
-				return false;
-			}
-			if (time > 0) {
-				if ((host->hsts_time = strdup(rest)) == NULL) {
-					return false;
-				}
-			}
-		}
-		return true;
-#endif
 	} else if (strcmp(key, "runonalter") == 0) {
 		if ((host->run_on_alter = strdup(value)) != NULL) {
 			return true;
@@ -1574,6 +1555,10 @@ static bool host_setting(char *key, char *value, t_host *host) {
 #ifdef ENABLE_RPROXY
 	t_rproxy *rproxy, *list;
 #endif
+#ifdef ENABLE_TLS
+	int time;
+#endif
+	int sqli_return_code;
 
 	if (strcmp(key, "accesslogfile") == 0) {
 		if (strcasecmp(value, "none") == 0) {
@@ -1696,15 +1681,18 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			return true;
 		}
 	} else if ((strcmp(key, "preventcsrf") == 0) || (strcmp(key, "preventxsrf") == 0)) {
-		if (parse_prevent(value, &(host->prevent_csrf)) == 0) {
+		if (parse_prevent(value, &(host->prevent_csrf), p_prevent) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "preventsqli") == 0) {
 		split_string(value, &value, &rest, ',');
-		if (parse_yesno(value, &(host->prevent_sqli)) == 0) {
-			if (rest != NULL) {
-				host->sqli_return_code = str_to_int(rest);
-				if ((host->sqli_return_code == 403) || (host->sqli_return_code == 404) || (host->sqli_return_code == 441)) {
+		if (parse_prevent(value, &(host->prevent_sqli), p_block) == 0) {
+			if ((rest != NULL) && (host->prevent_sqli != p_no)) {
+				sqli_return_code = str_to_int(rest);
+				if ((sqli_return_code == 403) || (sqli_return_code == 404)) {
+					host->prevent_sqli = p_prevent;
+				} else if (sqli_return_code == 441) {
+					host->prevent_sqli = p_block;
 					return true;
 				}
 			} else {
@@ -1712,7 +1700,7 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			}
 		}
 	} else if (strcmp(key, "preventxss") == 0) {
-		if (parse_prevent(value, &(host->prevent_xss)) == 0) {
+		if (parse_prevent(value, &(host->prevent_xss), p_prevent) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "requiredbinding") == 0) {
@@ -1736,6 +1724,22 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			}
 			return true;
 		}
+	} else if (strcmp(key, "requiretls") == 0) {
+		split_string(value, &value, &rest, ',');
+		if (parse_yesno(value, &(host->require_tls)) != 0) {
+			return false;
+		}
+		if (rest != NULL) {
+			if ((time = str_to_int(rest)) < 0) {
+				return false;
+			}
+			if (time > 0) {
+				if ((host->hsts_time = strdup(rest)) == NULL) {
+					return false;
+				}
+			}
+		}
+		return true;
 #endif
 #ifdef ENABLE_RPROXY
 	} else if (strcmp(key, "reverseproxy") == 0) {

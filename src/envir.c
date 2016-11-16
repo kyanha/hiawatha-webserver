@@ -88,7 +88,7 @@ static int add_to_environment_chroot(t_session *session, t_fcgi_buffer *fcgi_buf
 	return add_to_environment(fcgi_buffer, key, value + ofs);
 }
 
-/* Copy a http_header to an environment setting
+/* Copy a HTTP header to an environment setting
  */
 int http_header_to_environment(t_session *session, t_fcgi_buffer *fcgi_buffer, char *key, char *envir) {
 	char *value;
@@ -210,7 +210,7 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 		http_header_to_environment(session, fcgi_buffer, "Authorization:", "HTTP_AUTHORIZATION");
 	}
 
-	/* Convert X-* HTTP headers to HTTP_* environment variables
+	/* Convert HTTP headers to HTTP_* environment variables
 	 */
 	http_headers = session->http_headers;
 	while (http_headers != NULL) {
@@ -243,10 +243,6 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 	if (session->error_code != -1) {
 		snprintf(value, 9, "%d", session->error_code);
 		add_to_environment(fcgi_buffer, "HTTP_GENERATED_ERROR", value);
-	}
-
-	if (session->cookie != NULL) {
-		add_to_environment(fcgi_buffer, "HTTP_COOKIE", session->cookie);
 	}
 
 	envir = session->host->envir_str;

@@ -444,7 +444,9 @@ Default = 5, 30, example: TimeForRequest = 2, 45
 The (virtual) hosts the webserver will be serving. The first host must NOT be placed inside a record. This is the default host and therefor not virtual. It is wise to have the IP-address of the webserver as the Hostname of the default host and give it a blank page. Automated vulnerable-website scanners will not find your possible vulnerable website if you do so.
 .TP
 .B AccessList = (allow|deny|pwd) <ip-address>[/netmask][, (allow|deny|pwd) <ip-address>[/netmask], ...]
-Define which IPs have access to the website. If an IP does not match an entry in the list, access is granted. 'all' is an alias for 0.0.0.0/0. The IP address of the machine that connects and the IP address specified in the X-Forwarded-For header field (deny only) will be used to find a match. 'allow' gives access, 'deny' denies access and 'pwd' gives access if a valid password has been given (see PasswordFile for more information). Hiawatha will ignore this setting for files in /.well-known/acme-challenge/, which are used for authentication in the Let's Encrypt certificate request process.
+Define which IPs have access to the website. If an IP does not match an entry in the list, access is granted. 'all' is an alias for 0.0.0.0/0. The IP address of the machine that connects and the IP address specified in the X-Forwarded-For header field (deny only) will be used to find a match. 'allow' gives access, 'deny' denies access and 'pwd' gives access if a valid password has been given (see PasswordFile for more information).
+.br
+Hiawatha will ignore this setting for files in /.well-known/acme-challenge/, which are used for authentication in the Let's Encrypt certificate request process.
 .br
 Example: AccessList = deny 10.0.0.13, allow 10.0.0.0/24, deny all
 .TP
@@ -567,20 +569,20 @@ Hiawatha will ignore this setting for files in /.well-known/acme-challenge/, whi
 .br
 Example: PasswordFile = basic:/var/www/.passwords,/var/www/.groups
 .TP
-.B PreventCSRF = yes|no
-Prevent Cross-site Request Forgery by ignoring all cookies sent by a browser when following an external link to this website. This setting can cause problems for users who use tools to hide/remove the Referer HTTP header string while browsing. Please note that this protection is not 100% safe.
+.B PreventCSRF = no|detect|prevent|block
+Prevent Cross-Site Request Forgery attacks. The 'detect' option only detects and logs a CSRF attack, 'prevent' discards the POST data and cookies and 'block' returns a 443 error. This setting can cause problems for users who use tools to hide/remove the Referer HTTP header string while browsing.
 .br
-Default = no, example: PreventCSRF = yes
+Default = no, example: PreventCSRF = block
 .TP
-.B PreventSQLi = yes|no[, 403|404|441]
-Prevent SQL-injection by detecting injections and denying the request via a 403, 404 or 441 response. It is important to understand that the detection of SQL injections is done by best effort. There is no 100% guarantee that all SQL injections are blocked. Note that using this feature can have a negative effect on the performance of your webserver. Use with caution. See also BanOnSQLi and RequestLimitMask.
+.B PreventSQLi = no|detect|prevent|block
+Prevent SQL-injection attacks. The 'detect' option only detects and logs an SQL injection attack, 'prevent' returns a 404 error and 'block' returns a 441 error. It is important to understand that the detection of SQL injections is done by best effort. There is no 100% guarantee that all SQL injections are blocked. Note that using this feature can have a negative effect on the performance of your webserver and can make the exploit logfile grow very large. Use with caution. You better use a secure CMS or framework instead. See also BanOnSQLi and RequestLimitMask.
 .br
-Default = no,404, example: PreventSQLi = yes,441
+Default = no, example: PreventSQLi = detect
 .TP
-.B PreventXSS = yes|no
-Prevent cross-site scripting via the URL by replacing a less-then, greater-then, quote or double-quote in the URL with an underscore.
+.B PreventXSS = no|detect|prevent|block
+Prevent Cross-Site Scripting attacks. The 'detect' option only detects and logs a XSS attack, 'prevent' disables the <script> tag in the input and 'block' returns a 442 error.
 .br
-Default = no, example: PreventXSS = yes
+Default = no, example: PreventXSS = prevent
 .TP
 .B RequiredBinding = <binding_id>[, <binding_id>, ...]
 By default, a virtual host can be visited via all bindings. Via this opion, you can specify via which bindings a virtual host can be visited (see chapter BINDING CONFIGURATION for more information).
@@ -602,6 +604,8 @@ Example: RequiredGroup = webadmins,staff
 .TP
 .B RequireTLS = yes|no[, HSTS time]
 Specify that a domain must be visited with a TLS connection. If it is visited via HTTP, Hiawatha will send a redirect (301) with an HTTPS URL. The HSTS time is the max-age value of the Strict-Transport-Security HTTP header.
+.br
+Hiawatha will ignore this setting for files in /.well-known/acme-challenge/, which are used for authentication in the Let's Encrypt certificate request process.
 .br
 Default = no, example: RequireTLS = yes, 2678400
 .br

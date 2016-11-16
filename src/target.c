@@ -639,10 +639,10 @@ int execute_cgi(t_session *session) {
 	 */
 	if (session->host->prevent_sqli) {
 		result = prevent_sqli(session);
-		if (result == 1) {
+		if ((result > 0) && (session->host->prevent_sqli >= p_prevent)) {
 			session->error_cause = ec_SQL_INJECTION;
-		}
-		if (result != 0) {
+			return -1;
+		} else if (result == -1) {
 			return -1;
 		}
 	}
@@ -650,22 +650,18 @@ int execute_cgi(t_session *session) {
 	/* Prevent Cross-site Scripting
 	 */
 	if (session->host->prevent_xss != p_no) {
-		if (prevent_xss(session) > 0) {
-			if (session->host->prevent_xss == p_block) {
-				session->error_cause = ec_XSS;
-				return -1;
-			}
+		if ((prevent_xss(session) > 0) && (session->host->prevent_xss == p_block)) {
+			session->error_cause = ec_XSS;
+			return -1;
 		}
 	}
 
 	/* Prevent Cross-site Request Forgery
 	 */
 	if (session->host->prevent_csrf != p_no) {
-		if (prevent_csrf(session) > 0) {
-			if (session->host->prevent_csrf == p_block) {
-				session->error_cause = ec_CSRF;
-				return -1;
-			}
+		if ((prevent_csrf(session) > 0) && (session->host->prevent_csrf == p_block)) {
+			session->error_cause = ec_CSRF;
+			return -1;
 		}
 	}
 

@@ -2,6 +2,7 @@
 
 SET INSTALL_DIR=%~dp0
 SET CYGWIN=nodosfilewarning
+FOR /f %%i IN ('whoami') DO SET USERNAME=%%i
 
 SET /p task="[I]nstall or [U]ninstall Hiawatha as a Windows service? "
 ECHO.

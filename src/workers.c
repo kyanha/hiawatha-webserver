@@ -562,7 +562,7 @@ tunnel_ssh:
 	/* Enforce usage of TLS
 	 */
 #ifdef ENABLE_TLS
-	if (session->host->require_tls && (session->binding->use_tls == false)) {
+	if (session->host->require_tls && (session->binding->use_tls == false) && (is_letsencrypt_authentication_request(session) == false)) {
 		if ((qmark = strchr(session->uri, '?')) != NULL) {
 			*qmark = '\0';
 			session->vars = qmark + 1;
@@ -785,12 +785,12 @@ no_websocket:
 
 		/* Prevent SQL injection
 		 */
-		if (session->host->prevent_sqli) {
+		if (session->host->prevent_sqli != p_no) {
 			result = prevent_sqli(session);
-			if (result == 1) {
+			if ((result > 0) && (session->host->prevent_sqli >= p_prevent)) {
 				session->error_cause = ec_SQL_INJECTION;
-			}
-			if (result != 0) {
+				return -1;
+			} else if (result == -1) {
 				return -1;
 			}
 		}
@@ -798,22 +798,18 @@ no_websocket:
 		/* Prevent Cross-site Scripting
 		 */
 		if (session->host->prevent_xss != p_no) {
-			if (prevent_xss(session) > 0) {
-				if (session->host->prevent_xss == p_block) {
-					session->error_cause = ec_XSS;
-					return -1;
-				}
+			if ((prevent_xss(session) > 0) && (session->host->prevent_xss == p_block)) {
+				session->error_cause = ec_XSS;
+				return -1;
 			}
 		}
 
 		/* Prevent Cross-site Request Forgery
 		 */
 		if (session->host->prevent_csrf != p_no) {
-			if (prevent_csrf(session) > 0) {
-				if (session->host->prevent_csrf == p_block) {
-					session->error_cause = ec_CSRF;
-					return -1;
-				}
+			if ((prevent_csrf(session) > 0) && (session->host->prevent_csrf == p_block)) {
+				session->error_cause = ec_CSRF;
+				return -1;
 			}
 		}
 
@@ -1052,7 +1048,7 @@ static void handle_request_result(t_session *session, int result) {
 			if ((session->config->ban_on_sqli > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
 				ban_ip(&(session->ip_address), session->config->ban_on_sqli, session->config->kick_on_ban);
 				hostname = (session->hostname != NULL) ? session->hostname : unknown_host;
-				log_system(session, "Client banned because of SQL injection on %s", hostname);
+				log_system(session, "Client banned because of SQL injection at %s", hostname);
 				session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
@@ -1060,7 +1056,12 @@ static void handle_request_result(t_session *session, int result) {
 				}
 #endif
 			}
-			session->return_code = session->host->sqli_return_code;
+			if (session->host->prevent_sqli == p_block) {
+				session->return_code = 441;
+			} else {
+				session->return_code = 404;
+			}
+				
 			send_code(session);
 			if (session->log_request) {
 				log_request(session);

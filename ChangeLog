@@ -1,3 +1,15 @@
+hiawatha (10.3) stable; urgency=low
+
+  * PreventCSRF, PreventSQLi and PreventXSS improved.
+  * Prevention of MySQL data mining via SQL injection. Thanks to
+    Esmaeil Rahimian <rahimian@securehost.co>.
+  * Added revoke option to Let's Encrypt script.
+  * Hiawatha ignores RequireTLS for Let's Encrypt authentication requests.
+  * Small bugfixes and improvements.
+  * Bugfix: possible HTTP request pipelining error after CSRF prevented.
+
+ -- Hugo Leisink <hugo@leisink.net>  Sun,  5 Jun 2016 08:21:38 +0200
+
 hiawatha (10.2) stable; urgency=low
 
   * Added Let's Encrypt script (see extra/letsencrypt).

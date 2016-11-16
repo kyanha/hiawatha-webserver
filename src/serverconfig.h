@@ -42,7 +42,7 @@ typedef enum { root, part } t_pathmatch;
 typedef enum { no_auth, basic, digest } t_auth_method;
 typedef enum { hiawatha, common, extended } t_log_format;
 typedef enum { never, daily, weekly, monthly } t_log_rotate;
-typedef enum { p_no, p_yes, p_block } t_prevent;
+typedef enum { p_no, p_detect, p_prevent, p_block } t_prevent;
 #ifdef CYGWIN
 typedef enum { windows, cygwin } t_platform;
 #endif
@@ -278,8 +278,7 @@ typedef struct type_host {
 	t_rproxy        *rproxy;
 	t_charlist      use_rproxy;
 #endif
-	bool            prevent_sqli;
-	int             sqli_return_code;
+	t_prevent       prevent_sqli;
 	t_prevent       prevent_xss;
 	t_prevent       prevent_csrf;
 	bool            follow_symlinks;

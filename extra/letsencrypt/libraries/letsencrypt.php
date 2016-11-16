@@ -71,7 +71,9 @@
 		/* Register account
 		 */
 		public function register_account($email_address, $ca_terms) {
-			$this->acme->register_account($email_address, $ca_terms);
+			if ($this->acme->register_account($email_address, $ca_terms)) {
+				printf("Account registered successfully.\n");
+			}
 		}
 
 		/* Request Let's Encrypt certificate
@@ -171,6 +173,7 @@
 				fputs($fp, $rsa->private_key."\n");
 				fputs($fp, $certificate."\n");
 				fclose($fp);
+				chmod($cert_file, 0600);
 			}
 
 			/* Attach CA certificate
@@ -192,6 +195,7 @@
 						printf("Writing CA certificate to file.\n");
 						fputs($fp, $ca_cert."\n");
 						fclose($fp);
+						chmod($cert_file, 0400);
 					}
 				}
 			}
@@ -199,6 +203,25 @@
 			printf("\n");
 
 			return true;
+		}
+
+		/* Revoke Let's Encrypt certificate
+		 */
+		public function revoke_certificate($cert_file) {
+			if (($cert = file_get_contents($cert_file)) == false) {
+				printf(" - Certificate file %s not found.\n", $cert_file);
+				return;
+			}
+
+			preg_match('~BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE~s', $cert, $matches);
+			if (($cert = $matches[1]) == null) {
+				printf(" - Invalid certificate file.\n");
+			}
+			$cert = base64_decode($cert, true);
+
+			if ($this->acme->revoke_certificate($cert)) {
+				printf("Certificate revoked successfully.\n");
+			}
 		}
 	}
 ?>

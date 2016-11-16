@@ -598,10 +598,6 @@ int send_fcgi_request(t_session *session, int sock) {
 		if (send_fcgi_buffer(&fcgi_buffer, session->body, session->content_length) == -1) {
 			return -1;
 		}
-
-		if (send_fcgi_buffer(&fcgi_buffer, NULL, 0) == -1) {
-			return -1;
-		}
 	} else if (session->uploaded_file != NULL) {
 		/* Send uploaded file to FastCGI program
 		 */
@@ -620,9 +616,10 @@ int send_fcgi_request(t_session *session, int sock) {
 			return -1;
 		}
 
-		if (send_fcgi_buffer(&fcgi_buffer, NULL, 0) == -1) {
-			return -1;
-		}
+	}
+
+	if (send_fcgi_buffer(&fcgi_buffer, NULL, 0) == -1) {
+		return -1;
 	}
 
 	return 0;
