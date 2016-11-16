@@ -37,7 +37,7 @@
 
 typedef enum { no_cgi, binary, script, fastcgi } t_cgi_type;
 typedef enum { unknown, GET, POST, HEAD, TRACE, PUT, DELETE, CONNECT, WHEN, unsupported } t_req_method;
-typedef enum { missing_slash, require_tls, location, enforce_first_hostname } t_cause_of_301;
+typedef enum { missing_slash, require_tls, location, enforce_first_hostname } t_cause_of_30x;
 
 typedef struct type_session {
 	t_config        *config;
@@ -82,20 +82,19 @@ typedef struct type_session {
 	t_directory     *directory;
 	bool            handling_error;
 	char            *reason_for_403;
-	char            *cookie;
+	char            *cookies;
 	off_t           bytes_sent;
 	int             return_code;
 	int             error_code;
 	bool            log_request;
 	t_tempdata      *tempdata;
 	char            *uploaded_file;
-	long            uploaded_size;
 	char            *location;
 	bool            send_date;
 	bool            send_expires;
 	int             expires;
 	bool            caco_private;
-	t_cause_of_301  cause_of_301;
+	t_cause_of_30x  cause_of_30x;
 #ifdef ENABLE_TOOLKIT
 	char            *toolkit_fastcgi;
 #endif
@@ -118,7 +117,6 @@ typedef struct type_session {
 	 */
 #ifdef ENABLE_TLS
 	mbedtls_ssl_context tls_context;
-	//mbedtls_ssl_session tls_session;
 #endif
 
 	/* Output buffer
@@ -142,6 +140,10 @@ typedef struct type_session {
 	bool            rproxy_use_tls;
 	mbedtls_ssl_context rproxy_ssl;
 #endif
+#endif
+
+#ifdef ENABLE_HTTP2
+	bool            use_http2;
 #endif
 } t_session;
 

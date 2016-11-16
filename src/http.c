@@ -129,7 +129,7 @@ static long merge_chunks(char *buffer, long size, long *bytes_in_buffer) {
  */
 int fetch_request(t_session *session) {
 	char *new_reqbuf, *strstart, *strend;
-	long max_request_size, bytes_read, header_length = -1, content_length = -1, chunk_size_pos = 0;
+	long max_request_size, bytes_read, header_length = -1, content_length = -1, uploaded_size = 0, chunk_size_pos = 0;
 	int result = 200, write_bytes, poll_result, upload_handle = -1, retval;
 	time_t deadline;
 	struct pollfd poll_data;
@@ -184,8 +184,8 @@ int fetch_request(t_session *session) {
 							break;
 						}
 
-						session->uploaded_size = session->bytes_in_buffer - header_length;
-						if (write_buffer(upload_handle, session->request + header_length, session->uploaded_size) == -1) {
+						uploaded_size = session->bytes_in_buffer - header_length;
+						if (write_buffer(upload_handle, session->request + header_length, uploaded_size) == -1) {
 							result = 500;
 							break;
 						}
@@ -216,10 +216,11 @@ int fetch_request(t_session *session) {
 								break;
 							}
 
+							session->content_length = content_length;
+
 							if (store_on_disk) {
 								/* Write to file on disk
 								 */
-								session->content_length = 0;
 								if (content_length > session->binding->max_upload_size) {
 									result = 413;
 									break;
@@ -236,7 +237,6 @@ int fetch_request(t_session *session) {
 							} else {
 								/* Read into memory
 								 */
-								session->content_length = content_length;
 								if (header_length + content_length > max_request_size) {
 									session->error_cause = ec_MAX_REQUESTSIZE;
 									result = -1;
@@ -278,7 +278,7 @@ int fetch_request(t_session *session) {
 
 				if (content_length > -1) {
 					if (store_on_disk) {
-						if (session->uploaded_size == content_length) {
+						if (uploaded_size == content_length) {
 							/* Received a complete PUT request */
 							break;
 						}
@@ -389,15 +389,15 @@ int fetch_request(t_session *session) {
 							/* Write to file on disk
 							 */
 							write_bytes = bytes_read;
-							if (session->uploaded_size + bytes_read > content_length) {
-								write_bytes -= ((session->uploaded_size + bytes_read) - content_length);
+							if (uploaded_size + bytes_read > content_length) {
+								write_bytes -= ((uploaded_size + bytes_read) - content_length);
 							}
 							if (write_buffer(upload_handle, session->request + header_length, write_bytes) == -1) {
 								result = 500;
 								keep_reading = false;
 								break;
 							}
-							if ((session->uploaded_size += write_bytes) > session->binding->max_upload_size) {
+							if ((uploaded_size += write_bytes) > session->binding->max_upload_size) {
 								keep_reading = false;
 								result = 413;
 								break;
@@ -496,12 +496,12 @@ int parse_request(t_session *session, int total_bytes) {
 
 	/* Body and other request headerlines
 	 */
-	if (session->content_length > 0) {
+	if ((session->content_length > 0) && (session->uploaded_file == NULL)) {
 		session->body = session->request + session->header_length;
 	}
 	session->http_headers = parse_http_headers(str_end + 3);
 	session->hostname = strlower(get_http_header("Host:", session->http_headers));
-	session->cookie = get_http_header("Cookie:", session->http_headers);
+	session->cookies = get_http_header("Cookie:", session->http_headers);
 
 	if ((conn = get_http_header("Connection:", session->http_headers)) != NULL) {
 		conn = strlower(remove_spaces(conn));

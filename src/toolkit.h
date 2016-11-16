@@ -69,6 +69,7 @@ typedef struct type_toolkit_options {
 	char *method;
 	char *website_root;
 	char *fastcgi_server;
+	int  status_code;
 	int  ban;
 	bool caco_private;
 	int  total_connections;

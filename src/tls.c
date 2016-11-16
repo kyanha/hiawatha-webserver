@@ -178,6 +178,14 @@ static mbedtls_ctr_drbg_context ctr_drbg;
 static mbedtls_entropy_context entropy;
 static mbedtls_ssl_config client_config;
 
+#ifdef ENABLE_HTTP2
+static const struct {
+	const char *protocol;
+} alpn_http2[] = {
+	{"h2"}, {NULL}
+};
+#endif
+
 /* Required to use random number generator functions in a multithreaded application
  */
 static int tls_random(void *p_rng, unsigned char *output, size_t len) {
@@ -689,5 +697,21 @@ int tls_send_buffer(mbedtls_ssl_context *context, const char *buffer, int size) 
 
 	return total_written;
 }
+
+#ifdef ENABLE_HTTP2
+int tls_accept_http2(mbedtls_ssl_config *config) {
+	return mbedtls_ssl_conf_alpn_protocols(config, (const char**)&alpn_http2);
+}
+
+bool tls_http2_accepted(mbedtls_ssl_context *context) {
+	const char *protocol;
+
+	if ((protocol = mbedtls_ssl_get_alpn_protocol(context)) == NULL) {
+		return false;
+	}
+
+	return strcmp(protocol, "h2") == 0;
+}
+#endif
 
 #endif

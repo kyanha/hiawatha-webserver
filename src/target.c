@@ -396,10 +396,12 @@ no_gzip:
 			cached_object = NULL;
 		} else
 #endif
+		{
 			file_for_cache = use_gz_file ? gz_file : session->file_on_disk;
 			if ((cached_object = search_cache_for_file(session, file_for_cache)) == NULL) {
 				cached_object = add_file_to_cache(session, file_for_cache);
 			}
+		}
 
 		if (cached_object != NULL) {
 			if (send_begin + send_size > cached_object->content_length) {
@@ -520,9 +522,10 @@ int execute_cgi(t_session *session) {
 	char *old_path, *win32_path;
 #endif
 #ifdef ENABLE_CACHE
+	bool skip_cache;
 	t_cached_object *cached_object;
-	char *cache_buffer = NULL;
-	int  cache_size = 0, cache_time = 0;
+	char *cache_buffer = NULL, *cookie;
+	int  cache_size = 0, cache_time = 0, i;
 #endif
 #ifdef ENABLE_MONITOR
 	bool timed_out = false, measure_runtime = false;
@@ -668,7 +671,26 @@ int execute_cgi(t_session *session) {
 #ifdef ENABLE_CACHE
 	/* Search for CGI output in cache
 	 */
-	if (session->request_method == GET) {
+	skip_cache = false;
+	if (session->cookies != NULL) {
+		for (i = 0; i < session->host->skip_cache_cookies.size; i++) {
+			cookie = session->host->skip_cache_cookies.item[i];
+			if ((str = strstr(session->cookies, cookie)) != NULL) {
+				if (*(str + strlen(cookie)) != '=') {
+					continue;
+				}
+				if (str > session->cookies) {
+					if (*(str - 1) != ' ') {
+						continue;
+					}
+				}
+				skip_cache = true;
+				break;
+			}
+		}
+	}
+
+	if ((session->request_method == GET) && (skip_cache == false)) {
 		if ((cached_object = search_cache_for_cgi_output(session)) != NULL) {
 			if (send_header(session) == -1) {
 				retval = rs_DISCONNECT;
@@ -1012,7 +1034,7 @@ int execute_cgi(t_session *session) {
 #ifdef ENABLE_CACHE
 							/* Look for store-in-cache CGI header
 							 */
-							if (session->request_method == GET) {
+							if ((session->request_method == GET) && (skip_cache == false)) {
 								if ((cache_time = cgi_cache_time(cgi_info.input_buffer, header_length)) > 0) {
 									if ((cache_buffer = (char*)malloc(session->config->cache_max_filesize + 1)) != NULL) {
 										*(cache_buffer + session->config->cache_max_filesize) = '\0';
@@ -1427,7 +1449,7 @@ int handle_put_request(t_session *session) {
 				result = 416;
 			} else if (write_begin > file_size) {
 				result = 416;
-			} else if (session->uploaded_size != (write_end - write_begin + 1)) {
+			} else if (session->content_length != (write_end - write_begin + 1)) {
 				result = 416;
 			} else if (write_begin > 0) {
 				if (lseek(handle_write, write_begin, SEEK_SET) == -1) {
@@ -1454,7 +1476,7 @@ int handle_put_request(t_session *session) {
 		}
 
 		if ((file_size != NEW_FILE) && (range_found == false)) {
-			if (ftruncate(handle_write, session->uploaded_size) == -1) {
+			if (ftruncate(handle_write, session->content_length) == -1) {
 				log_error(session, "ftruncate() error");
 				result = 500;
 			}
@@ -1464,7 +1486,7 @@ int handle_put_request(t_session *session) {
 		 */
 		if (result != 500) {
 			if ((buffer = (char*)malloc(FILE_BUFFER_SIZE)) != NULL) {
-				while (total_written < session->uploaded_size) {
+				while (total_written < session->content_length) {
 					if ((bytes_read = read(handle_read, buffer, FILE_BUFFER_SIZE)) != -1) {
 						if (bytes_read == 0) {
 							break;
@@ -1715,9 +1737,9 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	options.hostname = session->hostname;
 	options.http_headers = session->http_headers;
 	options.body = session->body;
+	options.uploaded_file = session->uploaded_file;
 	options.content_length = session->content_length;
 	options.remote_user = session->remote_user;
-	options.uploaded_file = session->uploaded_file;
 #ifdef ENABLE_TLS
 	options.use_tls = session->binding->use_tls;
 #endif

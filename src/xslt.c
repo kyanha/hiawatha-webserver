@@ -250,7 +250,7 @@ static const char **get_transform_parameters(t_session *session) {
 
 	add_parameter_line(params, session->vars, '&', "GET_", &i);
 	add_parameter_line(params, session->body, '&', "POST_", &i);
-	add_parameter_line(params, session->cookie, ';', "COOKIE_", &i);
+	add_parameter_line(params, session->cookies, ';', "COOKIE_", &i);
 
 	params[i] = NULL;
 

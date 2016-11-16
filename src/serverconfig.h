@@ -169,6 +169,9 @@ typedef struct type_binding {
 	int           socket;
 	int           time_for_1st_request;
 	int           time_for_request;
+#ifdef ENABLE_HTTP2
+	bool          accept_http2;
+#endif
 
 	struct type_binding *next;
 } t_binding;
@@ -304,6 +307,7 @@ typedef struct type_host {
 	t_file_hash     *file_hashes;
 #endif
 	t_websocket     *websockets;
+	t_charlist      skip_cache_cookies;
 
 	struct type_host *next;
 } t_host;

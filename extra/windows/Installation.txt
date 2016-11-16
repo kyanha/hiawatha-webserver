@@ -9,11 +9,11 @@ to start the Hiawatha webserver.
 INSTALLATION OF PHP
 ====================
 To use PHP, download the PHP zip package from http://php.net/downloads.php and
-unzip it to C:\Program Files\PHP5\.
+unzip it to C:\Program Files\PHP7\.
 
-Optionally, run <HIAWATHA_INSTALL_DIR>\PHP5-FastCGI.bat to start PHP as a
-FastCGI daemon. If you installed PHP5 in another directory, edit the batch file
-to change the path to the PHP5 binary.
+Optionally, run <HIAWATHA_INSTALL_DIR>\PHP7-FastCGI.bat to start PHP as a
+FastCGI daemon. If you installed PHP7 in another directory, edit the batch file
+to change the path to the PHP7 binary.
 
 
 MANUAL PAGES

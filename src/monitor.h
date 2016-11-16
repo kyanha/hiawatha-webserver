@@ -24,7 +24,7 @@ int  init_monitor_module(t_config *config);
 void shutdown_monitor_module(void);
 
 int  monitor_event(char *event, ...);
-int  monitor_version(char *version);
+int  monitor_version(char *version, char *modules);
 int  monitor_stats_to_buffer(t_config *config, time_t now);
 
 void monitor_count_connection(t_session *session);

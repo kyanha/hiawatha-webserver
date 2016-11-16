@@ -602,7 +602,7 @@ The <groupname> is the name of the group a user must be a member of to have acce
 .br
 Example: RequiredGroup = webadmins,staff
 .TP
-.B RequireTLS = yes|no[, HSTS time]
+.B RequireTLS = yes|no[, HSTS time][; includeSubDomains][; preload]
 Specify that a domain must be visited with a TLS connection. If it is visited via HTTP, Hiawatha will send a redirect (301) with an HTTPS URL. The HSTS time is the max-age value of the Strict-Transport-Security HTTP header.
 .br
 Hiawatha will ignore this setting for files in /.well-known/acme-challenge/, which are used for authentication in the Let's Encrypt certificate request process.
@@ -640,6 +640,11 @@ Default = no, example: ShowIndex = /etc/hiawatha/index.xslt
 
 (requires that Hiawatha was not compiled with -DENABLE_XSLT=off)
 .TP
+.B SkipCacheCookie = <cookie name>[, <cookie name>, ...]
+Skip the internal cache for requests for GGI scripts that contain one of the mentioned cookies.
+.br
+Example: SkipCacheCookie = banshee_login_id
+.TP
 .B TLScertFile = <TLS private key and certificate file>
 Use this option inside a virtualhost block if you want to make use of the SNI capabilities of Hiawatha. See the TLScertFile option in the BINDING CONFIGURATION chapter for more information.
 .TP
@@ -671,7 +676,7 @@ Default = no, example: UseLocalConfig = yes
 .B UseFastCGI = <fcgi_server_id>[, <fcgi_server_id>, ...]
 The FastCGI server to use for this virtual host. The first FastCGI server record that matches (including extension), will be used. See chapter FASTCGI CONFIGURATION for more information. This option sets ExecuteCGI to 'yes' for this host.
 .br
-Example: UseFastCGI = PHP5
+Example: UseFastCGI = PHP7
 .TP
 .B UserWebsites = yes|no
 Activates user websites for this (virtual) host (the /~user/ URL's) (see UserDirectory for more information).
@@ -806,7 +811,7 @@ Example: Extension = php
 .B FastCGIid = <fcgi_server_id>
 Give each FastCGI server an unique Id. Use this Id with the UseFastCGI setting in a virtual host.
 .br
-Example: FastCGIid = PHP5
+Example: FastCGIid = PHP7
 .TP
 .B ServerRoot = <path>
 If the FastCGI server is running in a chroot, use this setting to specify that chroot directory.
@@ -905,9 +910,9 @@ Execute <toolkit_id> and terminate the current URL rewriting process.
 .br
 Don't log the current request in the file specified by AccessLogfile.
 .TP
-.B Redirect <url>
+.B Redirect [301..308] <url>
 .br
-Redirect (301) the browser to the specified URL and terminate toolkit processing.
+Redirect the browser to the specified URL and terminate toolkit processing. The default status code is 301.
 .TP
 .B Return
 .br

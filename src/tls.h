@@ -18,6 +18,7 @@
 
 #include <stdbool.h>
 #include "liblist.h"
+#include "mbedtls/platform.h"
 #include "mbedtls/ssl.h"
 #include "mbedtls/x509.h"
 #include "mbedtls/version.h"
@@ -28,7 +29,7 @@
 #define TLS_HANDSHAKE_NO_MATCH -3
 
 #ifdef ENABLE_DEBUG
-#define TLS_ERROR_LOGFILE LOG_DIR"/ssl.log"
+#define TLS_ERROR_LOGFILE LOG_DIR"/tls_debug.log"
 #endif
 
 typedef struct {
@@ -58,6 +59,10 @@ char *tls_cipher_string(mbedtls_ssl_context *context);
 void tls_close(mbedtls_ssl_context *context);
 int  tls_connect(mbedtls_ssl_context *context, int *sock, char *hostname);
 int  tls_send_buffer(mbedtls_ssl_context *context, const char *buffer, int size);
+#ifdef ENABLE_HTTP2
+int tls_accept_http2(mbedtls_ssl_config *config);
+bool tls_http2_accepted(mbedtls_ssl_context *context);
+#endif
 
 #endif
 

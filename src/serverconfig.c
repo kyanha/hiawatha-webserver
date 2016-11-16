@@ -168,6 +168,7 @@ static t_host *new_host(void) {
 	host->file_hashes         = NULL;
 #endif
 	host->websockets          = NULL;
+	init_charlist(&(host->skip_cache_cookies));
 
 	host->next                = NULL;
 
@@ -270,6 +271,9 @@ static t_binding *new_binding(void) {
 
 	binding->socket               = -1;
 	binding->poll_data            = NULL;
+#ifdef ENABLE_HTTP2
+	binding->accept_http2         = false;
+#endif
 
 	binding->next                 = NULL;
 
@@ -1729,13 +1733,38 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		if (parse_yesno(value, &(host->require_tls)) != 0) {
 			return false;
 		}
+
 		if (rest != NULL) {
+			if ((host->hsts_time = strdup(rest)) == NULL) {
+				return false;
+			}
+
+			if ((value = strchr(rest, ';')) != NULL) {
+				*value = '\0';
+				value++;
+			}
+
+			rest = remove_spaces(rest);
 			if ((time = str_to_int(rest)) < 0) {
 				return false;
 			}
-			if (time > 0) {
-				if ((host->hsts_time = strdup(rest)) == NULL) {
-					return false;
+
+			if (value != NULL) {
+				if ((rest = strchr(value, ';')) != NULL) {
+					*rest = '\0';
+					rest++;
+					rest = remove_spaces(rest);
+				}
+				value = remove_spaces(value);
+
+				if (strcasecmp(value, "includeSubDomains") == 0) {
+					value = rest;
+				}
+
+				if (value != NULL) {
+					if (strcasecmp(value, "preload") != 0) {
+						return false;
+					}
 				}
 			}
 		}
@@ -1765,6 +1794,10 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		}
 	} else if (strcmp(key, "secureurl") == 0) {
 		if (parse_yesno(value, &(host->secure_url)) == 0) {
+			return true;
+		}
+	} else if (strcmp(key, "skipcachecookie") == 0) {
+		if (parse_charlist(value, &(host->skip_cache_cookies)) == 0) {
 			return true;
 		}
 #ifdef ENABLE_TLS
@@ -2005,6 +2038,13 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 static bool binding_setting(char *key, char *value, t_binding *binding) {
 	char *rest;
 
+#ifdef ENABLE_HTTP2
+	if (strcmp(key, "accepthttp2") == 0) {
+		if (parse_yesno(value, &(binding->accept_http2)) == 0) {
+			return true;
+		}
+	} else
+#endif
 #ifdef HAVE_ACCF
 	if (strcmp(key, "enableaccf") == 0) {
 		if (parse_yesno(value, &(binding->enable_accf)) == 0) {

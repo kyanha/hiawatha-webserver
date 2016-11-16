@@ -352,8 +352,8 @@ static int process_url_toolkit(t_session *session, t_url_toolkit *toolkit, t_too
 		if ((session->location = strdup(toolkit_options->new_url)) == NULL) {
 			return -1;
 		}
-		session->cause_of_301 = location;
-		return 301;
+		session->cause_of_30x = location;
+		return toolkit_options->status_code;
 	}
 
 	if (result == UT_DENY_ACCESS) {
@@ -553,7 +553,7 @@ tunnel_ssh:
 	if (session->host->enforce_first_hostname && (session->hostname != NULL)) {
 		if (**(session->host->hostname.item) != '*') {
 			if (strcmp(session->hostname, *(session->host->hostname.item)) != 0) {
-				session->cause_of_301 = enforce_first_hostname;
+				session->cause_of_30x = enforce_first_hostname;
 				return 301;
 			}
 		}
@@ -568,7 +568,7 @@ tunnel_ssh:
 			session->vars = qmark + 1;
 			session->uri_len = strlen(session->uri);
 		}
-		session->cause_of_301 = require_tls;
+		session->cause_of_30x = require_tls;
 		return 301;
 	}
 #endif
@@ -703,6 +703,10 @@ no_websocket:
 		total_connections = count_registered_connections();
 	}
 
+	if (is_letsencrypt_authentication_request(session)) {
+		goto no_toolkit;
+	}
+
 	/* URL toolkit
 	 */
 	init_toolkit_options(&toolkit_options);
@@ -733,6 +737,8 @@ no_websocket:
 			i++;
 		}
 	}
+
+no_toolkit:
 #endif
 
 	/* Find GET data
@@ -871,7 +877,7 @@ no_websocket:
 			log_error(session, fb_filesystem);
 			return 403;
 		case not_found:
-			if (session->request_method == DELETE) {
+			if ((session->request_method == DELETE) && (session->host->webdav_app == false)) {
 				return 404;
 			}
 	}
@@ -1223,6 +1229,9 @@ static void connection_handler(t_session *session) {
 				handle_timeout(session);
 				break;
 			case TLS_HANDSHAKE_OKE:
+#ifdef ENABLE_HTTP2
+				session->use_http2 = tls_http2_accepted(&(session->tls_context));
+#endif
 				session->socket_open = true;
 				break;
 		}

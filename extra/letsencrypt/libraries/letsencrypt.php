@@ -78,7 +78,7 @@
 
 		/* Request Let's Encrypt certificate
 		 */
-		public function request_certificate($website_hostname, $cert_file = null) {
+		public function request_certificate($website_hostname, $cert_file = null, $reuse_key = false) {
 			/* Website root
 			 */
 			if (($website_root = $this->hiawatha->get_website_root($website_hostname)) == null) {
@@ -104,8 +104,13 @@
 
 			/* Generate RSA key
 			 */
-			printf("Generating RSA key.\n");
-			$rsa = new RSA(CERTIFICATE_RSA_KEY_SIZE);
+			if ($reuse_key == false) {
+				printf("Generating RSA key.\n");
+				$rsa = new RSA(CERTIFICATE_RSA_KEY_SIZE);
+			} else {
+				printf("Loading current RSA key.\n");
+				$rsa = new RSA($cert_file);
+			}
 
 			/* Generate CSR
 			 */
@@ -164,6 +169,8 @@
 					$number++;
 				}
 				printf("Using %s as output file.\n", $cert_file);
+			} else {
+				chmod($cert_file, 0600);
 			}
 
 			if (($fp = fopen($cert_file, "w")) == false) {
@@ -180,8 +187,18 @@
 			 */
 			if (($ca_url = $this->get_CA_url($certificate)) != false) {
 				printf("Retrieving CA certificate.\n");
-				list(,, $ca_hostname, $ca_path) = explode("/", $ca_url, 4);
-				$ca = new HTTP($ca_hostname);
+				list($protocol,, $ca_hostname, $ca_path) = explode("/", $ca_url, 4);
+				switch ($protocol) {
+					case "http:":
+						$ca = new HTTP($ca_hostname);
+						break;
+					case "https:":
+						$ca = new HTTPS($ca_hostname);
+						break;
+					default:
+						printf(" - Unknown protocol in CA url (%s)\n", $protocol);
+						return false;
+				}
 				$result = $ca->GET("/".$ca_path);
 				if ($result["status"] == 200) {
 					$ca_cert = $result["body"];

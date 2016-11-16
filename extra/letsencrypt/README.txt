@@ -8,7 +8,7 @@ When running the tool for the first time, it will create a Let's Encrypt
 account key. Make sure you make a backup of this account.key file.
 
 You can request a website certificate via: ./letsencrypt request <hostname>
-A virtual host for <hostname> must be present in the Hiawatha configuration
+A virtual host for <hostname> must be present in the webserver configuration
 and you must have write access rights to its website root. The <hostname>
 must be the first hostname for that virtual host. All other hostnames will
 be used as alternative hostnames for the certificate. Wildcards are not (yet)
@@ -27,9 +27,9 @@ website certificate.
 
 Certificates will be written to a file in the directory of this script. If you
 run the script as user root, the certificate will be written to the directory
-configured via the HIAWATHA_CERT_DIR setting.
+configured via the WEBSERVER_CERT_DIR setting.
 
 To automatically renew certificates that are about to get expired, run the
 letsencrypt tool with the parameter 'renew' as a cronjob of the user root.
-Add the parameter 'restart' to automatically restart Hiawatha when one or
+Add the parameter 'restart' to automatically restart the webserver when one or
 more certificates have been renewed.

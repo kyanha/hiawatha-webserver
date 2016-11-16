@@ -239,10 +239,10 @@ int monitor_event(char *event, ...) {
 
 /* Monitor version
  */
-int monitor_version(char *version) {
+int monitor_version(char *version, char *modules) {
 	char str[256];
 
-	if (snprintf(str, 256, "version\t%s\n", version) >= 255) {
+	if (snprintf(str, 256, "version\t%s%s\n", version, modules) >= 255) {
 		return -1;
 	}
 

@@ -33,6 +33,7 @@
 #include "filehashes.h"
 #include "mbedtls/md5.h"
 #ifdef ENABLE_TLS
+#include "mbedtls/platform.h"
 #include "mbedtls/ssl.h"
 #include "mbedtls/x509.h"
 #endif
@@ -521,9 +522,13 @@ int check_main_config(char *config_dir) {
 			inside_section = false;
 		} else if (inside_section == false) {
 			if (strcmp(haystack->key, "hostname") == 0) {
-				if (is_ip_address(haystack->value) == false) {
-					printf("Warning: it is wise to use your IP address as the hostname of the default website (line %d in '%s/%s') and give it a blank webpage. By doing so, automated webscanners won't find your possible vulnerable website.\n", haystack->linenr, config_dir, haystack->file);
-				}
+				rest = haystack->value;
+				do {
+					split_string(rest, &item, &rest, ',');
+					if (is_ip_address(item) == false) {
+						printf("Warning: it is wise to use your IP address as the hostname of the default website (line %d in '%s/%s') and give it a blank webpage. By doing so, automated webscanners won't find your possible vulnerable website.\n", haystack->linenr, config_dir, haystack->file);
+					}
+				} while (rest != NULL);
 				break;
 			}
 		}

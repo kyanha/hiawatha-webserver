@@ -295,7 +295,7 @@ void log_request(t_session *session) {
 		if (offset < BUFFER_SIZE) {
 			http_header = session->http_headers;
 			while (http_header != NULL) {
-				if ((strncasecmp("Cookie:", http_header->data, 7) != 0) && (strncasecmp("Authorization:", http_header->data, 14) != 0)) {
+				if ((strncasecmp("Cookie:", http_header->data, 7) != 0) && (strncasecmp("Authorization:", http_header->data, 14) != 0) && (strncasecmp("Proxy-Authorization:", http_header->data, 20) != 0)) {
 					snprintf(str + offset, BUFFER_SIZE - offset, "|%s", secure_string(http_header->data));
 					if ((offset += strlen(str + offset)) >= BUFFER_SIZE) {
 						break;

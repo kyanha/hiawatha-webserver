@@ -41,6 +41,7 @@ static pthread_mutex_t tomahawk_mutex;
 
 static char start_time[TIMESTAMP_SIZE];
 extern char *version_string;
+extern char *enabled_modules;
 
 static volatile unsigned long counters[COUNTER_MAX];
 static volatile unsigned long long transfer[TRANSFER_MAX];
@@ -225,7 +226,7 @@ static void show_help(FILE *fp) {
 }
 
 static void show_status(FILE *fp) {
-	fprintf(fp, "  %s\n", version_string);
+	fprintf(fp, "  %s%s\n", version_string, enabled_modules);
 	fprintf(fp, "  Start time        : %s\n\n", start_time);
 
 #ifdef ENABLE_CACHE

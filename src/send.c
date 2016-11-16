@@ -502,11 +502,18 @@ int send_http_code_header(t_session *session) {
 
 	switch (session->return_code) {
 		case 301:
+		case 302:
+		case 303:
+		case 304:
+		case 305:
+		case 306:
+		case 307:
+		case 308:
 			if (send_buffer(session, hs_lctn, 10) == -1) {
 				return -1;
 			}
 
-			if (session->cause_of_301 == enforce_first_hostname) {
+			if (session->cause_of_30x == enforce_first_hostname) {
 #ifdef ENABLE_TLS
 				if (session->binding->use_tls || session->host->require_tls) {
 					if (send_buffer(session, hs_https, 8) == -1) {
@@ -523,7 +530,7 @@ int send_http_code_header(t_session *session) {
 				}
 			}
 
-			if (session->cause_of_301 == location) {
+			if (session->cause_of_30x == location) {
 				if (session->location != NULL) {
 					if (send_buffer(session, session->location, strlen(session->location)) == -1) {
 						return -1;
@@ -536,7 +543,7 @@ int send_http_code_header(t_session *session) {
 			}
 
 #ifdef ENABLE_TLS
-			if (session->cause_of_301 == require_tls) {
+			if (session->cause_of_30x == require_tls) {
 				if (send_buffer(session, hs_https, 8) == -1) {
 					return -1;
 				}
@@ -555,7 +562,7 @@ int send_http_code_header(t_session *session) {
 				return -1;
 			}
 
-			if (session->cause_of_301 == missing_slash) {
+			if (session->cause_of_30x == missing_slash) {
 				if (send_buffer(session, "/", 1) == -1) {
 					return -1;
 				}

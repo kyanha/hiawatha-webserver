@@ -33,7 +33,7 @@
 static const struct {
 	const char *text;
 } sqli_detection[] = {
-	{"'\\s*--\\s"},
+	{"'\\s*--(\\s|')"},
 	{"\\s+(and|or|xor|&&|\\|\\|)\\s*\\(?\\s*('|[0-9]|`?[a-z\\._-]+`?\\s*(=|like)|[a-z]+\\s*\\()"},
 	{"\\s+(not\\s+)?in\\s*\\(\\s*['0-9]"},
 	{"union(\\s+all)?(\\s*\\(\\s*|\\s+)select(`|\\s)"},
@@ -89,7 +89,7 @@ static void clear_session(t_session *session) {
 	session->local_user = NULL;
 	session->header_sent = false;
 	session->data_sent = false;
-	session->cause_of_301 = missing_slash;
+	session->cause_of_30x = missing_slash;
 	session->header_length = 0;
 	session->content_length = 0;
 	session->file_on_disk = NULL;
@@ -106,7 +106,7 @@ static void clear_session(t_session *session) {
 	session->directory = NULL;
 	session->handling_error = false;
 	session->reason_for_403 = "";
-	session->cookie = NULL;
+	session->cookies = NULL;
 	session->bytes_sent = 0;
 	session->output_size = 0;
 	session->return_code = 200;
@@ -115,7 +115,6 @@ static void clear_session(t_session *session) {
 	session->log_request = true;
 	session->tempdata = NULL;
 	session->uploaded_file = NULL;
-	session->uploaded_size = 0;
 	session->location = NULL;
 	session->send_date = true;
 	session->send_expires = false;
@@ -156,6 +155,10 @@ void init_session(t_session *session) {
 
 #ifdef ENABLE_RPROXY
 	session->rproxy_kept_alive = false;
+#endif
+
+#ifdef ENABLE_HTTP2
+	session->use_http2 = false;
 #endif
 }
 
@@ -600,16 +603,14 @@ int remove_port_from_hostname(t_session *session) {
 
 /* Prevent cross-site scripting.
  */
-int prevent_xss(t_session *session) {
+
+static int prevent_xss_str(t_session *session, char *input) {
 	int result = 0;
-	bool logged = false;
 	short low, high;
 	char *str, value;
 	char tag[22];
 
-	if ((str = session->vars) == NULL) {
-		return 0;
-	}
+	str = input;
 
 	while (*str != '\0') {
 		if ((value = *str) == '%') {
@@ -629,28 +630,42 @@ int prevent_xss(t_session *session) {
 			strlower(tag);
 
 			if ((memcmp(tag, "script", 6) == 0) && ((tag[6] == ' ') || (tag[6] == '>'))) {
+				log_exploit_attempt(session, "XSS", input);
+#ifdef ENABLE_TOMAHAWK
+				increment_counter(COUNTER_EXPLOIT);
+#endif
+#ifdef ENABLE_MONITOR
+				if (session->config->monitor_enabled) {
+					monitor_count_exploit_attempt(session);
+					monitor_event("XSS attempt for %s%s", session->host->hostname.item[0], session->uri);
+				}
+#endif
+
 				if (session->host->prevent_xss == p_prevent) {
 					*str = '_';
 				}
+
 				result = 1;
 
-				if (logged == false) {
-					log_exploit_attempt(session, "XSS", session->vars);
-#ifdef ENABLE_TOMAHAWK
-					increment_counter(COUNTER_EXPLOIT);
-#endif
-#ifdef ENABLE_MONITOR
-					if (session->config->monitor_enabled) {
-						monitor_count_exploit_attempt(session);
-						monitor_event("XSS attempt for %s%s", session->host->hostname.item[0], session->uri);
-					}
-#endif
-					logged = true;
-				}
+				break;
 			}
 		}
 
 		str++;
+	}
+
+	return result;
+}
+
+int prevent_xss(t_session *session) {
+	int result = 0;
+
+	if (session->vars != NULL) {
+		result += prevent_xss_str(session, session->vars);
+	}
+
+	if ((session->body != NULL) && session->request_limit) {
+		result += prevent_xss_str(session, session->body);
 	}
 
 	return result;
@@ -806,8 +821,8 @@ int prevent_sqli(t_session *session) {
 		}
 	}
 
-	if (session->cookie != NULL) {
-		if ((result = prevent_sqli_str(session, session->cookie, strlen(session->cookie))) != 0) {
+	if (session->cookies != NULL) {
+		if ((result = prevent_sqli_str(session, session->cookies, strlen(session->cookies))) != 0) {
 			return result;
 		}
 	}
@@ -845,7 +860,7 @@ int prevent_csrf(t_session *session) {
 	} else {
 		session->request_method = GET;
 		session->body = NULL;
-		session->cookie = NULL;
+		session->cookies = NULL;
 
 		log_error(session, "invalid referer while checking for CSRF");
 
@@ -878,7 +893,7 @@ int prevent_csrf(t_session *session) {
 	if (session->host->prevent_csrf == p_prevent) {
 		session->request_method = GET;
 		session->body = NULL;
-		session->cookie = NULL;
+		session->cookies = NULL;
 	}
 
 #ifdef ENABLE_TOMAHAWK

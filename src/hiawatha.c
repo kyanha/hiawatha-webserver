@@ -74,12 +74,22 @@ static double current_server_load = 0;
 #endif
 
 char *fb_symlink     = "symlink not allowed";
-char *version_string = "Hiawatha v"VERSION
+char *version_string = "Hiawatha v"VERSION;
+char *enabled_modules = ""
 #ifdef ENABLE_CACHE
-	", cache"
+	", Cache"
+#endif
+#ifdef ENABLE_CHALLENGE
+	", ChallengeClient"
 #endif
 #ifdef ENABLE_DEBUG
 	", debug"
+#endif
+#ifdef ENABLE_FILEHASHES
+	", FileHashes"
+#endif
+#ifdef ENABLE_HTTP2
+	", HTTP/2"
 #endif
 #ifdef ENABLE_IPV6
 	", IPv6"
@@ -88,16 +98,19 @@ char *version_string = "Hiawatha v"VERSION
 	", Monitor"
 #endif
 #ifdef ENABLE_RPROXY
-	", reverse proxy"
+	", ReverseProxy"
 #endif
 #ifdef ENABLE_TLS
 	", TLS v"MBEDTLS_VERSION_STRING
+#endif
+#ifdef ENABLE_THREAD_POOL
+	", ThreadPool"
 #endif
 #ifdef ENABLE_TOMAHAWK
 	", Tomahawk"
 #endif
 #ifdef ENABLE_TOOLKIT
-	", URL toolkit"
+	", UrlToolkit"
 #endif
 #ifdef ENABLE_XSLT
 	", XSLT"
@@ -640,6 +653,13 @@ int run_webserver(t_settings *settings) {
 			if (tls_set_config(&(binding->tls_config), &tls_setup) != 0) {
 				return -1;
 			}
+
+#ifdef ENABLE_HTTP2
+			if (binding->use_tls && binding->accept_http2) {
+				tls_accept_http2(binding->tls_config);
+			}
+#endif
+
 		}
 #endif
 
@@ -903,7 +923,7 @@ int run_webserver(t_settings *settings) {
 			return -1;
 		}
 		monitor_event("Server start");
-		monitor_version(version_string);
+		monitor_version(version_string, enabled_modules);
 	}
 #endif
 #ifdef ENABLE_DEBUG
@@ -1116,7 +1136,8 @@ void show_help(char *hiawatha) {
 	printf("         -d: don't fork to the background.\n");
 	printf("         -h: show this information and exit.\n");
 	printf("         -k: check configuration and exit.\n");
-	printf("         -v: show version and compile information and exit.\n");
+	printf("         -m: show enabled modules and exit.\n");
+	printf("         -v: show version and copyright and exit.\n");
 }
 
 /* Main and stuff...
@@ -1148,9 +1169,16 @@ int main(int argc, char *argv[]) {
 			return EXIT_SUCCESS;
 		} else if (strcmp(argv[i], "-k") == 0) {
 			settings.config_check = true;
+		} else if (strcmp(argv[i], "-m") == 0) {
+			if (strlen(enabled_modules) == 0) {
+				enabled_modules = "none";
+			} else {
+				enabled_modules += 2;
+			}
+			printf("Enabled modules: %s\n", enabled_modules);
+			return EXIT_SUCCESS;
 		} else if (strcmp(argv[i], "-v") == 0) {
-			printf("%s\n", version_string);
-			printf("Copyright (c) by Hugo Leisink <hugo@leisink.net>\n");
+			printf("%s, copyright (c) by Hugo Leisink <hugo@leisink.net>\n", version_string);
 			return EXIT_SUCCESS;
 		} else {
 			fprintf(stderr, "Unknown option. Use '-h' for help.\n");

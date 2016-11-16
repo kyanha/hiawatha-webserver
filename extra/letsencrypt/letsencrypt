@@ -6,10 +6,14 @@
 	define("DAY", 86400);
 
 	function __autoload($class_name) {
-		$library = "libraries/".strtolower($class_name).".php";
-		if (file_exists($library)) {
-			include($library);
+		$library = __DIR__."/libraries/".strtolower($class_name).".php";
+
+		if (file_exists($library) == false) {
+			printf("Error including library for class %s.\n", $class_name);
+			exit;
 		}
+
+		include($library);
 	}
 
 	/* Configuration
@@ -25,6 +29,7 @@
 		printf("Usage: %s <command>\n", $executable);
 		printf("Commands: register: Register your account key at the Let's Encrypt CA.\n");
 		printf("          request <hostname> [<cert.pem>]: Request new certificate for website.\n");
+		printf("          expire: show number of days left before certificate expires.\n");
 		printf("          renew [restart]: Renew the almost expired Let's Encrypt certificates\n");
 		printf("                           in Hiawatha's certificate directory.\n");
 		printf("          revoke <cert.pem>: Revoke the certificate.\n");
@@ -47,6 +52,7 @@
 		}
 		fputs($fp, $account_key->private_key);
 		fclose($fp);
+		chmod("account.key", 0400);
 	} else {
 		$account_key = new RSA("account.key");
 	}
@@ -57,7 +63,9 @@
 
 	/* Execute commands
 	 */
-	switch ($argv[1]) {
+	$command = $argv[1];
+
+	switch ($command) {
 		case "register":
 			/* Account registration
 			 */
@@ -75,6 +83,7 @@
 			$lets_encrypt->request_certificate($argv[2], $argv[3]);
 			break;
 		case "renew":
+		case "expire":
 			/* Renew certificates
 			 */
 			if (($dp = opendir(HIAWATHA_CERT_DIR)) == false) {
@@ -87,11 +96,17 @@
 			$now = time();
 			$restart = false;
 
+			$cert_files = array();
 			while (($file = readdir($dp)) !== false) {
 				if (substr($file, 0, 1) == ".") {
 					continue;
 				}
 
+				array_push($cert_files, $file);
+			}
+			sort($cert_files);
+
+			foreach ($cert_files as $file) {
 				/* Read certificate
 				 */
 				$cert_file = HIAWATHA_CERT_DIR."/".$file;
@@ -103,22 +118,32 @@
 					continue;
 				}
 
-				/* Check if certificate is ready to be renewed
+				/* Check if issuer is Let's Encrypt
 				 */
 				if (in_array($x509["issuer"]["CN"], $lets_encrypt_issuers) == false) {
 					continue;
-				} else if ($x509["validTo_time_t"] - RENEWAL_EXPIRE_THRESHOLD * DAY > $now) {
-					continue;
 				}
 
-				/* Renew certificate
-				 */
-				printf("Renewing certificate for %s.\n", $x509["subject"]["CN"]);
-				if ($lets_encrypt->request_certificate($x509["subject"]["CN"], $cert_file) == false) {
-					break;
-				}
+				if ($command == "expire") {
+					$days_left = ($x509["validTo_time_t"] - $now) / DAY;
+					printf("%-35s %2d\n", $x509["subject"]["CN"], $days_left);
+				} else {
+					/* Check if certificate is ready to be renewed
+					 */
+					if ($x509["validTo_time_t"] - RENEWAL_EXPIRE_THRESHOLD * DAY > $now) {
+						continue;
+					}
 
-				$restart = true;
+					/* Renew certificate
+					 */
+					printf("Renewing certificate for %s.\n", $x509["subject"]["CN"]);
+					$reuse_key = in_array(strtolower(RENEWAL_REUSE_KEY), array("yes", "true"));
+					if ($lets_encrypt->request_certificate($x509["subject"]["CN"], $cert_file, $reuse_key) == false) {
+						break;
+					}
+
+					$restart = true;
+				}
 			}
 
 			closedir($dp);

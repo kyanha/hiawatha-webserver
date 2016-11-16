@@ -146,7 +146,22 @@ static bool parse_parameters(t_toolkit_rule *new_rule, char *value, char **opera
 
 		if (rest == NULL) {
 			return false;
-		} else if ((new_rule->parameter = strdup(rest)) == NULL) {
+		}
+
+		split_string(rest, &value, &rest, ' ');
+
+		if (rest != NULL) {
+			new_rule->value = str_to_int(value);
+			if ((new_rule->value < 301) || (new_rule->value > 308)) {
+				return false;
+			}
+
+			value = rest;
+		} else {
+			new_rule->value = 301;
+		}
+
+		if ((new_rule->parameter = strdup(value)) == NULL) {
 			return false;
 		}
 	} else if (strcasecmp(value, "return") == 0) {
@@ -754,6 +769,7 @@ int use_toolkit(char *url, t_url_toolkit *toolkit, t_toolkit_options *options) {
 					if (url_replaced) {
 						free(url);
 					}
+					options->status_code = rule->value;
 					return UT_REDIRECT;
 				} else if (url_replaced) {
 					options->new_url = url;

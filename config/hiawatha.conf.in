@@ -27,7 +27,7 @@ Binding {
 #
 #Binding {
 #	Port = 443
-#	TLScertFile = ssl/hiawatha.pem
+#	TLScertFile = tls/hiawatha.pem
 #	Interface = 127.0.0.1
 #	MaxRequestSize = 2048
 #	TimeForRequest = 30
@@ -55,8 +55,8 @@ Binding {
 #CGIextension = cgi
 #
 #FastCGIserver {
-#	FastCGIid = PHP5
-#	ConnectTo = /var/lib/hiawatha/php-fcgi.sock
+#	FastCGIid = PHP7
+#	ConnectTo = /run/php/php7.0-fpm.sock
 #	Extension = php
 #}
 
@@ -113,7 +113,7 @@ ErrorLogfile = @LOG_DIR@/error.log
 #	AccessLogfile = /var/www/my-domain/log/access.log
 #	ErrorLogfile = /var/www/my-domain/log/error.log
 #	TimeForCGI = 5
-#	UseFastCGI = PHP5
+#	UseFastCGI = PHP7
 #	UseToolkit = banshee
 #	UseDirectory = static, files
 #}

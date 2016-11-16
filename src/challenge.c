@@ -40,7 +40,7 @@ static char secret[SECRET_SIZE];
 static int get_random(char *buffer, size_t size) {
 	int fp, result = 0;
 
-	if ((fp = open("/dev/random", O_RDONLY)) == -1) {
+	if ((fp = open("/dev/urandom", O_RDONLY)) == -1) {
 		return -1;
 	}
 

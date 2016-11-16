@@ -19,6 +19,7 @@
 #include <stdbool.h>
 #include <regex.h>
 #ifdef ENABLE_TLS
+#include "mbedtls/platform.h"
 #include "mbedtls/ssl.h"
 #endif
 #include "ip.h"
@@ -53,9 +54,9 @@ typedef struct {
 	char          *hostname;
 	t_http_header *http_headers;
 	char          *body;
+	char          *uploaded_file;
 	int           content_length;
 	char          *remote_user;
-	char          *uploaded_file;
 #ifdef ENABLE_TLS
 	bool          use_tls;
 #endif

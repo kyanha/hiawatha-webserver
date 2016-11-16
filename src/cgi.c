@@ -418,7 +418,7 @@ pid_t fork_cgi_process(t_session *session, t_cgi_info *cgi_info) {
 			cgi_info->from_cgi = html_pipe[0];
 			cgi_info->cgi_error = error_pipe[0];
 
-			if ((session->body != NULL) && (session->content_length > 0)) {
+			if (session->body != NULL) {
 				/* Send POST data to CGI program.
 				 */
 				if (write_buffer(cgi_info->to_cgi, session->body, session->content_length) == -1) {
@@ -592,7 +592,7 @@ int send_fcgi_request(t_session *session, int sock) {
 	}
 
 	fcgi_buffer.type = FCGI_STDIN;
-	if ((session->body != NULL) && (session->content_length > 0)) {
+	if (session->body != NULL) {
 		/* Send POST data to FastCGI program.
 		 */
 		if (send_fcgi_buffer(&fcgi_buffer, session->body, session->content_length) == -1) {
