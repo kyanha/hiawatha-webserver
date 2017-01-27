@@ -1,97 +1,86 @@
-#!/bin/sh
-# Description: Starts and stops the Hiawatha service
-#              used to provide reverce proxy status.
-# chkconfig: - 80 30
+#! /bin/sh
 
-prefix=/usr/local
-exec_prefix=${prefix}
-HIAWATHA=${exec_prefix}/sbin/hiawatha
-PIDFILE=${exec_prefix}/var/run/hiawatha.pid
+### BEGIN INIT INFO
+# Provides:          hiawatha httpd httpd-cgi
+# Required-Start:    $syslog $network $remote_fs
+# Required-Stop:     $syslog $network $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Hiawatha webserver
+# Description:       Hiawatha, a secure and advanced webserver.
+### END INIT INFO
 
-status_hiawatha () {
-	if ps -p $hiawathaPID > /dev/null 2>&1; then
-		return 0
+# Source function library.
+. /etc/init.d/functions
+
+# /etc/init.d/hiawatha: start and stop the Hiawatha webserver daemon
+NAME=Hiawatha
+DAEMON=/usr/sbin/hiawatha
+WIGWAM=/usr/sbin/wigwam
+PIDFILE=/var/run/hiawatha.pid
+
+RETVAL=0
+
+start() {
+	[ -x $DAEMON ] || exit 5
+
+	umask 077
+
+	if [ -f $PIDFILE ]; then
+		echo $NAME is already running.
+		return 1
 	fi
 
-	return 1
+	echo -n $"Starting Hiawatha webserver: "
+	$WIGWAM -q || failure
+	daemon $DAEMON
+	RETVAL=$?
+	echo
+	return $RETVAL
 }
-
-printstatus_hiawatha() {
-	if status_hiawatha $1 $2; then
-		echo "hiawatha (pid $hiawathaPID) is running..."
-	else
-		echo "hiawatha is not running"
+stop() {
+	if [ ! -f $PIDFILE ]; then
+		echo $NAME is not running.
+		return 1
 	fi
+
+	echo -n $"Shutting down Hiawatha webserver: "
+	killproc -p "$PIDFILE" $DAEMON
+	RETVAL=$?
+	[ $RETVAL -eq 0 ] && success
+	echo
+	return $RETVAL
+}
+rhstatus() {
+	status -p "$PIDFILE" -l $NAME $DAEMON
+}
+restart() {
+	stop
+	start
 }
 
-killproc_hiawatha () {
-	kill $2 $hiawathaPID
-}
-
-pid_hiawatha () {
-	if test ! -f ${PIDFILE}; then
-	echo "No lock file found in ${PIDFILE}"
-	exit 1
-	fi
-	hiawathaPID=`head -n 1 ${PIDFILE}`
-}
-
-# Check that hiawatha exists.
-if [ ! -f ${HIAWATHA} ]; then
-	echo "Executable file ${HIAWATHA} not found.  Exiting."
-	exit 1
-fi
-
-# See how we were called.
 case "$1" in
 	start)
-		echo -n "Starting hiawatha: "
-		echo
-		if [ -f ${PIDFILE} ]; then
-			pid_hiawatha
-			printstatus_hiawatha hiawatha
-		else
-			/usr/local/sbin/hiawatha
-		fi
+		start
 		;;
-
 	stop)
-		echo -n "Stopping hiawatha: "
-		echo
-		pid_hiawatha
-		killproc_hiawatha hiawatha
-
-		for i in 1 2 3 4 5 6 7 8 9 10 ; do
-		if status_hiawatha > /dev/null; then
-			echo -n '.'
-			sleep 1
-		else
-			break
-		fi
-		done
-		if status_hiawatha > /dev/null; then
-			echo ''
-			echo 'Warning - hiawatha did not exit in a timely manner'
-		else
-			rm -f ${PIDFILE}
-			echo 'done.'
-		fi
+		stop
 		;;
-
-	status)
-		pid_hiawatha
-		printstatus_hiawatha hiawatha
-		;;
-
 	restart)
-		printf "Restarting hiawatha..."
-		$0 stop
-		$0 start
+		restart
 		;;
-
+	reload)
+		exit 3
+		;;
+	force-reload)
+		restart
+		;;
+	status)
+		rhstatus
+		;;
 	*)
-		echo "Usage: hiawatha {start|stop|restart|status}"
-		exit 1
-		;;
-
+		echo $"Usage: $0 {start|stop|restart|status}"
+		exit 3
 esac
+
+exit $?

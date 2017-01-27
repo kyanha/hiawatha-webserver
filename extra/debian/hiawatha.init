@@ -72,7 +72,7 @@ case "$1" in
 			log_end_msg 1 || true
 		fi
 		;;
-	
+
 	check)
 		echo "==[ Check by Wigwam"
 		/usr/sbin/wigwam

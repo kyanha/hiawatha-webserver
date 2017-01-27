@@ -366,7 +366,7 @@ int send_header(t_session *session) {
 
 	/* Custom headers
 	 */
-	header = session->host->custom_headers;
+	header = session->host->custom_headers_client;
 	while (header != NULL) {
 		if (send_buffer(session, header->key, strlen(header->key)) == -1) {
 			return -1;

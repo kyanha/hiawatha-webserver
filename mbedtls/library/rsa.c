@@ -2,19 +2,21 @@
  *  The RSA public-key cryptosystem
  *
  *  Copyright (C) 2006-2015, ARM Limited, All Rights Reserved
- *  SPDX-License-Identifier: Apache-2.0
+ *  SPDX-License-Identifier: GPL-2.0
  *
- *  Licensed under the Apache License, Version 2.0 (the "License"); you may
- *  not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
- *  http://www.apache.org/licenses/LICENSE-2.0
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- *  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  *
  *  This file is part of mbed TLS (https://tls.mbed.org)
  */
@@ -102,7 +104,10 @@ int mbedtls_rsa_gen_key( mbedtls_rsa_context *ctx,
     if( f_rng == NULL || nbits < 128 || exponent < 3 )
         return( MBEDTLS_ERR_RSA_BAD_INPUT_DATA );
 
-    mbedtls_mpi_init( &P1 ); mbedtls_mpi_init( &Q1 ); 
+    if( nbits % 2 )
+        return( MBEDTLS_ERR_RSA_BAD_INPUT_DATA );
+
+    mbedtls_mpi_init( &P1 ); mbedtls_mpi_init( &Q1 );
     mbedtls_mpi_init( &H ); mbedtls_mpi_init( &G );
 
     /*
@@ -116,16 +121,8 @@ int mbedtls_rsa_gen_key( mbedtls_rsa_context *ctx,
         MBEDTLS_MPI_CHK( mbedtls_mpi_gen_prime( &ctx->P, nbits >> 1, 0,
                                 f_rng, p_rng ) );
 
-        if( nbits % 2 )
-        {
-            MBEDTLS_MPI_CHK( mbedtls_mpi_gen_prime( &ctx->Q, ( nbits >> 1 ) + 1, 0,
+        MBEDTLS_MPI_CHK( mbedtls_mpi_gen_prime( &ctx->Q, nbits >> 1, 0,
                                 f_rng, p_rng ) );
-        }
-        else
-        {
-            MBEDTLS_MPI_CHK( mbedtls_mpi_gen_prime( &ctx->Q, nbits >> 1, 0,
-                                f_rng, p_rng ) );
-        }
 
         if( mbedtls_mpi_cmp_mpi( &ctx->P, &ctx->Q ) == 0 )
             continue;
@@ -133,6 +130,9 @@ int mbedtls_rsa_gen_key( mbedtls_rsa_context *ctx,
         MBEDTLS_MPI_CHK( mbedtls_mpi_mul_mpi( &ctx->N, &ctx->P, &ctx->Q ) );
         if( mbedtls_mpi_bitlen( &ctx->N ) != nbits )
             continue;
+
+        if( mbedtls_mpi_cmp_mpi( &ctx->P, &ctx->Q ) < 0 )
+                                mbedtls_mpi_swap( &ctx->P, &ctx->Q );
 
         MBEDTLS_MPI_CHK( mbedtls_mpi_sub_int( &P1, &ctx->P, 1 ) );
         MBEDTLS_MPI_CHK( mbedtls_mpi_sub_int( &Q1, &ctx->Q, 1 ) );

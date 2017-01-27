@@ -4,19 +4,21 @@
  * \brief Internal functions shared by the SSL modules
  *
  *  Copyright (C) 2006-2015, ARM Limited, All Rights Reserved
- *  SPDX-License-Identifier: Apache-2.0
+ *  SPDX-License-Identifier: GPL-2.0
  *
- *  Licensed under the Apache License, Version 2.0 (the "License"); you may
- *  not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
- *  http://www.apache.org/licenses/LICENSE-2.0
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- *  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  *
  *  This file is part of mbed TLS (https://tls.mbed.org)
  */
@@ -355,6 +357,11 @@ int mbedtls_ssl_send_fatal_handshake_failure( mbedtls_ssl_context *ssl );
 void mbedtls_ssl_reset_checksum( mbedtls_ssl_context *ssl );
 int mbedtls_ssl_derive_keys( mbedtls_ssl_context *ssl );
 
+int mbedtls_ssl_read_record_layer( mbedtls_ssl_context *ssl );
+int mbedtls_ssl_handle_message_type( mbedtls_ssl_context *ssl );
+int mbedtls_ssl_prepare_handshake_record( mbedtls_ssl_context *ssl );
+void mbedtls_ssl_update_handshake_status( mbedtls_ssl_context *ssl );
+
 int mbedtls_ssl_read_record( mbedtls_ssl_context *ssl );
 int mbedtls_ssl_fetch_input( mbedtls_ssl_context *ssl, size_t nb_want );
 
@@ -384,6 +391,7 @@ mbedtls_pk_type_t mbedtls_ssl_pk_alg_from_sig( unsigned char sig );
 
 mbedtls_md_type_t mbedtls_ssl_md_alg_from_hash( unsigned char hash );
 unsigned char mbedtls_ssl_hash_from_md_alg( int md );
+int mbedtls_ssl_set_calc_verify_md( mbedtls_ssl_context *ssl, int md );
 
 #if defined(MBEDTLS_ECP_C)
 int mbedtls_ssl_check_curve( const mbedtls_ssl_context *ssl, mbedtls_ecp_group_id grp_id );

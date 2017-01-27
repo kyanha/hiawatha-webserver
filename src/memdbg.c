@@ -1,6 +1,6 @@
 #include "config.h"
 
-#ifdef ENABLE_DEBUG
+#ifdef ENABLE_MEMDBG
 
 #define MAXIMUM_LINES  10
 #define CHARS_PER_LINE 16

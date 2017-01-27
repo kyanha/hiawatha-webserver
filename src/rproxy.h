@@ -57,6 +57,7 @@ typedef struct {
 	char          *uploaded_file;
 	int           content_length;
 	char          *remote_user;
+	t_keyvalue    *custom_headers;
 #ifdef ENABLE_TLS
 	bool          use_tls;
 #endif

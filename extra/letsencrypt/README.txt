@@ -12,7 +12,7 @@ A virtual host for <hostname> must be present in the webserver configuration
 and you must have write access rights to its website root. The <hostname>
 must be the first hostname for that virtual host. All other hostnames will
 be used as alternative hostnames for the certificate. Wildcards are not (yet)
-supported by Let's Encrypt, so they will not be used as alternative names
+supported by Let's Encrypt, so they will not be used as an alternative name
 in the certificate. Unless you specify a filename as the third parameter,
 the requested certificate will be stored in the file <hostname>.pem. When
 requesting a Let's Encrypt certificate, make sure your website is reachable
@@ -27,7 +27,7 @@ website certificate.
 
 Certificates will be written to a file in the directory of this script. If you
 run the script as user root, the certificate will be written to the directory
-configured via the WEBSERVER_CERT_DIR setting.
+configured via the HIAWATHA_CERT_DIR setting.
 
 To automatically renew certificates that are about to get expired, run the
 letsencrypt tool with the parameter 'renew' as a cronjob of the user root.

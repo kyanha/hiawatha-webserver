@@ -41,7 +41,7 @@
 		letter-spacing:1px;
 	}
 	thead th.timestamp {
-		width:160px;
+		width:175px;
 	}
 	thead th.size {
 		width:140px;

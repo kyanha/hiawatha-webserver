@@ -2,19 +2,21 @@
  *  X.509 certificate parsing and verification
  *
  *  Copyright (C) 2006-2015, ARM Limited, All Rights Reserved
- *  SPDX-License-Identifier: Apache-2.0
+ *  SPDX-License-Identifier: GPL-2.0
  *
- *  Licensed under the Apache License, Version 2.0 (the "License"); you may
- *  not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
- *  http://www.apache.org/licenses/LICENSE-2.0
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- *  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  *
  *  This file is part of mbed TLS (https://tls.mbed.org)
  */
@@ -1160,9 +1162,10 @@ int mbedtls_x509_crt_parse_path( mbedtls_x509_crt *chain, const char *path )
     FindClose( hFind );
 #else /* _WIN32 */
     int t_ret;
+    int snp_ret;
     struct stat sb;
     struct dirent *entry;
-    char entry_name[255];
+    char entry_name[MBEDTLS_X509_MAX_FILE_PATH_LEN];
     DIR *dir = opendir( path );
 
     if( dir == NULL )
@@ -1178,11 +1181,16 @@ int mbedtls_x509_crt_parse_path( mbedtls_x509_crt *chain, const char *path )
 
     while( ( entry = readdir( dir ) ) != NULL )
     {
-        mbedtls_snprintf( entry_name, sizeof entry_name, "%s/%s", path, entry->d_name );
+        snp_ret = mbedtls_snprintf( entry_name, sizeof entry_name,
+                                    "%s/%s", path, entry->d_name );
 
-        if( stat( entry_name, &sb ) == -1 )
+        if( snp_ret < 0 || (size_t)snp_ret >= sizeof entry_name )
         {
-            closedir( dir );
+            ret = MBEDTLS_ERR_X509_BUFFER_TOO_SMALL;
+            goto cleanup;
+        }
+        else if( stat( entry_name, &sb ) == -1 )
+        {
             ret = MBEDTLS_ERR_X509_FILE_IO_ERROR;
             goto cleanup;
         }
@@ -1198,9 +1206,10 @@ int mbedtls_x509_crt_parse_path( mbedtls_x509_crt *chain, const char *path )
         else
             ret += t_ret;
     }
-    closedir( dir );
 
 cleanup:
+    closedir( dir );
+
 #if defined(MBEDTLS_THREADING_PTHREAD)
     if( mbedtls_mutex_unlock( &mbedtls_threading_readdir_mutex ) != 0 )
         ret = MBEDTLS_ERR_THREADING_MUTEX_ERROR;

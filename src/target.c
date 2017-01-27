@@ -167,7 +167,7 @@ no_gzip:
 #ifdef ENABLE_FILEHASHES
 	/* File hashes
 	 */
-	if (session->host->file_hashes != NULL) {
+	if ((session->host->file_hashes != NULL) && (session->letsencrypt_auth_request == false)) {
 		if (file_hash_match(session->file_on_disk, session->host->file_hashes) == false) {
 			log_file_error(session, session->file_on_disk, "invalid file hash");
 #ifdef ENABLE_MONITOR
@@ -1740,6 +1740,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	options.uploaded_file = session->uploaded_file;
 	options.content_length = session->content_length;
 	options.remote_user = session->remote_user;
+	options.custom_headers = session->host->custom_headers_rproxy;
 #ifdef ENABLE_TLS
 	options.use_tls = session->binding->use_tls;
 #endif

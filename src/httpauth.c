@@ -493,7 +493,7 @@ int http_authentication_result(t_session *session, bool access_on_pwdfile_missin
 	char *auth_str;
 	int result = ha_DENIED;
 
-	if (is_letsencrypt_authentication_request(session)) {
+	if (session->letsencrypt_auth_request) {
 		return ha_ALLOWED;
 	}
 

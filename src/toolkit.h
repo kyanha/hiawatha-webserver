@@ -25,17 +25,19 @@
 #define UT_EXIT          1
 #define UT_REDIRECT    301
 #define UT_DENY_ACCESS 403
+#define UT_NOT_FOUND   404
 
-#define IU_EXISTS        0
-#define IU_ISFILE        1
-#define IU_ISDIR         2
+#define IU_NOTFOUND      0
+#define IU_EXISTS        1
+#define IU_ISFILE        2
+#define IU_ISDIR         3
 
 typedef enum { tc_none, tc_header, tc_match, tc_method, tc_request_uri, tc_total_connections
 #ifdef ENABLE_TLS
                , tc_use_tls
 #endif
                } t_toolkit_condition;
-typedef enum { to_none, to_ban, to_deny_access, to_fastcgi, to_omit_request_log,
+typedef enum { to_none, to_ban, to_deny_access, to_fastcgi, to_not_found, to_omit_request_log,
                to_redirect, to_rewrite, to_skip, to_sub, to_use } t_toolkit_operation;
 typedef enum { tf_continue, tf_exit, tf_return } t_toolkit_flow;
 

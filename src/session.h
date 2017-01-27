@@ -101,6 +101,7 @@ typedef struct type_session {
 #ifdef ENABLE_XSLT
 	char            *xslt_file;
 #endif
+	bool            letsencrypt_auth_request;
 
 	/* Throttling: send_buffer() in send.c
 	 */
@@ -167,6 +168,8 @@ int  prevent_csrf(t_session *session);
 void close_socket(t_session *session);
 int  handle_connection_not_allowed(t_session *session, int connections);
 bool file_can_be_compressed(t_session *session);
-bool is_letsencrypt_authentication_request(t_session *session);
+#ifdef ENABLE_DEBUG
+void printhex(char *str, int len);
+#endif
 
 #endif

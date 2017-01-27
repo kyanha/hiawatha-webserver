@@ -31,7 +31,7 @@
 #include "mbedtls/ssl_cache.h"
 #include "mbedtls/error.h"
 #include "mbedtls/version.h"
-#include "mbedtls/net.h"
+#include "mbedtls/net_sockets.h"
 #include "mbedtls/ssl.h"
 #include "mbedtls/x509.h"
 #ifdef ENABLE_DEBUG

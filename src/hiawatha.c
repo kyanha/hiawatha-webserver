@@ -169,7 +169,7 @@ void task_runner(t_config *config) {
 		if (delay >= TASK_RUNNER_INTERVAL) {
 			now = time(NULL);
 
-#ifdef ENABLE_DEBUG
+#ifdef ENABLE_MEMDBG
 			/* Print memory usage
 			 */
 		    memdbg_print_log(true);
@@ -368,6 +368,11 @@ int bind_sockets(t_binding *binding) {
 		} else if (binding->interface.family == AF_INET6) {
 			/* IPv6
 			 */
+			optval = 1;
+			if (setsockopt(binding->socket, IPPROTO_IPV6, IPV6_V6ONLY, &optval, sizeof(int)) < 0) {
+				perror("setsockopt(IPPROTO_IPV6, IPV6_V6ONLY)");
+			}
+
 			memset(&saddr6, 0, sizeof(struct sockaddr_in6));
 			saddr6.sin6_family = AF_INET6;
 			memcpy(&(saddr6.sin6_addr.s6_addr), &(binding->interface.value), IPv6_LEN);
@@ -926,7 +931,7 @@ int run_webserver(t_settings *settings) {
 		monitor_version(version_string, enabled_modules);
 	}
 #endif
-#ifdef ENABLE_DEBUG
+#ifdef ENABLE_MEMDBG
 	init_memdbg();
 #endif
 #ifdef ENABLE_CHALLENGE
@@ -994,7 +999,7 @@ int run_webserver(t_settings *settings) {
 	}
 	pthread_attr_destroy(&task_runner_attr);
 
-#ifdef ENABLE_DEBUG
+#ifdef ENABLE_MEMDBG
 	/* Clear memory debugger log
 	 */
 	memdbg_clear_log();

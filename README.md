@@ -38,7 +38,7 @@ The following path settings are available for cmake.
 	-DCMAKE_INSTALL_BINDIR=<path>      Location of the ssi-cgi binary.
 	-DCMAKE_INSTALL_SBINDIR=<path>     Location of the other Hiawatha binaries.
 	-DCMAKE_INSTALL_SYSCONFDIR=<path>  The configuration files will be installed in <path>/hiawatha.
-	-DCMAKE_INSTALL_LIBDIR=<path>      The mbed TLS shared library will be installed in <path>/hiawatha.
+	-DCMAKE_INSTALL_LIBDIR=<p9ath>      The mbed TLS shared library will be installed in <path>/hiawatha.
 	-DCMAKE_INSTALL_MANDIR=<path>      Manual pages will be installed in <path>/man1.
 	-DCONFIG_DIR=<path>                Location of the Hiawatha configuration files.
 	-DLOG_DIR=<path>                   Log directory used in the default hiawatha.conf.
@@ -52,6 +52,6 @@ Related projects
 ----------------
 The Hiawatha Monitor is a monitoring tool for Hiawatha. It helps you to keep track of all your Hiawatha installation. It's a PHP webapplication and requires a MySQL database and the cron daemon for periodic downloading of statistical information from the webservers it monitors. More information about the Hiawatha Monitor can be found at https://www.hiawatha-webserver.org/monitor.
 
-The Banshee PHP framework has also been written with security in mind. It has a Model-View-Controller architecture (XSLT for the views) and requires a MySQL database. More information about Banshee can be found at http://www.banshee-php.org/.
+The Banshee PHP framework has also been written with security in mind. It has a Model-View-Controller architecture (XSLT for the views) and requires a MySQL database. More information about Banshee can be found at https://www.banshee-php.org/.
 
 Other interesting projects can be found at http://projects.leisink.net/.

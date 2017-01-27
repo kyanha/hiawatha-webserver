@@ -378,6 +378,7 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 	bool forwarded_found = false, is_websocket = false;
 	t_send_buffer send_buffer;
 	int handle, bytes_read, skip_dir;
+	t_keyvalue *header;
 #ifdef ENABLE_CACHE
 	char extension[EXTENSION_SIZE];
 #endif
@@ -606,6 +607,23 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 		} else if (send_to_webserver(webserver, result, &send_buffer, "\r\n", 2) == -1) {
 			return -1;
 		}
+	}
+
+	/* Send custom headers
+	 */
+	header = options->custom_headers;
+	while (header != NULL) {
+		if (send_to_webserver(webserver, result, &send_buffer, header->key, strlen(header->key)) == -1) {
+			return -1;
+		} else if (send_to_webserver(webserver, result, &send_buffer, ": ", 2) == -1) {
+			return -1;
+		} else if (send_to_webserver(webserver, result, &send_buffer, header->value, strlen(header->value)) == -1) {
+			return -1;
+		} else if (send_to_webserver(webserver, result, &send_buffer, "\r\n", 2) == -1) {
+			return -1;
+		}
+
+		header = header->next;
 	}
 
 	/* Close header

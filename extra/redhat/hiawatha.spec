@@ -6,6 +6,7 @@ Group:          Applications/Internet
 License:        GPLv2
 URL:            https://www.hiawatha-webserver.org/
 Source0:        https://www.hiawatha-webserver.org/files/%{name}-%{version}.tar.gz
+Patch0:         nobody-99.patch
 
 BuildRoot:      %{_topdir}/BUILDROOT/
 BuildRequires:  make,gcc,glibc-devel,libxml2-devel,libxslt-devel
@@ -16,6 +17,7 @@ Hiawatha is a webserver with the three key attributes: secure, easy-to-use, and 
 
 %prep
 %setup -q
+%patch0 -p1
 
 %build
 CFLAGS="${CFLAGS:-%optflags}" ; export CFLAGS
@@ -34,7 +36,7 @@ mkdir -p  %{buildroot}
 mkdir -p %{buildroot}%{_defaultdocdir}/hiawatha
 cp ChangeLog %{buildroot}%{_defaultdocdir}/hiawatha
 mkdir -p %{buildroot}%{_initrddir}
-cp extra/debian/init.d/hiawatha %{buildroot}%{_initrddir}
+cp extra/redhat/hiawatha %{buildroot}%{_initrddir}
 sed -i "s/#ServerId/ServerId/" %{buildroot}%{_sysconfdir}/hiawatha/hiawatha.conf
 
 %post

@@ -120,6 +120,7 @@ static void clear_session(t_session *session) {
 	session->send_expires = false;
 	session->expires = -1;
 	session->caco_private = true;
+	session->letsencrypt_auth_request = false;
 #ifdef ENABLE_TOOLKIT
 	session->toolkit_fastcgi = NULL;
 #endif
@@ -980,6 +981,36 @@ bool file_can_be_compressed(t_session *session) {
 	return false;
 }
 
-bool is_letsencrypt_authentication_request(t_session *session) {
-	return strncmp(session->request_uri, "/.well-known/acme-challenge/", 28) == 0;
+#ifdef ENABLE_DEBUG
+void printhex(char *str, int len) {
+	int chars_per_line = 16, i, max_i;
+
+	while (len > 0) {
+		max_i = len > chars_per_line ? chars_per_line : len;
+
+		for (i = 0; i < max_i; i++) {
+			fprintf(stderr, "%02X ", *((unsigned char*)str + i));
+		}
+		for (i = max_i; i < chars_per_line; i++) {
+			fprintf(stderr, "   ");
+		}
+
+		fprintf(stderr, "  ");
+		for (i = 0; i < max_i; i++) {
+			if ((*((unsigned char*)str + i) >= 32) && (*((unsigned char*)str + i) <= 126)) {
+				fprintf(stderr, "%c", *((unsigned char*)str + i));
+			} else {
+				fprintf(stderr, ".");
+			}
+		}
+		for (i = max_i; i < chars_per_line; i++) {
+			fprintf(stderr, " ");
+		}
+
+		fprintf(stderr, "\n");
+
+		str += chars_per_line;
+		len -= chars_per_line;
+	}
 }
+#endif

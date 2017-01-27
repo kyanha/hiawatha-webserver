@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include "toolkit.h"
 #include "libstr.h"
@@ -138,6 +139,11 @@ static bool parse_parameters(t_toolkit_rule *new_rule, char *value, char **opera
 		} else if ((new_rule->parameter = strdup(rest)) == NULL) {
 			return false;
 		}
+	} else if (strcasecmp(value, "notfound") == 0) {
+		/* Fake a not found
+		 */
+		new_rule->operation = to_not_found;
+		new_rule->flow = tf_exit;
 	} else if (strcasecmp(value, "redirect") == 0) {
 		/* Redirect
 		 */
@@ -248,16 +254,16 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 	int cflags;
 	size_t len;
 	char *do_operations[] = {
-		"ban", "call", "denyaccess", "exit", "goto", "return", "omitrequestlog",
-		"skip", "use", NULL};
+		"ban", "call", "denyaccess", "exit", "goto", "notfound", "omitrequestlog",
+		"return", "skip", "use", NULL};
 	char *header_operations[] = {
-		"ban", "call", "denyaccess", "exit", "goto", "return", "omitrequestlog",
-		"skip", "use", NULL};
+		"ban", "call", "denyaccess", "exit", "goto", "notfound", "omitrequestlog",
+		"return", "skip", "use", NULL};
 	char *match_operations[] = {
-		"ban", "call", "denyaccess", "exit", "goto", "redirect", "return",
+		"ban", "call", "denyaccess", "exit", "goto", "notfound", "redirect", "return",
 		"rewrite", "skip", "usefastcgi", NULL};
 	char *method_operations[] = {
-		"call", "denyaccess", "exit", "goto", "return", "skip", "use", NULL};
+		"call", "denyaccess", "exit", "goto", "notfound", "return", "skip", "use", NULL};
 	char *requesturi_operations[] = {
 		"call", "exit", "return", "skip", NULL};
 	char *total_connections_operations[] = {
@@ -405,7 +411,9 @@ bool toolkit_setting(char *key, char *value, t_url_toolkit *toolkit) {
 			return false;
 		}
 
-		if (strcasecmp(value, "exists") == 0) {
+		if (strcasecmp(value, "notfound") == 0) {
+			new_rule->value = IU_NOTFOUND;
+		} else if (strcasecmp(value, "exists") == 0) {
 			new_rule->value = IU_EXISTS;
 		} else if (strcasecmp(value, "isfile") == 0) {
 			new_rule->value = IU_ISFILE;
@@ -700,6 +708,8 @@ int use_toolkit(char *url, t_url_toolkit *toolkit, t_toolkit_options *options) {
 							}
 							break;
 					}
+				} else if ((errno == ENOENT) && (rule->value == IU_NOTFOUND)) {
+					condition_met = true;
 				}
 
 				free(file);
@@ -751,6 +761,10 @@ int use_toolkit(char *url, t_url_toolkit *toolkit, t_toolkit_options *options) {
 				 */
 				options->fastcgi_server = rule->parameter;
 				break;
+			case to_not_found:
+				/* Fake a not found
+				 */
+				return UT_NOT_FOUND;
 			case to_redirect:
 				/* Redirect client
 				 */

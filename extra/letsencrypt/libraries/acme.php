@@ -211,15 +211,10 @@
 			} while ($body["status"] == "pending");
 
 			if ($body["status"] != "valid") {
+				printf(" - %s.\n", $body["error"]["detail"]);
 				printf(" - No valid authorization key received.\n");
 				return false;
 			}
-
-			/* Clean up
-			 */
-			unlink($dir."/".$challenge["token"]);
-			rmdir($dir);
-			rmdir($website_root."/.well-known");
 
 			return $body;
 		}
@@ -240,6 +235,21 @@
 			*/
 			printf(" - Retrieving authorization key.\n");
 			$authorization = $this->get_authorization_key($website_root, $challenge);
+
+			/* Clean up
+			 */
+			$subdir = "/.well-known/acme-challenge";
+			if (($dp = opendir($website_root.$subdir)) !== false) {
+				while (($file = readdir($dp)) !== false) {
+					if (substr($file, 0, 1) != ".") {
+						unlink($website_root.$subdir."/".$file);
+					}
+				}
+				closedir($dp);
+			}
+			rmdir($website_root.$subdir);
+			rmdir($website_root."/.well-known");
+
 			if ($authorization == false) {
 				printf(" - Error while retrieving authorization key.\n");
 				return false;

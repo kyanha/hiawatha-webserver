@@ -53,6 +53,7 @@ mkdir -p ${HOME}/rpmbuild/SOURCES
 tar -czf ${HOME}/rpmbuild/SOURCES/hiawatha-${version}.tar.gz hiawatha-${version}
 cd hiawatha-${version}
 sed "s/VERSION/${version}/" extra/redhat/hiawatha.spec > build_redhat_package/hiawatha.spec
+cp extra/redhat/*.patch ${HOME}/rpmbuild/SOURCES
 
 # Make Red Hat package
 #

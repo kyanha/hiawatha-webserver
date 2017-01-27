@@ -8,19 +8,21 @@
  *  memory footprint.
  *
  *  Copyright (C) 2006-2015, ARM Limited, All Rights Reserved
- *  SPDX-License-Identifier: Apache-2.0
+ *  SPDX-License-Identifier: GPL-2.0
  *
- *  Licensed under the Apache License, Version 2.0 (the "License"); you may
- *  not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
- *  http://www.apache.org/licenses/LICENSE-2.0
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- *  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  *
  *  This file is part of mbed TLS (https://tls.mbed.org)
  */
@@ -70,6 +72,10 @@
  * System has time.h and time().
  * The time does not need to be correct, only time differences are used,
  * by contrast with MBEDTLS_HAVE_TIME_DATE
+ *
+ * Defining MBEDTLS_HAVE_TIME allows you to specify MBEDTLS_PLATFORM_TIME_ALT,
+ * MBEDTLS_PLATFORM_TIME_MACRO, MBEDTLS_PLATFORM_TIME_TYPE_MACRO and
+ * MBEDTLS_PLATFORM_STD_TIME.
  *
  * Comment if your system does not support time functions
  */
@@ -147,6 +153,8 @@
  *
  * \warning MBEDTLS_PLATFORM_XXX_ALT cannot be defined at the same time as
  * MBEDTLS_PLATFORM_XXX_MACRO!
+ *
+ * Requires: MBEDTLS_PLATFORM_TIME_ALT requires MBEDTLS_HAVE_TIME
  *
  * Uncomment a macro to enable alternate implementation of specific base
  * platform function
@@ -935,18 +943,6 @@
 //#define MBEDTLS_SHA256_SMALLER
 
 /**
- * \def MBEDTLS_SSL_AEAD_RANDOM_IV
- *
- * Generate a random IV rather than using the record sequence number as a
- * nonce for ciphersuites using and AEAD algorithm (GCM or CCM).
- *
- * Using the sequence number is generally recommended.
- *
- * Uncomment this macro to always use random IVs with AEAD ciphersuites.
- */
-//#define MBEDTLS_SSL_AEAD_RANDOM_IV
-
-/**
  * \def MBEDTLS_SSL_ALL_ALERT_MESSAGES
  *
  * Enable sending of alert messages in case of encountered errors as per RFC.
@@ -1666,6 +1662,19 @@
 #define MBEDTLS_CIPHER_C
 
 /**
+ * \def MBEDTLS_CMAC_C
+ *
+ * Enable the CMAC (Cipher-based Message Authentication Code) mode for block
+ * ciphers.
+ *
+ * Module:  library/cmac.c
+ *
+ * Requires: MBEDTLS_AES_C or MBEDTLS_DES_C
+ *
+ */
+//#define MBEDTLS_CMAC_C
+
+/**
  * \def MBEDTLS_CTR_DRBG_C
  *
  * Enable the CTR_DRBG AES-256-based random generator.
@@ -1954,7 +1963,7 @@
  * environment:
  * https://tls.mbed.org/kb/how-to/how-do-i-port-mbed-tls-to-a-new-environment-OS
  *
- * Module:  library/net.c
+ * Module:  library/net_sockets.c
  *
  * This module provides networking routines.
  */
@@ -2503,6 +2512,7 @@
 /* Entropy options */
 //#define MBEDTLS_ENTROPY_MAX_SOURCES                20 /**< Maximum number of sources supported */
 //#define MBEDTLS_ENTROPY_MAX_GATHER                128 /**< Maximum amount requested from entropy sources */
+//#define MBEDTLS_ENTROPY_MIN_HARDWARE               32 /**< Default minimum number of bytes required for the hardware entropy source mbedtls_hardware_poll() before entropy is released */
 
 /* Memory buffer allocator options */
 //#define MBEDTLS_MEMORY_ALIGN_MULTIPLE      4 /**< Align on multiples of this value */
@@ -2512,7 +2522,7 @@
 //#define MBEDTLS_PLATFORM_STD_CALLOC        calloc /**< Default allocator to use, can be undefined */
 //#define MBEDTLS_PLATFORM_STD_FREE            free /**< Default free to use, can be undefined */
 //#define MBEDTLS_PLATFORM_STD_EXIT            exit /**< Default exit to use, can be undefined */
-//#define MBEDTLS_PLATFORM_STD_TIME            time /**< Default time to use, can be undefined */
+//#define MBEDTLS_PLATFORM_STD_TIME            time /**< Default time to use, can be undefined. MBEDTLS_HAVE_TIME must be enabled */
 //#define MBEDTLS_PLATFORM_STD_FPRINTF      fprintf /**< Default fprintf to use, can be undefined */
 //#define MBEDTLS_PLATFORM_STD_PRINTF        printf /**< Default printf to use, can be undefined */
 /* Note: your snprintf must correclty zero-terminate the buffer! */
@@ -2528,8 +2538,8 @@
 //#define MBEDTLS_PLATFORM_CALLOC_MACRO        calloc /**< Default allocator macro to use, can be undefined */
 //#define MBEDTLS_PLATFORM_FREE_MACRO            free /**< Default free macro to use, can be undefined */
 //#define MBEDTLS_PLATFORM_EXIT_MACRO            exit /**< Default exit macro to use, can be undefined */
-//#define MBEDTLS_PLATFORM_TIME_MACRO            time /**< Default time macro to use, can be undefined */
-//#define MBEDTLS_PLATFORM_TIME_TYPE_MACRO       time_t /**< Default time macro to use, can be undefined */
+//#define MBEDTLS_PLATFORM_TIME_MACRO            time /**< Default time macro to use, can be undefined. MBEDTLS_HAVE_TIME must be enabled */
+//#define MBEDTLS_PLATFORM_TIME_TYPE_MACRO       time_t /**< Default time macro to use, can be undefined. MBEDTLS_HAVE_TIME must be enabled */
 //#define MBEDTLS_PLATFORM_FPRINTF_MACRO      fprintf /**< Default fprintf macro to use, can be undefined */
 //#define MBEDTLS_PLATFORM_PRINTF_MACRO        printf /**< Default printf macro to use, can be undefined */
 /* Note: your snprintf must correclty zero-terminate the buffer! */
@@ -2563,11 +2573,16 @@
 
 /* X509 options */
 //#define MBEDTLS_X509_MAX_INTERMEDIATE_CA   8   /**< Maximum number of intermediate CAs in a verification chain. */
+//#define MBEDTLS_X509_MAX_FILE_PATH_LEN     512 /**< Maximum length of a path/filename string in bytes including the null terminator character ('\0'). */
 
 /* \} name SECTION: Customisation configuration options */
 
 /* Target and application specific configurations */
-//#define YOTTA_CFG_MBEDTLS_USER_CONFIG_FILE "target_config.h"
+//#define YOTTA_CFG_MBEDTLS_TARGET_CONFIG_FILE "mbedtls/target_config.h"
+
+#if defined(TARGET_LIKE_MBED) && defined(YOTTA_CFG_MBEDTLS_TARGET_CONFIG_FILE)
+#include YOTTA_CFG_MBEDTLS_TARGET_CONFIG_FILE
+#endif
 
 /*
  * Allow user to override any previous default.

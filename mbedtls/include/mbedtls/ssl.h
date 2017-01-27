@@ -4,19 +4,21 @@
  * \brief SSL/TLS functions.
  *
  *  Copyright (C) 2006-2015, ARM Limited, All Rights Reserved
- *  SPDX-License-Identifier: Apache-2.0
+ *  SPDX-License-Identifier: GPL-2.0
  *
- *  Licensed under the Apache License, Version 2.0 (the "License"); you may
- *  not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
- *  http://www.apache.org/licenses/LICENSE-2.0
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- *  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  *
  *  This file is part of mbed TLS (https://tls.mbed.org)
  */
@@ -52,7 +54,7 @@
 #endif
 
 #if defined(MBEDTLS_HAVE_TIME)
-#include <time.h>
+#include "mbedtls/platform_time.h"
 #endif
 
 /*
@@ -107,6 +109,8 @@
 #define MBEDTLS_ERR_SSL_TIMEOUT                           -0x6800  /**< The operation timed out. */
 #define MBEDTLS_ERR_SSL_CLIENT_RECONNECT                  -0x6780  /**< The client initiated a reconnect from the same port. */
 #define MBEDTLS_ERR_SSL_UNEXPECTED_RECORD                 -0x6700  /**< Record header looks valid but is not expected. */
+#define MBEDTLS_ERR_SSL_NON_FATAL                         -0x6680  /**< The alert message received indicates a non-fatal error. */
+#define MBEDTLS_ERR_SSL_INVALID_VERIFY_HASH               -0x6600  /**< Couldn't set the hash for verifying CertificateVerify */
 
 /*
  * Various constants
@@ -1105,9 +1109,10 @@ void mbedtls_ssl_conf_dbg( mbedtls_ssl_config *conf,
  *                 \c mbedtls_ssl_recv_t and \c mbedtls_ssl_recv_timeout_t for
  *                 the conventions those callbacks must follow.
  *
- * \note           On some platforms, net.c provides \c mbedtls_net_send(),
- *                 \c mbedtls_net_recv() and \c mbedtls_net_recv_timeout()
- *                 that are suitable to be used here.
+ * \note           On some platforms, net_sockets.c provides
+ *                 \c mbedtls_net_send(), \c mbedtls_net_recv() and
+ *                 \c mbedtls_net_recv_timeout() that are suitable to be used
+ *                 here.
  */
 void mbedtls_ssl_set_bio( mbedtls_ssl_context *ssl,
                           void *p_bio,

@@ -114,7 +114,7 @@ static t_host *new_host(void) {
 	init_charlist(&(host->required_binding));
 	init_charlist(&(host->required_group));
 	init_charlist(&(host->alter_group));
-	host->custom_headers      = NULL;
+	host->custom_headers_client = NULL;
 #ifdef ENABLE_TOOLKIT
 	init_charlist(&(host->toolkit_rules_str));
 	host->toolkit_rules       = NULL;
@@ -142,6 +142,7 @@ static t_host *new_host(void) {
 #ifdef ENABLE_RPROXY
 	host->rproxy              = NULL;
 	init_charlist(&(host->use_rproxy));
+	host->custom_headers_rproxy = NULL;
 #endif
 	host->prevent_sqli        = p_no;
 	host->prevent_xss         = p_no;
@@ -1608,8 +1609,14 @@ static bool host_setting(char *key, char *value, t_host *host) {
 				return true;
 			}
 		}
-	} else if (strcmp(key, "customheader") == 0) {
-		if (parse_keyvalue(value, &(host->custom_headers), ":") != -1) {
+#ifdef ENABLE_RPROXY
+	} else if (strcmp(key, "customheaderbackend") == 0) {
+		if (parse_keyvalue(value, &(host->custom_headers_rproxy), ":") != -1) {
+			return true;
+		}
+#endif
+	} else if ((strcmp(key, "customheaderclient") == 0) || (strcmp(key, "customheader") == 0)) {
+		if (parse_keyvalue(value, &(host->custom_headers_client), ":") != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "denybody") == 0) {

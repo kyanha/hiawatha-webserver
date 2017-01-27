@@ -15,9 +15,11 @@ Options: -c <path>: path to where the configrationfiles are located.
 .br
          -d: don't fork to the background.
 .br
+         -h: show help and exit.
+.br
          -k: check configuration and exit.
 .br
-         -h: show help and exit.
+         -m: show enabled modules and exit.
 .br
          -v: show version and compile information and exit.
 
@@ -485,10 +487,17 @@ Allow a CGI application to ban a client via a 'X-Hiawatha-Ban: <value>' CGI head
 .br
 Default = no, example: BanByCGI = yes
 .TP
-.B CustomHeader = <key>: <value>
-Set a custom HTTP header for every response.
+.B CustomHeaderClient = <key>: <value>
+Set a custom HTTP header for every response sent to the client.
 .br
-Example: CustomHeader = Access-Control-Allow-Origin: *
+Example: CustomHeaderClient = Access-Control-Allow-Origin: *
+.TP
+.B CustomHeaderBackend = <key>: <value>
+Set a custom HTTP header for every request forwarded to the backend while acting as a reverse proxy.
+.br
+Example: CustomHeaderBackend = X-Custom-Header: some_value
+
+(requires that Hiawatha was not compiled with -DENABLE_RPROXY=off)
 .TP
 .B DenyBody = <regular expression>
 If the request body matches the case insensitive regular expression, return a 403 Forbidden.
@@ -616,6 +625,8 @@ Default = no, example: RequireTLS = yes, 2678400
 Forward the request with URLs that match the regular expression <pattern> to another webserver, where <path> is placed before the original URL. When <hostname> is an IP address, the value of the Host HTTP header is unchanged. Otherwise, it is replaced with the value of <hostname>. The optional <skip directories> is a number that indicates how many directories in the original URL should be skipped when sending it to the final webserver. The connection is closed after <timeout> seconds, which is set to 5 seconds by default. By default, Hiawatha doesn't use keep-alive connections to the final webserver. You can enable this by adding 'keep-alive' to the configuration line. When specifying multiple reverse proxies for one (virtual) host, Hiawatha prefers reverse proxies with a scheme (HTTP/HTTPS) matching the one of the client connection. See also CAcertificates.
 .br
 Example: ReverseProxy ^/icons/ 1 http://resources.lan/images
+
+(requires that Hiawatha was not compiled with -DENABLE_RPROXY=off)
 .TP
 .B RunOnAlter = <path to program>
 Run a program after a client has sent a PUT or a DELETE request. Information about the request is placed in environment variables, just like CGI
@@ -858,8 +869,8 @@ Call, DenyAccess, Exit, Goto, Return, Skip or Use
 .br
 Example: Method POST Return
 .TP
-.B RequestURI exists|isfile|isdir <action>
-Perform an action if the requested URL exists on disk, where <action> can be one of the following:
+.B RequestURI exists|isfile|isdir|notfound <action>
+Perform an action based on the presence of the requested file, where <action> can be one of the following:
 .br
 Call, Return, Exit or Skip.
 .br

@@ -3,7 +3,7 @@
 
 #include "config.h"
 
-#ifdef ENABLE_DEBUG
+#ifdef ENABLE_MEMDBG
 
 #include <stdbool.h>
 

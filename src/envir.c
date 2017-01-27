@@ -176,7 +176,7 @@ void set_environment(t_session *session, t_fcgi_buffer *fcgi_buffer) {
 		add_to_environment(fcgi_buffer, "QUERY_STRING", session->vars);
 	}
 
-	if (session->body != NULL) {
+	if ((session->body != NULL) || (session->uploaded_file != NULL)) {
 		snprintf(len, 19, "%ld", session->content_length);
 		len[19] = '\0';
 		add_to_environment(fcgi_buffer, "CONTENT_LENGTH", len);

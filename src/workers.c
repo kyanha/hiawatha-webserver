@@ -298,7 +298,7 @@ static t_access allow_client(t_session *session) {
 	t_ip_addr forwarded_ip;
 	t_access access;
 
-	if (is_letsencrypt_authentication_request(session)) {
+	if (session->letsencrypt_auth_request) {
 		return allow;
 	}
 
@@ -361,6 +361,11 @@ static int process_url_toolkit(t_session *session, t_url_toolkit *toolkit, t_too
 		return 403;
 	}
 
+	if (result == UT_NOT_FOUND) {
+		log_error(session, "not found faked via URL toolkit rule");
+		return 404;
+	}
+
 	if (result == UT_EXIT) {
 		return UT_EXIT;
 	}
@@ -408,6 +413,7 @@ static int serve_client(t_session *session) {
 #endif
 
 	session->time = time(NULL);
+	session->letsencrypt_auth_request = (strncmp(session->request_uri, "/.well-known/acme-challenge/", 28) == 0);
 
 	/* Hide reverse proxies
 	 */
@@ -562,7 +568,7 @@ tunnel_ssh:
 	/* Enforce usage of TLS
 	 */
 #ifdef ENABLE_TLS
-	if (session->host->require_tls && (session->binding->use_tls == false) && (is_letsencrypt_authentication_request(session) == false)) {
+	if (session->host->require_tls && (session->binding->use_tls == false) && (session->letsencrypt_auth_request == false)) {
 		if ((qmark = strchr(session->uri, '?')) != NULL) {
 			*qmark = '\0';
 			session->vars = qmark + 1;
@@ -615,11 +621,13 @@ tunnel_ssh:
 	}
 
 #ifdef ENABLE_RPROXY
-	rproxy = select_rproxy(session->host->rproxy, session->uri
+	if (session->letsencrypt_auth_request == false) {
+		rproxy = select_rproxy(session->host->rproxy, session->uri
 #ifdef ENABLE_TLS
-		, session->binding->use_tls
+			, session->binding->use_tls
 #endif
-		);
+			);
+	}
 #endif
 
 	/* Websocket
@@ -703,7 +711,7 @@ no_websocket:
 		total_connections = count_registered_connections();
 	}
 
-	if (is_letsencrypt_authentication_request(session)) {
+	if (session->letsencrypt_auth_request) {
 		goto no_toolkit;
 	}
 
@@ -1309,7 +1317,7 @@ static void connection_handler(t_session *session) {
 		remove_client(session, true);
 	}
 
-#ifdef ENABLE_DEBUG
+#ifdef ENABLE_MEMDBG
 	/* Show memory usage by thread
 	 */
 	memdbg_print_log(false);

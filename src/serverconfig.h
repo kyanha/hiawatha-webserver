@@ -248,7 +248,7 @@ typedef struct type_host {
 	t_charlist      required_binding;
 	t_charlist      required_group;
 	t_charlist      alter_group;
-	t_keyvalue      *custom_headers;
+	t_keyvalue      *custom_headers_client;
 	char            *wrap_cgi;
 	t_groups        groups;
 	t_accesslist    *access_list;
@@ -280,6 +280,7 @@ typedef struct type_host {
 #ifdef ENABLE_RPROXY
 	t_rproxy        *rproxy;
 	t_charlist      use_rproxy;
+	t_keyvalue      *custom_headers_rproxy;
 #endif
 	t_prevent       prevent_sqli;
 	t_prevent       prevent_xss;

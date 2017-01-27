@@ -1,7 +1,7 @@
 #!/bin/sh
 
 if [ ! -d /Applications ]; then
-	echo "MacOS X required."
+	echo "MacOS required."
 	exit
 fi
 
@@ -48,13 +48,13 @@ strip cgi-wrapper hiawatha ssi-cgi wigwam
 make install DESTDIR=`pwd`/root
 sed "s/#ServerId = www-data/ServerId = _www/" config/hiawatha.conf > root/usr/local/etc/hiawatha/hiawatha.conf
 mkdir -p root/Library/LaunchDaemons
-cp ../extra/macosx/org.hiawatha-webserver.httpd.plist root/Library/LaunchDaemons
+cp ../extra/macos/org.hiawatha-webserver.httpd.plist root/Library/LaunchDaemons
 
 echo "-- Building package"
-cp -r ../extra/macosx/diskimage .
+cp -r ../extra/macos/diskimage .
 version=`grep VERSION config.h | cut -f2 -d'"'`
-pkgbuild --root root --scripts ../extra/macosx/scripts --version ${version} --identifier org.hiawatha-webserver.httpd hiawatha.pkg
-productbuild --distribution ../extra/macosx/Distribution.xml --resources ../extra/macosx diskimage/hiawatha-${version}.pkg
+pkgbuild --root root --scripts ../extra/macos/scripts --version ${version} --identifier org.hiawatha-webserver.httpd hiawatha.pkg
+productbuild --distribution ../extra/macos/Distribution.xml --resources ../extra/macos diskimage/hiawatha-${version}.pkg
 echo "-- Buiding disk image"
 hdiutil create ../"Hiawatha v${version}.dmg" -srcfolder diskimage -volname "Hiawatha ${version}" -ov
 
