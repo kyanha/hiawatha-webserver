@@ -6,5 +6,7 @@
 	missingok
 	create 640 www-data www-data
 	sharedscripts
-	/usr/bin/killall -HUP hiawatha
+	postrotate
+		/usr/bin/killall -HUP hiawatha
+	endscript
 }
