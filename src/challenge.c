@@ -265,7 +265,7 @@ int challenge_client(t_session *session) {
 		return 200;
 	}
 
-	return strcmp(generated, collected) == 0 ? 0 : 503;
+	return strcmp_rtap(generated, collected) == 0 ? 0 : 503;
 }
 
 #endif

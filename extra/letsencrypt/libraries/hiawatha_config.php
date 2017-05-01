@@ -2,8 +2,28 @@
 	class Hiawatha_config {
 		private $website_root = array();
 		private $website_hostnames = array();
+		private $certificate_files = array();
 
 		public function __construct($config_dir) {
+			if (($dp = opendir(HIAWATHA_CERT_DIR)) == false) {
+				printf(" - Can't read Hiawatha certificate directory.\n");
+			} else {
+				while (($file = readdir($dp)) !== false) {
+					if (substr($file, 0, 1) == ".") {
+						continue;
+					}
+
+					if (substr($file, 0, 1) != "/") {
+						$file = HIAWATHA_CERT_DIR."/".$file;
+					}
+
+					array_push($this->certificate_files, $file);
+				}
+				sort($this->certificate_files);
+
+				closedir($dp);
+			}
+
 			$this->read_config_file($config_dir."/hiawatha.conf");
 		}
 
@@ -13,6 +33,10 @@
 
 		public function get_website_hostnames($hostname) {
 			return $this->website_hostnames[$hostname];
+		}
+
+		public function get_certificate_files() {
+			return $this->certificate_files;
 		}
 
 		private function read_config_dir($config_dir) {
@@ -42,12 +66,13 @@
 
 			$inside_virtual_host = false;
 			while (($line = fgets($fp)) !== false) {
-				list($command, $param) = explode(" ", strtolower(trim($line)), 2);
+				list($command, $param) = explode(" ", trim($line), 2);
+				$command = strtolower($command);
 				$param = trim($param, " =");
 
 				if ($inside_virtual_host) {
 					if ($command == "hostname") {
-						$hostnames = explode(",", $param);
+						$hostnames = explode(",", strtolower($param));
 						foreach ($hostnames as $key => $value) {
 							$hostnames[$key] = trim($value);
 						}
@@ -59,6 +84,14 @@
 						}
 					} else if ($command == "websiteroot") {
 						$websiteroot = $param;
+					} else if ($command == "tlscertfile") {
+						if (substr($param, 0, 1) != "/") {
+							$param = HIAWATHA_CONFIG_DIR."/".$param;
+						}
+						if (in_array($param, $this->certificate_files) == false) {
+							array_push($this->certificate_files, $param);
+							sort($this->certificate_files);
+						}
 					} else if ($command == "}") {
 						if (($hostname != null) && ($websiteroot != null)) {
 							$this->website_root[$hostname] = $websiteroot;

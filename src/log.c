@@ -94,7 +94,7 @@ static char *secure_string(char *str) {
 
 /* Log the Hiawatha process ID.
  */
-void log_pid(t_config *config, pid_t pid, uid_t UNUSED(server_uid)) {
+void log_pid(t_config *config, pid_t pid, uid_t server_uid) {
 	FILE *fp;
 
 	if ((fp = fopen(config->pidfile, "w")) == NULL) {
@@ -114,6 +114,9 @@ void log_pid(t_config *config, pid_t pid, uid_t UNUSED(server_uid)) {
 			fprintf(stderr, "Warning: can't chown PID file %s. Make sure it's owned by root!\n", config->pidfile);
 		}
 	}
+#else
+	/* prevent unused warning */
+	(void)server_uid;
 #endif
 }
 
@@ -402,6 +405,7 @@ void log_garbage(t_session *session) {
 	strcat(str, "|");
 	print_timestamp(str + strlen(str));
 	fprintf(fp, "%s%s"EOL, str, session->request);
+
 	fclose(fp);
 }
 

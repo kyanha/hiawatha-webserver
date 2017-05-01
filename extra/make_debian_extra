@@ -44,15 +44,17 @@ depends=`cat extra/debian/control | grep Build-Depends | cut -f2 -d:`
 
 sed "s/<VERSION>/${version}/" extra/debian/hiawatha.dsc | sed "s/<SIZE>/${size}/" | sed "s/<DEPENDS>/${depends}/" | \
 	sed "s/<MD5>/${md5}/" | sed "s/<SHA1>/${sha1}/" | sed "s/<SHA256>/${sha256}/" > hiawatha_${version}.dsc
-gpg --clearsign hiawatha_${version}.dsc
-mv hiawatha_${version}.dsc.asc hiawatha_${version}.dsc
+if [ -x /usr/bin/gpg ]; then
+	gpg --clearsign hiawatha_${version}.dsc
+	mv hiawatha_${version}.dsc.asc hiawatha_${version}.dsc
+fi
 
 # Generate .changes file
 #
 cd build_debian_package
 dpkg-genchanges > ../hiawatha_${version}.changes
 cd ..
-if [ -x /usr/bin/gpg ] && [ "`gpg -K | grep uid | grep 'Hugo Leisink' | wc -l`" = "1" ]; then
+if [ -x /usr/bin/gpg ]; then
 	gpg --clearsign hiawatha_${version}.changes
 	mv hiawatha_${version}.changes.asc hiawatha_${version}.changes
 fi

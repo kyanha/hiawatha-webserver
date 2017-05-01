@@ -640,7 +640,7 @@ int execute_cgi(t_session *session) {
 
 	/* Prevent SQL injection
 	 */
-	if (session->host->prevent_sqli) {
+	if (session->host->prevent_sqli != p_no) {
 		result = prevent_sqli(session);
 		if ((result > 0) && (session->host->prevent_sqli >= p_prevent)) {
 			session->error_cause = ec_SQL_INJECTION;

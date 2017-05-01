@@ -49,8 +49,7 @@ cmake .. -DCMAKE_INSTALL_SBINDIR="${default_dir_cyg}/program" \
          -DLOG_DIR="${default_dir_cyg}/logfiles" \
          -DPID_DIR="${default_dir_cyg}/work" \
          -DWORK_DIR="${default_dir_cyg}/work" \
-         -DWEBROOT_DIR="${default_dir}/default_site" \
-         -DCMAKE_LEGACY_CYGWIN_WIN32=0
+         -DWEBROOT_DIR="${default_dir}/default_site"
 make
 
 # Make Windows package

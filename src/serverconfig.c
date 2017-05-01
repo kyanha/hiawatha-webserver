@@ -43,6 +43,9 @@ static t_keyvalue *variables = NULL;
 #ifdef ENABLE_XSLT
 static char *index_xslt;
 #endif
+#ifdef ENABLE_TLS
+static t_hpkp_data *hpkp_records = NULL;
+#endif
 
 int init_config_module(char *config_dir) {
 	size_t config_dir_len;
@@ -138,6 +141,7 @@ static t_host *new_host(void) {
 	host->ca_certificate      = NULL;
 	host->ca_crl              = NULL;
 	host->random_header_length = -1;
+	host->hpkp_data           = NULL;
 #endif
 #ifdef ENABLE_RPROXY
 	host->rproxy              = NULL;
@@ -272,9 +276,6 @@ static t_binding *new_binding(void) {
 
 	binding->socket               = -1;
 	binding->poll_data            = NULL;
-#ifdef ENABLE_HTTP2
-	binding->accept_http2         = false;
-#endif
 
 	binding->next                 = NULL;
 
@@ -398,7 +399,7 @@ t_config *default_config(void) {
 #endif
 
 #ifdef ENABLE_TLS
-	config->min_tls_version    = MBEDTLS_SSL_MINOR_VERSION_1;
+	config->min_tls_version    = MBEDTLS_SSL_MINOR_VERSION_2;
 	config->dh_size            = 2048;
 	config->ca_certificates    = NULL;
 #endif
@@ -615,6 +616,62 @@ static int parse_expires(char *line, int *time, bool *caco_private) {
 
 	return 0;
 }
+
+#ifdef ENABLE_TLS
+static int parse_hpkp(char *line, t_hpkp_data **hpkp_data) {
+	char *file, *max_age;
+	t_hpkp_data *record;
+	int max_age_i;
+	size_t len;
+	bool days;
+
+	if (split_string(line, &file, &max_age, ',') == 0) {
+		if ((len = strlen(max_age)) == 0) {
+			return -1;
+		}
+
+		if ((days = (max_age[len - 1] == 'd'))) {
+			max_age[len - 1] = '\0';
+		}
+
+		if ((max_age_i = str_to_int(max_age)) == -1) {
+			return -1;
+		}
+
+		if (days) {
+			max_age_i *= DAY;
+		}
+	} else {
+		max_age_i = 30 * DAY;
+	}
+
+	record = hpkp_records;
+	while (record != NULL) {
+		if ((strcmp(record->cert_file, file) == 0) && (record->max_age == max_age_i)) {
+			*hpkp_data = record;
+			return 0;
+		}
+
+		record = record->next;
+	}
+
+	if ((*hpkp_data = (t_hpkp_data*)malloc(sizeof(t_hpkp_data))) == NULL) {
+		return -1;
+	}
+
+	if (((*hpkp_data)->cert_file = strdup(file)) == NULL) {
+		return -1;
+	}
+
+	(*hpkp_data)->max_age = max_age_i;
+	(*hpkp_data)->http_header = NULL;
+	(*hpkp_data)->next = hpkp_records;
+
+	hpkp_records = *hpkp_data;
+
+	return 0;
+}
+#endif
 
 static bool replace_variables(char **line) {
 	bool replaced = false;
@@ -1562,6 +1619,8 @@ static bool host_setting(char *key, char *value, t_host *host) {
 #endif
 #ifdef ENABLE_TLS
 	int time;
+	size_t size;
+	bool day;
 #endif
 	int sqli_return_code;
 
@@ -1641,6 +1700,10 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		if (parse_yesno(value, &(host->enable_path_info)) == 0) {
 			return true;
 		}
+	} else if (strcmp(key, "enforcefirsthostname") == 0) {
+		if (parse_yesno(value, &(host->enforce_first_hostname)) == 0) {
+			return true;
+		}
 	} else if (strcmp(key, "errorlogfile") == 0) {
 		if (valid_path(value)) {
 			if ((host->error_logfile = strdup(value)) != NULL) {
@@ -1667,10 +1730,6 @@ static bool host_setting(char *key, char *value, t_host *host) {
 #endif
 	} else if (strcmp(key, "followsymlinks") == 0) {
 		if (parse_yesno(value, &(host->follow_symlinks)) == 0) {
-			return true;
-		}
-	} else if (strcmp(key, "enforcefirsthostname") == 0) {
-		if (parse_yesno(value, &(host->enforce_first_hostname)) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "hostname") == 0) {
@@ -1714,6 +1773,12 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		if (parse_prevent(value, &(host->prevent_xss), p_prevent) == 0) {
 			return true;
 		}
+#ifdef ENABLE_TLS
+	} else if (strcmp(key, "publickeypins") == 0) {
+		if (parse_hpkp(value, &(host->hpkp_data)) == 0) {
+			return true;
+		}
+#endif
 	} else if (strcmp(key, "requiredbinding") == 0) {
 		if (parse_charlist(value, &(host->required_binding)) == 0) {
 			return true;
@@ -1742,7 +1807,11 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		}
 
 		if (rest != NULL) {
-			if ((host->hsts_time = strdup(rest)) == NULL) {
+			if ((size = strlen(rest)) == 0) {
+				return false;
+			}
+
+			if ((host->hsts_time = (char*)malloc(size + 10)) == NULL) {
 				return false;
 			}
 
@@ -1752,11 +1821,26 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			}
 
 			rest = remove_spaces(rest);
-			if ((time = str_to_int(rest)) < 0) {
+			if ((size = strlen(rest)) == 0) {
 				return false;
 			}
+			if ((day = (rest[size - 1] == 'd'))) {
+				rest[size - 1] = '\0';
+			}
+			if ((time = str_to_int(rest)) <= 0) {
+				return false;
+			}
+			if (day) {
+				if (time > 3650) {
+					return false;
+				}
+				time *= DAY;
+			}
+			time = sprintf(host->hsts_time, "%d", time);
 
 			if (value != NULL) {
+				sprintf(host->hsts_time + time, ";%s", value);
+
 				if ((rest = strchr(value, ';')) != NULL) {
 					*rest = '\0';
 					rest++;
@@ -2045,13 +2129,6 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 static bool binding_setting(char *key, char *value, t_binding *binding) {
 	char *rest;
 
-#ifdef ENABLE_HTTP2
-	if (strcmp(key, "accepthttp2") == 0) {
-		if (parse_yesno(value, &(binding->accept_http2)) == 0) {
-			return true;
-		}
-	} else
-#endif
 #ifdef HAVE_ACCF
 	if (strcmp(key, "enableaccf") == 0) {
 		if (parse_yesno(value, &(binding->enable_accf)) == 0) {

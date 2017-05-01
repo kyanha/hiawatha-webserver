@@ -1,3 +1,14 @@
+hiawatha (10.6) stable; urgency=low
+
+  * Added PublicKeyPins option.
+  * Added renewal-scripts to Let's Encrypt script.
+  * mbed TLS updated to 2.4.2.
+  * Small changes to CMake build system.
+  * Small improvements.
+  * Bugfix: SCSV bug in mbed TLS.
+
+ -- Hugo Leisink <hugo@leisink.net>  Sun, 16 Apr 2017 22:04:37 +0200
+
 hiawatha (10.5) stable; urgency=low
 
   * mbed TLS updated to 2.4.0, using GPL version.

@@ -76,11 +76,15 @@ static int add_to_environment_chroot(t_session *session, t_fcgi_buffer *fcgi_buf
 
 	if ((key == NULL) || (value == NULL)) {
 		return 0;
-	} else if (session->fcgi_server != NULL) {
-		if (strncmp(value, session->fcgi_server->chroot, session->fcgi_server->chroot_len) == 0) {
-			c = value[session->fcgi_server->chroot_len];
-			if ((c == '/') || (c == '\0')) {
-				ofs = session->fcgi_server->chroot_len;
+	}
+	
+	if (session->fcgi_server != NULL) {
+		if ((session->fcgi_server->chroot != NULL) && (session->fcgi_server->chroot_len > 0)) {
+			if (strncmp(value, session->fcgi_server->chroot, session->fcgi_server->chroot_len) == 0) {
+				c = value[session->fcgi_server->chroot_len];
+				if ((c == '/') || (c == '\0')) {
+					ofs = session->fcgi_server->chroot_len;
+				}
 			}
 		}
 	}

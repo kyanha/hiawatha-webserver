@@ -86,30 +86,16 @@
 		case "expire":
 			/* Renew certificates
 			 */
-			if (($dp = opendir(HIAWATHA_CERT_DIR)) == false) {
-				printf(" - Can't read Hiawatha certificate directory.\n");
-				break;
-			}
-
 			$lets_encrypt_issuers = explode("|", LE_ISSUERS);
 
 			$now = time();
 			$restart = false;
 
-			$cert_files = array();
-			while (($file = readdir($dp)) !== false) {
-				if (substr($file, 0, 1) == ".") {
-					continue;
-				}
+			$cert_files = $lets_encrypt->get_certificate_files();
 
-				array_push($cert_files, $file);
-			}
-			sort($cert_files);
-
-			foreach ($cert_files as $file) {
+			foreach ($cert_files as $cert_file) {
 				/* Read certificate
 				 */
-				$cert_file = HIAWATHA_CERT_DIR."/".$file;
 				if (($cert = file_get_contents($cert_file)) == false) {
 					printf(" - Error reading %s.\n", $cert_file);
 					continue;
@@ -139,14 +125,20 @@
 					printf("Renewing certificate for %s.\n", $x509["subject"]["CN"]);
 					$reuse_key = in_array(strtolower(RENEWAL_REUSE_KEY), array("yes", "true"));
 					if ($lets_encrypt->request_certificate($x509["subject"]["CN"], $cert_file, $reuse_key) == false) {
-						break;
+						continue;
+					}
+
+					/* Renewal script
+					 */
+					$renewal_script = RENEWAL_SCRIPT_DIR."/".str_replace(".pem", "", $file);
+					if (file_exists($renewal_script)) {
+						printf("Running script %s.\n", $renewal_script);
+						system($renewal_script);
 					}
 
 					$restart = true;
 				}
 			}
-
-			closedir($dp);
 
 			if ($restart) {
 				if ($argv[2] == "restart") {

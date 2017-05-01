@@ -32,4 +32,11 @@ configured via the HIAWATHA_CERT_DIR setting.
 To automatically renew certificates that are about to get expired, run the
 letsencrypt tool with the parameter 'renew' as a cronjob of the user root.
 Add the parameter 'restart' to automatically restart the webserver when one or
-more certificates have been renewed.
+more certificates have been renewed. All certificates located in the
+HIAWATHA_CERT_DIR directory and those referred to in the Hiawatha configuration
+will be renewed.
+
+You can run a script when the certificate of a host is renewed. Create a script
+in the RENEWAL_SCRIPT_DIR directory and give it the name of the hostname for
+which it must be run. That script will be executed upon renewal of the matching
+certificate.

@@ -1237,9 +1237,6 @@ static void connection_handler(t_session *session) {
 				handle_timeout(session);
 				break;
 			case TLS_HANDSHAKE_OKE:
-#ifdef ENABLE_HTTP2
-				session->use_http2 = tls_http2_accepted(&(session->tls_context));
-#endif
 				session->socket_open = true;
 				break;
 		}

@@ -41,6 +41,15 @@ typedef struct {
 	int                dh_size;
 } t_tls_setup;
 
+typedef struct type_hpkp_data {
+	char             *cert_file;
+	int              max_age;
+	char             *http_header;
+	size_t           header_size;
+
+	struct type_hpkp_data *next;
+} t_hpkp_data;
+
 int  init_tls_module(mbedtls_x509_crt *ca_certificats);
 int  tls_set_config(mbedtls_ssl_config **tls_config, t_tls_setup *tls_setup);
 int  tls_register_sni(t_charlist *hostname, t_tls_setup *tls_setup);
@@ -59,10 +68,7 @@ char *tls_cipher_string(mbedtls_ssl_context *context);
 void tls_close(mbedtls_ssl_context *context);
 int  tls_connect(mbedtls_ssl_context *context, int *sock, char *hostname);
 int  tls_send_buffer(mbedtls_ssl_context *context, const char *buffer, int size);
-#ifdef ENABLE_HTTP2
-int tls_accept_http2(mbedtls_ssl_config *config);
-bool tls_http2_accepted(mbedtls_ssl_context *context);
-#endif
+int  create_hpkp_header(t_hpkp_data *hpkp_data);
 
 #endif
 

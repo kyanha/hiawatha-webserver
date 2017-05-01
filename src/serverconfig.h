@@ -169,9 +169,6 @@ typedef struct type_binding {
 	int           socket;
 	int           time_for_1st_request;
 	int           time_for_request;
-#ifdef ENABLE_HTTP2
-	bool          accept_http2;
-#endif
 
 	struct type_binding *next;
 } t_binding;
@@ -276,6 +273,7 @@ typedef struct type_host {
 	mbedtls_x509_crt   *ca_certificate;
 	mbedtls_x509_crl   *ca_crl;
 	int             random_header_length;
+	t_hpkp_data     *hpkp_data;
 #endif
 #ifdef ENABLE_RPROXY
 	t_rproxy        *rproxy;

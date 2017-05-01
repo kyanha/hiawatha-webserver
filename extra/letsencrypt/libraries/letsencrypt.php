@@ -55,6 +55,19 @@
 			return array_diff(array_unique($result), array($main));
 		}
 
+		/* Remove IP addresses from hostname list
+		 */
+		private function remove_ip_addresses($hostnames) {
+			$result = array();
+			foreach ($hostnames as $hostname) {
+				if (filter_var($hostname, FILTER_VALIDATE_IP) === false) {
+					array_push($result, $hostname);
+				}
+			}
+
+			return $result;
+		}
+
 		/* Check if certificate is in PEM format
 		 */
 		private function is_pem_format($cert) {
@@ -66,6 +79,12 @@
 		private function convert_to_pem($der_cert) {
 			$pem_data = chunk_split(base64_encode($der_cert), 64, "\n");
 			return "-----BEGIN CERTIFICATE-----\n".$pem_data."-----END CERTIFICATE-----\n";
+		}
+
+		/* Get all Hiawatha certificates
+		 */
+		public function get_certificate_files() {
+			return $this->hiawatha->get_certificate_files();
 		}
 
 		/* Register account
@@ -95,6 +114,7 @@
 			/* Alternative hostnames
 			 */
 			$website_alt_hostnames = $this->hiawatha->get_website_hostnames($website_hostname);
+			$website_alt_hostnames = $this->remove_ip_addresses($website_alt_hostnames);
 			$website_alt_hostnames = $this->remove_wildcard_hostnames($website_alt_hostnames, $website_hostname);
 			foreach ($website_alt_hostnames as $alt_hostname) {
 				if ($this->acme->authorize_hostname($alt_hostname, $website_root) == false) {

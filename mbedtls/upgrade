@@ -53,7 +53,7 @@ mbedtls_disable MBEDTLS_ARC4_C
 
 if [ -f ${version}.patch ]; then
 	echo "Applying patch."
-	patch < ${version}.patch
+	patch -p1 < ${version}.patch
 fi
 
 echo "Cleaning up."

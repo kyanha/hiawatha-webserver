@@ -4,13 +4,14 @@
 #define LOG_DIR     "${LOG_DIR}"
 #define PID_DIR     "${PID_DIR}"
 #define SBIN_DIR    "${CMAKE_INSTALL_FULL_SBINDIR}"
-#define VERSION     "${HIAWATHA_VERSION}"
+#define VERSION     "${PROJECT_VERSION}"
 #define WEBROOT_DIR "${WEBROOT_DIR}"
 #define WORK_DIR    "${WORK_DIR}"
 
 /* Settings
  */
 #define _GNU_SOURCE 1
+#define _FILE_OFFSET_BITS 64
 #cmakedefine CYGWIN ${CYGWIN}
 #cmakedefine CIFS ${CIFS}
 
@@ -28,10 +29,9 @@
 
 /* Other Hiawatha features
  */
- #define ENABLE_CHALLENGE ON
+#define ENABLE_CHALLENGE ON
 /* #define ENABLE_DEBUG ON */
 #define ENABLE_FILEHASHES ON
-/* #define ENABLE_HTTP2 ON */
 /* #define ENABLE_MEMDBG ON */
 #define ENABLE_THREAD_POOL ON
 

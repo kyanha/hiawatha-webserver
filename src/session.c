@@ -157,10 +157,6 @@ void init_session(t_session *session) {
 #ifdef ENABLE_RPROXY
 	session->rproxy_kept_alive = false;
 #endif
-
-#ifdef ENABLE_HTTP2
-	session->use_http2 = false;
-#endif
 }
 
 /* Reset a session-record for reuse.
@@ -305,7 +301,7 @@ int get_target_extension(t_session *session) {
 
 	if ((session->extension = strrchr(last_slash, '.')) != NULL) {
 		session->extension++;
-	} else {
+	} else if (session->letsencrypt_auth_request == false) {
 		session->extension = session->host->no_extension_as;
 	}
 

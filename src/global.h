@@ -30,10 +30,4 @@
 
 #define PTHREAD_STACK_SIZE 512 * KILOBYTE
 
-#if defined(__GNUC__)
-#define UNUSED(x) x __attribute__((unused))
-#else
-#define UNUSED(x) x
-#endif
-
 #endif

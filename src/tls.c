@@ -14,9 +14,12 @@
 #ifdef ENABLE_TLS
 
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <string.h>
 #include <syslog.h>
 #include <pthread.h>
@@ -30,10 +33,10 @@
 #include "mbedtls/dhm.h"
 #include "mbedtls/ssl_cache.h"
 #include "mbedtls/error.h"
-#include "mbedtls/version.h"
 #include "mbedtls/net_sockets.h"
-#include "mbedtls/ssl.h"
-#include "mbedtls/x509.h"
+#include "mbedtls/x509_csr.h"
+#include "mbedtls/sha256.h"
+#include "mbedtls/base64.h"
 #ifdef ENABLE_DEBUG
 #include "mbedtls/debug.h"
 #endif
@@ -41,6 +44,7 @@
 
 #define TIMESTAMP_SIZE          40
 #define SNI_MAX_HOSTNAME_LEN   128
+#define PK_DER_BUFFER_SIZE    2048
 #ifdef ENABLE_DEBUG
 #define TLS_DEBUG_LEVEL          6
 #endif
@@ -178,14 +182,6 @@ static mbedtls_ctr_drbg_context ctr_drbg;
 static mbedtls_entropy_context entropy;
 static mbedtls_ssl_config client_config;
 
-#ifdef ENABLE_HTTP2
-static const struct {
-	const char *protocol;
-} alpn_http2[] = {
-	{"h2"}, {NULL}
-};
-#endif
-
 /* Required to use random number generator functions in a multithreaded application
  */
 static int tls_random(void *p_rng, unsigned char *output, size_t len) {
@@ -201,17 +197,23 @@ static int tls_random(void *p_rng, unsigned char *output, size_t len) {
 /* TLS debug callback function
  */
 #ifdef ENABLE_DEBUG
-static void tls_debug(void UNUSED(*ctx), int level, const char *file, int line, const char *str) {
+static void tls_debug(void *ctx, int level, const char *file, int line, const char *str) {
+	/* prevent unused warning */
+	(void)ctx;
+
 	log_string(TLS_ERROR_LOGFILE, "mbed TLS (%d) %s,%04d: %s", level, file, line, str);
 }
 #endif
 
 /* Server Name Indication callback function
  */
-static int sni_callback(void UNUSED(*param), mbedtls_ssl_context *context, const unsigned char *sni_hostname, size_t len) {
+static int sni_callback(void *param, mbedtls_ssl_context *context, const unsigned char *sni_hostname, size_t len) {
 	char hostname[SNI_MAX_HOSTNAME_LEN + 1];
 	t_sni_list *sni;
 	int i;
+
+	/* prevent unused warning */
+	(void)param;
 
 	if (len > SNI_MAX_HOSTNAME_LEN) {
 		return -1;
@@ -310,7 +312,7 @@ int init_tls_module(mbedtls_x509_crt *ca_certificates) {
 	return 0;
 }
 
-int  tls_set_config(mbedtls_ssl_config **tls_config, t_tls_setup *tls_setup) {
+int tls_set_config(mbedtls_ssl_config **tls_config, t_tls_setup *tls_setup) {
 	if ((*tls_config = (mbedtls_ssl_config*)malloc(sizeof(mbedtls_ssl_config))) == NULL) {
 		return -1;
 	}
@@ -698,20 +700,132 @@ int tls_send_buffer(mbedtls_ssl_context *context, const char *buffer, int size) 
 	return total_written;
 }
 
-#ifdef ENABLE_HTTP2
-int tls_accept_http2(mbedtls_ssl_config *config) {
-	return mbedtls_ssl_conf_alpn_protocols(config, (const char**)&alpn_http2);
-}
+/* Create HTTP Public Key Pinning header
+ */
+int create_hpkp_header(t_hpkp_data *hpkp_data) {
+	mbedtls_x509_crt certificate;
+	mbedtls_x509_csr signing_request;
+	mbedtls_pk_context public_key, *pk;
+	int result = -1, fd, count, chars, der_len, err;
+	char *content = NULL, *pos, *header, *end, *pem_begin = "-----BEGIN ";
+	struct stat file_info;
+	ssize_t bytes, total;
+	unsigned char pk_der[PK_DER_BUFFER_SIZE], sha256_hash[32], hash[64];
+	size_t base64_len;
 
-bool tls_http2_accepted(mbedtls_ssl_context *context) {
-	const char *protocol;
-
-	if ((protocol = mbedtls_ssl_get_alpn_protocol(context)) == NULL) {
-		return false;
+	if (hpkp_data->http_header != NULL) {
+		return 0;
 	}
 
-	return strcmp(protocol, "h2") == 0;
+	if (stat(hpkp_data->cert_file, &file_info) == -1) {
+		return -1;
+	}
+
+	if ((content = (char*)malloc(file_info.st_size + 1)) == NULL) {
+		return -1;
+	}
+
+	if ((fd = open(hpkp_data->cert_file, O_RDONLY)) == -1) {
+		fprintf(stderr, "Error opening file for HPKP %s.\n", hpkp_data->cert_file);
+		goto hpkp_error;
+	}
+
+	total = 0;
+	while (total < file_info.st_size) {
+		if ((bytes = read(fd, content + total, file_info.st_size - total)) == -1) {
+			close(fd);
+			goto hpkp_error;
+		}
+
+		total += bytes;
+	}
+	content[file_info.st_size] = '\0';
+
+	close(fd);
+
+	count = 0;
+	pos = content;
+	while ((pos = strstr(pos, pem_begin)) != NULL) {
+		count++;
+		pos += 10;
+	}
+
+	if (count == 0) {
+		fprintf(stderr, "Error extracting public keys from %s.\n", hpkp_data->cert_file);
+		goto hpkp_error;
+	}
+
+	if ((hpkp_data->http_header = (char*)malloc(50 + 64 * count)) == NULL) {
+		goto hpkp_error;
+	}
+
+	if ((chars = sprintf(hpkp_data->http_header, "Public-Key-Pins: ")) < 0) {
+		goto hpkp_error;
+	}
+	header = hpkp_data->http_header + chars;
+
+	pos = content;
+	while ((pos = strstr(pos, pem_begin)) != NULL) {
+		if ((end = strstr(pos, "-----END ")) == NULL) {
+			goto hpkp_error;
+		}
+		if ((end = strchr(end, '\n')) != NULL) {
+			*end = '\0';
+		} else if ((end = strchr(end, '\0')) == NULL) {
+			goto hpkp_error;
+		}
+
+		mbedtls_x509_crt_init(&certificate);
+		mbedtls_x509_csr_init(&signing_request);
+		mbedtls_pk_init(&public_key);
+
+		if ((err = mbedtls_x509_crt_parse(&certificate, (unsigned char*)pos, end - pos + 1)) == 0) {
+			pk = &(certificate.pk);
+		} else if ((err = mbedtls_x509_csr_parse(&signing_request, (unsigned char*)pos, end - pos + 1)) == 0) {
+			pk = &(signing_request.pk);
+		} else if ((err = mbedtls_pk_parse_public_key(&public_key, (unsigned char*)pos, end - pos + 1)) == 0) {
+			pk = &public_key;
+		} else {
+			print_tls_error(err, "HPKP");
+			goto hpkp_error;
+		}
+
+		if ((der_len = mbedtls_pk_write_pubkey_der(pk, (unsigned char*)pk_der, PK_DER_BUFFER_SIZE)) <= 0) {
+			goto hpkp_error;
+		}
+
+		mbedtls_x509_crt_free(&certificate);
+		mbedtls_x509_csr_free(&signing_request);
+		mbedtls_pk_free(&public_key);
+
+		mbedtls_sha256((unsigned char*)pk_der + (PK_DER_BUFFER_SIZE - der_len), der_len, sha256_hash, false);
+
+		if (mbedtls_base64_encode((unsigned char*)hash, 64, &base64_len, (unsigned char*)sha256_hash, 32) != 0) {
+			goto hpkp_error;
+		}
+
+		if ((chars = sprintf(header, "pin-sha256=\"%s\"; ", hash)) < 0) {
+			goto hpkp_error;
+		}
+		header += chars;
+
+		pos = end + 1;
+	}
+
+	sprintf(header, "max-age=%d\r\n", hpkp_data->max_age);
+	hpkp_data->header_size = strlen(hpkp_data->http_header);
+
+	result = 0;
+
+hpkp_error:
+	if (result == -1) {
+		free(hpkp_data->http_header);
+		hpkp_data->http_header = NULL;
+	}
+
+	free(content);
+
+	return result;
 }
-#endif
 
 #endif

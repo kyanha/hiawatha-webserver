@@ -229,7 +229,7 @@ static bool parse_parameters(t_toolkit_rule *new_rule, char *value, char **opera
 			return false;
 		}
 	} else if (strcasecmp(value, "usefastcgi") == 0) {
-		/* Match UseFastCGI
+		/* UseFastCGI
 		 */
 		new_rule->operation = to_fastcgi;
 		new_rule->flow = tf_exit;

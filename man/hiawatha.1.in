@@ -76,7 +76,7 @@ Default = no, example: AnonymizeIP = yes
 .B BanlistMask = (allow|deny) <ip-address>[/netmask][, (allow|deny) <ip-address>[/netmask], ...]
 Prevent IPs from getting banned in case of bad behaviour. By default, all IPs can be banned. IPs that are 'denied' in the banlist will not be banned.
 .br
-Example: BanlistMask = allow 192.168.1.2, deny 192.168.0.0/16
+Example: BanlistMask = deny 127.0.0.1, deny 192.168.0.1
 .TP
 .B BanOnDeniedBody = <ban-time>
 Number of seconds to ban an IP in case of a denied request body. See als DenyBody.
@@ -593,6 +593,14 @@ Prevent Cross-Site Scripting attacks. The 'detect' option only detects and logs 
 .br
 Default = no, example: PreventXSS = prevent
 .TP
+.B PublicKeyPins = <public key file>[, max_age=<value>[d]]
+Hiawatha will load public keys from the <public key file>, which will be used to calculate the pin-sha256 values for the Public-Key-Pins HTTP header (HPKP). The <public key file> can contain certificates, certificate signing requests and public keys, all in PEM format. The optional max_age value is in seconds or in days when it ends with a 'd'. The default value for max_age is '30d'.
+.br
+Example: PublicKeyPins = /etc/hiawatha/letsencrypt.pem, 60d
+.br
+
+(requires that Hiawatha was not compiled with -DENABLE_TLS=off)
+.TP
 .B RequiredBinding = <binding_id>[, <binding_id>, ...]
 By default, a virtual host can be visited via all bindings. Via this opion, you can specify via which bindings a virtual host can be visited (see chapter BINDING CONFIGURATION for more information).
 .br
@@ -611,8 +619,8 @@ The <groupname> is the name of the group a user must be a member of to have acce
 .br
 Example: RequiredGroup = webadmins,staff
 .TP
-.B RequireTLS = yes|no[, HSTS time][; includeSubDomains][; preload]
-Specify that a domain must be visited with a TLS connection. If it is visited via HTTP, Hiawatha will send a redirect (301) with an HTTPS URL. The HSTS time is the max-age value of the Strict-Transport-Security HTTP header.
+.B RequireTLS = yes|no[, <HSTS time>[d]][; includeSubDomains][; preload]
+Specify that a domain must be visited with a TLS connection. If it is visited via HTTP, Hiawatha will send a redirect (301) with an HTTPS URL. The <HSTS time> is the max-age value of the Strict-Transport-Security HTTP header in seconds or in days when it ends with a 'd'.
 .br
 Hiawatha will ignore this setting for files in /.well-known/acme-challenge/, which are used for authentication in the Let's Encrypt certificate request process.
 .br

@@ -255,7 +255,7 @@ static int set_ownership(char *file, struct stat *status, uid_t uid, gid_t gid) 
 
 /* Create a file with the right protection and ownership
  */
-int create_file(char *file, mode_t mode, uid_t UNUSED(uid), gid_t UNUSED(gid)) {
+int create_file(char *file, mode_t mode, uid_t uid, gid_t gid) {
 	struct stat status;
 	int fd;
 
@@ -289,6 +289,10 @@ int create_file(char *file, mode_t mode, uid_t UNUSED(uid), gid_t UNUSED(gid)) {
 	if (set_ownership(file, &status, uid, gid) == -1) {
 		return -4;
 	}
+#else
+	/* prevent unused warning */
+	(void)uid;
+	(void)gid;
 #endif
 
 	return 0;
@@ -296,7 +300,7 @@ int create_file(char *file, mode_t mode, uid_t UNUSED(uid), gid_t UNUSED(gid)) {
 
 /* Create a directory with the right protection and ownership
  */
-int create_directory(char *directory, mode_t mode, uid_t UNUSED(uid), gid_t UNUSED(gid)) {
+int create_directory(char *directory, mode_t mode, uid_t uid, gid_t gid) {
 	struct stat status;
 
 	if (stat(directory, &status) == -1) {
@@ -313,6 +317,10 @@ int create_directory(char *directory, mode_t mode, uid_t UNUSED(uid), gid_t UNUS
 	} else if (set_ownership(directory, &status, uid, gid) == -1) {
 		return -4;
 	}
+#else
+	/* prevent unused warning */
+	(void)uid;
+	(void)gid;
 #endif
 
 	return 0;

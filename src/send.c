@@ -68,7 +68,7 @@ char *hs_x_forwarded_for = "X-Forwarded-For:";   /* 16 */
 
 char *unknown_http_code = "Unknown Error";
 
-static char *ec_doctype = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\">\n";
+static char *ec_doctype = "<!DOCTYPE html>\n";
 static char *ec_head    = "<html>\n<head>\n<title>";
 static char *ec_body1   = "</title>\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n<style type=\"text/css\">\n"
                           "body { background-color:#d0d0d0; font-family:sans-serif; padding:0 30px }\n"
@@ -413,6 +413,14 @@ int send_header(t_session *session) {
 		}
 		if (send_buffer(session, "\r\n", 2) == -1) {
 			return -1;
+		}
+	}
+
+	/* HTTP Public Key Pinning 
+	 */
+	if (session->binding->use_tls && (session->host->hpkp_data != NULL)) {
+		if (session->host->hpkp_data->http_header != NULL) {
+			send_buffer(session, session->host->hpkp_data->http_header, session->host->hpkp_data->header_size);
 		}
 	}
 #endif
