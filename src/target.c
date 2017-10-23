@@ -164,6 +164,12 @@ no_gzip:
 		}
 	}
 
+	if (in_charlist(session->extension, &(session->config->block_extensions))) {
+		session->encode_gzip = false;
+		close(handle);
+		return 403;
+	}
+
 #ifdef ENABLE_FILEHASHES
 	/* File hashes
 	 */
@@ -892,7 +898,7 @@ int execute_cgi(t_session *session) {
 									end_of_header -= delta;
 								}
 							}
-							
+
 							header_length = end_of_header + 4 - cgi_info.input_buffer;
 
 							if (return_code == 200) {
@@ -1791,7 +1797,12 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 	} else {
 		/* Connect to webserver
 		 */
-		if ((webserver.socket = connect_to_server(&(rproxy->ip_addr), rproxy->port)) == -1) {
+		if (rproxy->unix_socket != NULL) {
+			webserver.socket = connect_to_unix_socket(rproxy->unix_socket);
+		} else {
+			webserver.socket = connect_to_server(&(rproxy->ip_addr), rproxy->port);
+		}
+		if (webserver.socket == -1) {
 			log_error(session, "error connecting to reverse proxy");
 			return 503;
 		}
@@ -2259,7 +2270,7 @@ int forward_to_websocket(t_session *session) {
 			goto ws_error;
 		}
 
-    	http_header = http_header->next;
+		http_header = http_header->next;
 	}
 
 	if (add_to_buffer("\r\n", buffer, &size, WS_BUFFER_SIZE) == -1) {

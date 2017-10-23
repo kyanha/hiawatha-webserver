@@ -37,7 +37,7 @@
 			return false;
 		}
 
-		/* Remove hostnames containing a wildcard from list
+		/* Remove hostnames containing a wildcard from the list
 		 */
 		private function remove_wildcard_hostnames($hostnames, $main) {
 			$result = array();
@@ -55,12 +55,13 @@
 			return array_diff(array_unique($result), array($main));
 		}
 
-		/* Remove IP addresses from hostname list
+		/* Remove IP addresses from the list
 		 */
 		private function remove_ip_addresses($hostnames) {
 			$result = array();
+
 			foreach ($hostnames as $hostname) {
-				if (filter_var($hostname, FILTER_VALIDATE_IP) === false) {
+				if (filter_var($hostname, FILTER_VALIDATE_IP) == false) {
 					array_push($result, $hostname);
 				}
 			}

@@ -280,7 +280,7 @@ int anonymized_ip_to_str(t_ip_addr *ip, char *str, int max_len) {
 int hostname_to_ip(char *hostname, t_ip_addr *ip) {
 	struct addrinfo *addrinfo;
 
-    if (getaddrinfo(hostname, NULL, NULL, &addrinfo) != 0) {
+	if (getaddrinfo(hostname, NULL, NULL, &addrinfo) != 0) {
 		return -1;
 	}
 

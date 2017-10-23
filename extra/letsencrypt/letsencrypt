@@ -130,7 +130,8 @@
 
 					/* Renewal script
 					 */
-					$renewal_script = RENEWAL_SCRIPT_DIR."/".str_replace(".pem", "", $file);
+					$info = pathinfo($cert_file);
+					$renewal_script = RENEWAL_SCRIPT_DIR."/".$info["filename"];
 					if (file_exists($renewal_script)) {
 						printf("Running script %s.\n", $renewal_script);
 						system($renewal_script);

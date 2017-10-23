@@ -107,6 +107,18 @@ char *get_http_header(char *key, t_http_header *http_headers) {
 	return NULL;
 }
 
+/* Return the HTTP Origin or Referer header
+ */
+char *get_referer_header(t_http_header *http_headers) {
+	char *referer;
+
+	if ((referer = get_http_header("Origin:", http_headers)) == NULL) {
+		referer = get_http_header("Referer:", http_headers);
+	}
+
+	return referer;
+}
+
 /* free() a list of http_headers.
  */
 t_http_header *remove_http_headers(t_http_header *http_headers) {

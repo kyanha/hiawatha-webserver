@@ -100,6 +100,10 @@ void memdbg_clear_log(void) {
 	while (alloc_log != NULL) {
 		log = alloc_log;
 		alloc_log = alloc_log->next;
+
+		if (log->filename != NULL) {
+			free(log->filename);
+		}
 		free(log);
 	}
 

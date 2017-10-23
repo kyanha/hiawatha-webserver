@@ -123,6 +123,11 @@ Number of seconds to ban an IP in case of <number> wrong passwords for HTTP auth
 .br
 Default = -:0, Example: BanOnWrongPassword = 3:120
 .TP
+.B BlockExtensions = <extension>[,<extension>, ...]
+Prevent the uploading of files with these extensions.
+.br
+Example: BlockExtensions = pem, key, exe
+.TP
 .B CAcertificates = <file|directory>
 Load CA root certificates which Hiawatha uses for validation when acting as a client, which it does for the reverse proxy and the websockets. If not set, TLS connections that Hiawatha makes are not secure.
 .br
@@ -580,16 +585,22 @@ Example: PasswordFile = basic:/var/www/.passwords,/var/www/.groups
 .TP
 .B PreventCSRF = no|detect|prevent|block
 Prevent Cross-Site Request Forgery attacks. The 'detect' option only detects and logs a CSRF attack, 'prevent' discards the POST data and cookies and 'block' returns a 443 error. This setting can cause problems for users who use tools to hide/remove the Referer HTTP header string while browsing.
+
+Don't use this as a generic security feature. Only use it to prevent a specific vulnerablility in an application that can't be taken offline while you wait for a patch.
 .br
 Default = no, example: PreventCSRF = block
 .TP
 .B PreventSQLi = no|detect|prevent|block
-Prevent SQL-injection attacks. The 'detect' option only detects and logs an SQL injection attack, 'prevent' returns a 404 error and 'block' returns a 441 error. It is important to understand that the detection of SQL injections is done by best effort. There is no 100% guarantee that all SQL injections are blocked. Note that using this feature can have a negative effect on the performance of your webserver and can make the exploit logfile grow very large. Use with caution. You better use a secure CMS or framework instead. See also BanOnSQLi and RequestLimitMask.
+Prevent SQL-injection attacks. The 'detect' option only detects and logs an SQL injection attack, 'prevent' returns a 404 error and 'block' returns a 441 error. It is important to understand that the detection of SQL injections is done by best effort. There is no 100% guarantee that all SQL injections are blocked. Note that using this feature can have a negative effect on the performance of your webserver and can make the exploit logfile grow very large. See also BanOnSQLi and RequestLimitMask.
+
+Don't use this as a generic security feature. Only use it to prevent a specific vulnerablility in an application that can't be taken offline while you wait for a patch.
 .br
 Default = no, example: PreventSQLi = detect
 .TP
 .B PreventXSS = no|detect|prevent|block
 Prevent Cross-Site Scripting attacks. The 'detect' option only detects and logs a XSS attack, 'prevent' disables the <script> tag in the input and 'block' returns a 442 error.
+
+Don't use this as a generic security feature. Only use it to prevent a specific vulnerablility in an application that can't be taken offline while you wait for a patch.
 .br
 Default = no, example: PreventXSS = prevent
 .TP
@@ -629,10 +640,10 @@ Default = no, example: RequireTLS = yes, 2678400
 
 (requires that Hiawatha was not compiled with -DENABLE_TLS=off)
 .TP
-.B ReverseProxy [!]<pattern> [<skip directories>] http[s]://<hostname>[:<port>][/<path>] [<timeout>] [keep-alive]
+.B ReverseProxy = [!]<pattern> [<skip directories>] http[s]://<hostname>[:<port>][/<path>]|<unix-socket> [<timeout>] [keep-alive]
 Forward the request with URLs that match the regular expression <pattern> to another webserver, where <path> is placed before the original URL. When <hostname> is an IP address, the value of the Host HTTP header is unchanged. Otherwise, it is replaced with the value of <hostname>. The optional <skip directories> is a number that indicates how many directories in the original URL should be skipped when sending it to the final webserver. The connection is closed after <timeout> seconds, which is set to 5 seconds by default. By default, Hiawatha doesn't use keep-alive connections to the final webserver. You can enable this by adding 'keep-alive' to the configuration line. When specifying multiple reverse proxies for one (virtual) host, Hiawatha prefers reverse proxies with a scheme (HTTP/HTTPS) matching the one of the client connection. See also CAcertificates.
 .br
-Example: ReverseProxy ^/icons/ 1 http://resources.lan/images
+Example: ReverseProxy = ^/icons/ 1 http://resources.lan/images
 
 (requires that Hiawatha was not compiled with -DENABLE_RPROXY=off)
 .TP

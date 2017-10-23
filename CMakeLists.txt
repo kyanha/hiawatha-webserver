@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(Hiawatha VERSION 10.6)
+project(Hiawatha VERSION 10.7 LANGUAGES C)
 
 # Compiler
 set(CMAKE_C_FLAGS "-O2 -Wall -Wextra ${CMAKE_C_FLAGS}")
@@ -105,6 +105,7 @@ if(ENABLE_TLS)
 		if (CMAKE_SYSTEM MATCHES "OpenBSD")
 			option(LINK_WITH_PTHREAD "Explicitly link mbed TLS library to pthread." on)
 		endif()
+		cmake_policy(SET CMP0048 NEW)
 		add_subdirectory(mbedtls)
 	endif()
 	set(MBEDTLS_LIBRARIES "mbedtls" "mbedx509" "mbedcrypto")

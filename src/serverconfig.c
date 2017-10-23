@@ -322,6 +322,7 @@ t_config *default_config(void) {
 	config->directory          = NULL;
 	config->throttle           = NULL;
 	config->cgi_handler        = NULL;
+	config->fcgi_server        = NULL;
 	config->cgi_wrapper        = SBIN_DIR"/cgi-wrapper";
 	config->wrap_user_cgi      = false;
 	config->log_format         = hiawatha;
@@ -349,6 +350,7 @@ t_config *default_config(void) {
 	config->ban_on_timeout     = 0;
 	config->ban_on_wrong_password = 0;
 	config->ban_on_invalid_url = 0;
+	init_charlist(&(config->block_extensions));
 	config->kick_on_ban        = false;
 	config->reban_during_ban   = false;
 	config->max_wrong_passwords = 0;
@@ -523,7 +525,7 @@ static int parse_prevent(char *prevent, t_prevent *result, t_prevent yes) {
 		*result = p_detect;
 	} else if (strcmp(prevent, "prevent") == 0) {
 		*result = p_prevent;
-	} else if (strcmp(prevent, "block") == 0) { 
+	} else if (strcmp(prevent, "block") == 0) {
 		*result = p_block;
 	} else {
 		return -1;
@@ -1028,7 +1030,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		if (parse_yesno(value, &(config->anonymize_ip)) == 0) {
 			return true;
 		}
-    } else if (strcmp(key, "banlistmask") == 0) {
+	} else if (strcmp(key, "banlistmask") == 0) {
 		if ((config->banlist_mask = parse_accesslist(value, false, config->banlist_mask)) != NULL) {
 			return true;
 		}
@@ -1072,6 +1074,10 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		if (split_string(value, &value, &rest, ':') == -1) {
 		} else if ((config->max_wrong_passwords = str_to_int(value)) <= 0) {
 		} else if ((config->ban_on_wrong_password = str_to_int(rest)) > 0) {
+			return true;
+		}
+	} else if (strcmp(key, "blockextensions") == 0) {
+		if (parse_charlist(value, &(config->block_extensions)) == 0) {
 			return true;
 		}
 #ifdef ENABLE_TLS
@@ -1443,7 +1449,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		sprintf(config->tunnel_ssh_credential, "Basic %s", value);
 
 		return true;
-	
+
 #endif
 	} else if (strcmp(key, "userdirectory") == 0) {
 		if ((*value != '/') && (strchr(value, '.') == NULL)) {

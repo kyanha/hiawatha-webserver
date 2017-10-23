@@ -1,3 +1,13 @@
+hiawatha (10.7) stable; urgency=low
+
+  * Connect to a Unix socket via a reverse proxy.
+  * Added BlockExtensions setting.
+  * mbed TLS updated to 2.6.0.
+  * Small improvements.
+  * Bugfix: error in handling renewal scripts in Let's Encrypt script.
+
+ -- Hugo Leisink <hugo@leisink.net>  Mon, 16 Oct 2017 19:31:54 +0200
+
 hiawatha (10.6) stable; urgency=low
 
   * Added PublicKeyPins option.

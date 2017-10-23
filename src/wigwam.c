@@ -736,6 +736,7 @@ void check_url_toolkit(char *config_dir, char **toolkit_id) {
 	 */
 	http_headers = NULL;
 	add_header(&http_headers, "HTTP_HOST", "Host");
+	add_header(&http_headers, "HTTP_ORIGIN", "Origin");
 	add_header(&http_headers, "HTTP_REFERER", "Referer");
 	add_header(&http_headers, "HTTP_USER_AGENT", "User-Agent");
 
@@ -947,7 +948,7 @@ int main(int argc, char *argv[]) {
 				fprintf(stderr, "Specify a username and a realm.\n");
 				return EXIT_FAILURE;
 			}
-        } else if (strcmp(argv[i], "-h") == 0) {
+		} else if (strcmp(argv[i], "-h") == 0) {
 			show_help(argv[0]);
 			return EXIT_SUCCESS;
 #ifdef ENABLE_FILEHASHES
@@ -962,7 +963,11 @@ int main(int argc, char *argv[]) {
 #endif
 #ifdef ENABLE_TOOLKIT
 		} else if (strcmp(argv[i], "-t") == 0) {
-			check_url_toolkit(config_dir, argv + i + 1);
+			if (i + 1 >= argc) {
+				show_help(argv[0]);
+			} else {
+				check_url_toolkit(config_dir, argv + i + 1);
+			}
 			return EXIT_SUCCESS;
 #endif
 		} else if (strcmp(argv[i], "-q") == 0) {

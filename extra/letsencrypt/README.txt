@@ -1,5 +1,6 @@
-Open letsencrypt.conf, change the account email address and key size according
-to your needs.
+Copy the all the files belonging to this script to a suitable location, for
+example /root/letsencrypt. Open letsencrypt.conf, change the account email
+address and key size according to your needs.
 
 Before you can request a certificate, you need to register an account at the
 Let's Encrypt CA. You can do this via the command: ./letsencrypt register

@@ -583,11 +583,11 @@ int strpcmp(char *str, regex_t *regexp) {
 	return (regexec(regexp, str, 0, NULL, 0) == 0) ? 0 : -1;
 }
 
-/* strcmp with remote time-attack prevention
+/* strcmp with remote timing-attack prevention
  */
 int strcmp_rtap(const char *s1, const char *s2) {
-	size_t l1, l2, len, extra, i;
-	int result;
+	size_t l1, l2, len = 0, extra = 0, i;
+	int result = 0;
 
 	if ((s1 == NULL) || (s2 == NULL)) {
 		return -1;
@@ -597,35 +597,27 @@ int strcmp_rtap(const char *s1, const char *s2) {
 	l2 = strlen(s2);
 
 	if (l1 < l2) {
-		result = -1;
+		result = 1;
 		len = l1;
 		extra = 0;
-	} else if (l1 > l2) {
+	}
+	if (l1 > l2) {
 		result = 1;
 		len = l2;
 		extra = l1 - l2;
-	} else {
+	}
+	if (l1 == l2) {
 		result = 0;
 		len = l1;
 		extra = 0;
 	}
 
 	for (i = 0; i < len; i++) {
-		if ((s1[i] < s2[i]) && (result == 0)) {
-			result = -1;
-		}
-		if ((s1[i] > s2[i]) && (result == 0)) {
-			result = 1;
-		}
+		result |= s1[i] ^ s2[i];
 	}
 
 	for (i = 0; i < extra; i++) {
-		if ((s1[i] < s1[i]) && (result == 0)) {
-			result = -1;
-		}
-		if ((s1[i] > s1[i]) && (result == 0)) {
-			result = 1;
-		}
+		result |= s1[i] ^ s2[0];
 	}
 
 	return result;

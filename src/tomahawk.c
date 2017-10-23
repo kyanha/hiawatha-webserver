@@ -107,7 +107,7 @@ int init_tomahawk_module(void) {
 	time_t t;
 	struct tm s;
 
-    adminlist = NULL;
+	adminlist = NULL;
 	if (pthread_mutex_init(&tomahawk_mutex, NULL) != 0) {
 		return -1;
 	}

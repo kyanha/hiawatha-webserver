@@ -135,101 +135,117 @@ t_rproxy *rproxy_setting(char *line) {
 		return NULL;
 	}
 
-	/* Protocol
+	/* Back connection via Unix socket
 	 */
-	if (strncmp(line, "http://", 7) == 0) {
-		line += 7;
-#ifdef ENABLE_TLS
-		rproxy->use_tls = false;
-	} else if (strncmp(line, "https://", 8) == 0) {
-		line += 8;
-		rproxy->use_tls = true;
-#endif
-	} else {
-		free(rproxy);
-		return NULL;
-	}
+	if (*line == '/') {
+		if ((rproxy->unix_socket = strdup(line)) == NULL) {
+			check_free(rproxy->path);
+			return NULL;
+		}
 
-	/* Path
-	 */
-	rproxy->path = NULL;
-	rproxy->path_len = 0;
-	if ((path = strchr(line, '/')) != NULL) {
-		if ((len = strlen(path)) > 1) {
-			if (*(path + len - 1) == '/') {
-				*(path + len - 1) = '\0';
+		rproxy->hostname = NULL;
+		rproxy->hostname_len = -1;
+		rproxy->path = NULL;
+		rproxy->path_len = -1;
+	} else {
+		rproxy->unix_socket = NULL;
+
+		/* Protocol
+		 */
+		if (strncmp(line, "http://", 7) == 0) {
+			line += 7;
+#ifdef ENABLE_TLS
+			rproxy->use_tls = false;
+		} else if (strncmp(line, "https://", 8) == 0) {
+			line += 8;
+			rproxy->use_tls = true;
+#endif
+		} else {
+			free(rproxy);
+			return NULL;
+		}
+
+		/* Path
+		 */
+		rproxy->path = NULL;
+		rproxy->path_len = -1;
+		if ((path = strchr(line, '/')) != NULL) {
+			if ((len = strlen(path)) > 1) {
+				if (*(path + len - 1) == '/') {
+					*(path + len - 1) = '\0';
+				}
+				if ((rproxy->path = strdup(path)) == NULL) {
+					free(rproxy);
+					return NULL;
+				}
+				rproxy->path_len = strlen(rproxy->path);
 			}
-			if ((rproxy->path = strdup(path)) == NULL) {
+			*path = '\0';
+		}
+
+		/* Port
+		 */
+#ifdef ENABLE_IPV6
+		if (*line == '[') {
+			line++;
+			if ((port = strchr(line, ']')) == NULL) {
+				check_free(rproxy->path);
 				free(rproxy);
 				return NULL;
 			}
-			rproxy->path_len = strlen(rproxy->path);
-		}
-		*path = '\0';
-	}
-
-	/* Port
-	 */
-#ifdef ENABLE_IPV6
-	if (*line == '[') {
-		line++;
-		if ((port = strchr(line, ']')) == NULL) {
-			check_free(rproxy->path);
-			free(rproxy);
-			return NULL;
-		}
-		*(port++) = '\0';
-		if (*port == '\0') {
-			port = NULL;
-		} else if (*port != ':') {
-			check_free(rproxy->path);
-			free(rproxy);
-			return NULL;
-		}
-	} else
-#endif
-		port = strchr(line, ':');
-
-	if (port != NULL) {
-		*(port++) = '\0';
-		if ((rproxy->port = str_to_int(port)) < 1) {
-			check_free(rproxy->path);
-			free(rproxy);
-			return NULL;
-		} else if (rproxy->port > 65535) {
-			check_free(rproxy->path);
-			free(rproxy);
-			return NULL;
-		}
-	} else {
-#ifdef ENABLE_TLS
-		if (rproxy->use_tls) {
-			rproxy->port = 443;
+			*(port++) = '\0';
+			if (*port == '\0') {
+				port = NULL;
+			} else if (*port != ':') {
+				check_free(rproxy->path);
+				free(rproxy);
+				return NULL;
+			}
 		} else
 #endif
-			rproxy->port = 80;
-	}
+			port = strchr(line, ':');
 
-	/* Hostname
-	 */
-	if (parse_ip(line, &(rproxy->ip_addr)) == -1) {
-		if ((rproxy->hostname = strdup(line)) == NULL) {
-			check_free(rproxy->path);
-			free(rproxy);
-			return NULL;
+		if (port != NULL) {
+			*(port++) = '\0';
+			if ((rproxy->port = str_to_int(port)) < 1) {
+				check_free(rproxy->path);
+				free(rproxy);
+				return NULL;
+			} else if (rproxy->port > 65535) {
+				check_free(rproxy->path);
+				free(rproxy);
+				return NULL;
+			}
+		} else {
+#ifdef ENABLE_TLS
+			if (rproxy->use_tls) {
+				rproxy->port = 443;
+			} else
+#endif
+				rproxy->port = 80;
 		}
-		rproxy->hostname_len = strlen(rproxy->hostname);
 
-		if (hostname_to_ip(line, &(rproxy->ip_addr)) == -1) {
-			fprintf(stderr, "Can't resolve hostname '%s'\n", line);
-			check_free(rproxy->path);
-			check_free(rproxy->hostname);
-			free(rproxy);
-			return NULL;
+		/* Hostname
+		 */
+		if (parse_ip(line, &(rproxy->ip_addr)) == -1) {
+			if ((rproxy->hostname = strdup(line)) == NULL) {
+				check_free(rproxy->path);
+				free(rproxy);
+				return NULL;
+			}
+			rproxy->hostname_len = strlen(rproxy->hostname);
+
+			if (hostname_to_ip(line, &(rproxy->ip_addr)) == -1) {
+				fprintf(stderr, "Can't resolve hostname '%s'\n", line);
+				check_free(rproxy->path);
+				check_free(rproxy->hostname);
+				free(rproxy);
+				return NULL;
+			}
+		} else {
+			rproxy->hostname = NULL;
+			rproxy->hostname_len = -1;
 		}
-	} else {
-		rproxy->hostname = NULL;
-		rproxy->hostname_len = -1;
 	}
 
 	/* Timeout
@@ -375,7 +391,7 @@ static int send_to_webserver(t_rproxy_webserver *webserver, t_rproxy_result *res
 int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *options, t_rproxy *rproxy, t_rproxy_result *result, bool session_keep_alive) {
 	t_http_header *http_header;
 	char forwarded_for[20 + MAX_IP_STR_LEN], ip_addr[MAX_IP_STR_LEN], forwarded_port[32], *buffer, *referer, *uri;
-	bool forwarded_found = false, is_websocket = false;
+	bool forwarded_found = false, is_websocket = false, is_referer;
 	t_send_buffer send_buffer;
 	int handle, bytes_read, skip_dir;
 	t_keyvalue *header;
@@ -477,7 +493,9 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 				continue;
 			}
 
-			if ((strncasecmp(http_header->data, "Referer:", 8) == 0) && (options->hostname != NULL)) {
+			is_referer = (strncasecmp(http_header->data, "Origin:", 7) == 0) ||
+			             (strncasecmp(http_header->data, "Referer:", 8) == 0);
+			if (is_referer && (options->hostname != NULL)) {
 				if (str_replace(http_header->data, options->hostname, rproxy->hostname, &referer) > 0) {
 					if (send_to_webserver(webserver, result, &send_buffer, referer, strlen(referer)) == -1) {
 						free(referer);
@@ -487,6 +505,7 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 					if (send_to_webserver(webserver, result, &send_buffer, "\r\n", 2) == -1) {
 						return -1;
 					}
+
 					continue;
 				}
 			}

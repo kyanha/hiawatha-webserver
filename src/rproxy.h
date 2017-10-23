@@ -35,6 +35,7 @@ typedef struct type_rproxy {
 	size_t     hostname_len;
 	t_ip_addr  ip_addr;
 	int        port;
+	char       *unix_socket;
 	char       *path;
 	size_t     path_len;
 	int        timeout;

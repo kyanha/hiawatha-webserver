@@ -215,6 +215,7 @@ static const char **get_transform_parameters(t_session *session) {
 	add_http_header(session, params, "Host:", "HTTP_HOST", &i);
 	add_http_header(session, params, "If-Modified-Since:", "HTTP_IF_MODIFIED_SINCE", &i);
 	add_http_header(session, params, "If-Unmodified-Since:", "HTTP_IF_UNMODIFIED_SINCE", &i);
+	add_http_header(session, params, "Origin:", "HTTP_ORIGIN", &i);
 	add_http_header(session, params, "Range:", "HTTP_RANGE", &i);
 	add_http_header(session, params, "Referer:", "HTTP_REFERER", &i);
 	add_http_header(session, params, "User-Agent:", "HTTP_USER_AGENT", &i);
@@ -501,7 +502,7 @@ int show_index(t_session *session) {
 #ifdef ENABLE_XSLT
 	xmlDocPtr data_xml;
 #endif
-	char *text_xml, fsize_str[30], timestr[33], value[VALUE_SIZE + 1], *extension, *link, *slash, *ruri;
+	char *text_xml, fsize_str[30], timestr[33], value[VALUE_SIZE + 1], *extension, *link, *slash, *uri, *ruri;
 	int text_size, text_max, result, handle;
 	off_t total_fsize = 0;
 	bool root_dir, show_xml;
@@ -556,7 +557,7 @@ int show_index(t_session *session) {
 
 	session->mimetype = "text/html";
 
-    /* HTTP/1.0 has no knowledge about chunked Transfer-Encoding.
+	/* HTTP/1.0 has no knowledge about chunked Transfer-Encoding.
 	 */
 	if (*(session->http_version + 7) == '0') {
 		session->keep_alive = false;
@@ -627,12 +628,19 @@ int show_index(t_session *session) {
 		return -1;
 	}
 
-	if (xml_special_chars(session->request_uri, &ruri) == -1) {
+	if ((uri = strdup(session->request_uri)) == NULL) {
 		free(text_xml);
 		remove_filelist(filelist);
 		return -1;
 	}
-	url_decode(ruri);
+	url_decode(uri);
+	if (xml_special_chars(uri, &ruri) == -1) {
+		free(uri);
+		free(text_xml);
+		remove_filelist(filelist);
+		return -1;
+	}
+	free(uri);
 	if (add_tag(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "request_uri", ruri) == -1) {
 		free(text_xml);
 		free(ruri);

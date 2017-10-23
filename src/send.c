@@ -416,7 +416,7 @@ int send_header(t_session *session) {
 		}
 	}
 
-	/* HTTP Public Key Pinning 
+	/* HTTP Public Key Pinning
 	 */
 	if (session->binding->use_tls && (session->host->hpkp_data != NULL)) {
 		if (session->host->hpkp_data->http_header != NULL) {

@@ -840,10 +840,8 @@ int prevent_csrf(t_session *session) {
 		return 0;
 	}
 
-	if ((referer = get_http_header("Origin:", session->http_headers)) == NULL) {
-		if ((referer = get_http_header("Referer:", session->http_headers)) == NULL) {
-			return 0;
-		}
+	if ((referer = get_referer_header(session->http_headers)) == NULL) {
+		return 0;
 	}
 
 #ifdef ENABLE_MONITOR

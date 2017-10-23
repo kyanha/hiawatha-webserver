@@ -258,6 +258,7 @@ static int run_program(t_session *session, char *program, int return_code) {
 				snprintf(value, 9, "%d", return_code);
 				setenv("HTTP_RETURN_CODE", value, 1);
 
+				http_header_to_environment(session, NULL, "Origin:", "HTTP_ORIGIN");
 				http_header_to_environment(session, NULL, "Range:", "HTTP_RANGE");
 				http_header_to_environment(session, NULL, "Referer:", "HTTP_REFERER");
 				http_header_to_environment(session, NULL, "User-Agent:", "HTTP_USER_AGENT");
@@ -304,7 +305,7 @@ static t_access allow_client(t_session *session) {
 
 	if ((access = ip_allowed(&(session->ip_address), session->host->access_list)) != allow) {
 		return access;
- 	} else if (last_forwarded_ip(session->http_headers, &forwarded_ip) == -1) {
+	} else if (last_forwarded_ip(session->http_headers, &forwarded_ip) == -1) {
 		return allow;
 	} else if (ip_allowed(&forwarded_ip, session->host->access_list) == deny) {
 		return deny;
@@ -1075,7 +1076,7 @@ static void handle_request_result(t_session *session, int result) {
 			} else {
 				session->return_code = 404;
 			}
-				
+
 			send_code(session);
 			if (session->log_request) {
 				log_request(session);

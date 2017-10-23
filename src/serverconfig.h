@@ -263,7 +263,7 @@ typedef struct type_host {
 	t_url_toolkit   **toolkit_rules_user;
 #endif
 #ifdef ENABLE_TLS
-    bool            require_tls;
+	bool            require_tls;
 	char            *hsts_time;
 	char            *key_cert_file;
 	char            *ca_cert_file;
@@ -324,6 +324,7 @@ typedef struct type_config {
 	bool          anonymize_ip;
 	bool          wait_for_cgi;
 	t_charlist    cgi_extension;
+	t_fcgi_server *fcgi_server;
 #ifdef ENABLE_THREAD_POOL
 	int           thread_pool_size;
 	int           thread_kill_rate;
@@ -378,7 +379,7 @@ typedef struct type_config {
 	int           flooding_time;
 	int           reconnect_delay;
 	t_accesslist  *banlist_mask;
-	t_fcgi_server *fcgi_server;
+	t_charlist    block_extensions;
 
 	char          *work_directory;
 	char          *upload_directory;

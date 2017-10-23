@@ -73,6 +73,7 @@ typedef struct type_error_handler {
 
 t_http_header *parse_http_headers(char *line);
 char *get_http_header(char *key, t_http_header *http_headers);
+char *get_referer_header(t_http_header *http_headers);
 t_http_header *remove_http_headers(t_http_header *http_headers);
 
 void init_charlist(t_charlist *list);
