@@ -157,8 +157,7 @@
 				"payload"   => $payload,
 				"signature" => $signature));
 
-			$this->server->add_header("Accept", "application/json");
-			$this->server->add_header("Content-Type", "application/json");
+			$this->server->add_header("Content-Type", "application/jose+json");
 
 			if (($result = $this->server->POST($uri, $data)) === false) {
 				printf(" - HTTP error for %s.\n", $uri);

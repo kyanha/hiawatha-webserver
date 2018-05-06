@@ -425,13 +425,16 @@ int main(int argc, char *argv[]) {
 			case fb_error:
 				log_error("contains_not_allowed_symlink() error");
 				print_code(500);
+				break;
 			case fb_not_found:
 				log_error("CGI program not found");
 				print_code(404);
+				break;
 			case fb_no_access:
 			case fb_yes:
 				log_error("symlinks not allowed");
 				print_code(403);
+				break;
 			case fb_no:
 				break;
 		}
@@ -444,13 +447,16 @@ int main(int argc, char *argv[]) {
 			case fb_error:
 				log_error("can_execute() error");
 				print_code(500);
+				break;
 			case fb_not_found:
 				log_error("CGI program not found");
 				print_code(404);
+				break;
 			case fb_no_access:
 			case fb_no:
 				log_error("access to CGI program denied");
 				print_code(403);
+				break;
 			case fb_yes:
 				break;
 		}
@@ -466,6 +472,7 @@ int main(int argc, char *argv[]) {
 		case -1:
 			log_error("fork() error");
 			print_code(500);
+			break;
 		case 0:
 			execvp(argv[arg_offset], argv + 1 + arg_offset);
 			log_error("execvp() error");

@@ -868,7 +868,6 @@ no_toolkit:
 
 	switch (file_type(session->file_on_disk)) {
 		case ft_error:
-fprintf(stderr, "[%s]\n", session->file_on_disk);
 			return 500;
 		case ft_other:
 			return 403;

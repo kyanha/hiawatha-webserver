@@ -1,5 +1,86 @@
 mbed TLS ChangeLog (Sorted per branch, date)
 
+= mbed TLS 2.8.0 branch released 2018-03-16
+
+Default behavior changes
+   * The truncated HMAC extension now conforms to RFC 6066. This means
+     that when both sides of a TLS connection negotiate the truncated
+     HMAC extension, Mbed TLS can now interoperate with other
+     compliant implementations, but this breaks interoperability with
+     prior versions of Mbed TLS. To restore the old behavior, enable
+     the (deprecated) option MBEDTLS_SSL_TRUNCATED_HMAC_COMPAT in
+     config.h. Found by Andreas Walz (ivESK, Offenburg University of
+     Applied Sciences).
+
+Security
+   * Fix implementation of the truncated HMAC extension. The previous
+     implementation allowed an offline 2^80 brute force attack on the
+     HMAC key of a single, uninterrupted connection (with no
+     resumption of the session).
+   * Verify results of RSA private key operations to defend
+     against Bellcore glitch attack.
+   * Fix a buffer overread in ssl_parse_server_key_exchange() that could cause
+     a crash on invalid input.
+   * Fix a buffer overread in ssl_parse_server_psk_hint() that could cause a
+     crash on invalid input.
+   * Fix CRL parsing to reject CRLs containing unsupported critical
+     extensions. Found by Falko Strenzke and Evangelos Karatsiolis.
+
+Features
+   * Extend PKCS#8 interface by introducing support for the entire SHA
+     algorithms family when encrypting private keys using PKCS#5 v2.0.
+     This allows reading encrypted PEM files produced by software that
+     uses PBKDF2-SHA2, such as OpenSSL 1.1. Submitted by Antonio Quartulli,
+     OpenVPN Inc. Fixes #1339
+   * Add support for public keys encoded in PKCS#1 format. #1122
+
+New deprecations
+   * Deprecate support for record compression (configuration option
+     MBEDTLS_ZLIB_SUPPORT).
+
+Bugfix
+   * Fix the name of a DHE parameter that was accidentally changed in 2.7.0.
+     Fixes #1358.
+   * Fix test_suite_pk to work on 64-bit ILP32 systems. #849
+   * Fix mbedtls_x509_crt_profile_suiteb, which used to reject all certificates
+     with flag MBEDTLS_X509_BADCERT_BAD_PK even when the key type was correct.
+     In the context of SSL, this resulted in handshake failure. Reported by
+     daniel in the Mbed TLS forum. #1351
+   * Fix Windows x64 builds with the included mbedTLS.sln file. #1347
+   * Fix setting version TLSv1 as minimal version, even if TLS 1
+     is not enabled. Set MBEDTLS_SSL_MIN_MAJOR_VERSION
+     and MBEDTLS_SSL_MIN_MINOR_VERSION instead of
+     MBEDTLS_SSL_MAJOR_VERSION_3 and MBEDTLS_SSL_MINOR_VERSION_1. #664
+   * Fix compilation error on Mingw32 when _TRUNCATE is defined. Use _TRUNCATE
+     only if __MINGW32__ not defined. Fix suggested by Thomas Glanzmann and
+     Nick Wilson on issue #355
+   * In test_suite_pk, pass valid parameters when testing for hash length
+     overflow. #1179
+   * Fix memory allocation corner cases in memory_buffer_alloc.c module. Found
+     by Guido Vranken. #639
+   * Log correct number of ciphersuites used in Client Hello message. #918
+   * Fix X509 CRT parsing that would potentially accept an invalid tag when
+     parsing the subject alternative names.
+   * Fix a possible arithmetic overflow in ssl_parse_server_key_exchange()
+     that could cause a key exchange to fail on valid data.
+   * Fix a possible arithmetic overflow in ssl_parse_server_psk_hint() that
+     could cause a key exchange to fail on valid data.
+   * Don't define mbedtls_aes_decrypt and mbedtls_aes_encrypt under
+     MBEDTLS_DEPRECATED_REMOVED. #1388
+   * Fix a 1-byte heap buffer overflow (read-only) during private key parsing.
+     Found through fuzz testing.
+
+Changes
+   * Fix tag lengths and value ranges in the documentation of CCM encryption.
+     Contributed by Mathieu Briand.
+   * Fix typo in a comment ctr_drbg.c. Contributed by Paul Sokolovsky.
+   * Remove support for the library reference configuration for picocoin.
+   * MD functions deprecated in 2.7.0 are no longer inline, to provide
+     a migration path for those depending on the library's ABI.
+   * Clarify the documentation of mbedtls_ssl_setup.
+   * Use (void) when defining functions with no parameters. Contributed by
+     Joris Aerts. #678
+
 = mbed TLS 2.7.0 branch released 2018-02-03
 
 Security

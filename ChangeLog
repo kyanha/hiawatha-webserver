@@ -1,3 +1,12 @@
+hiawatha (10.8.1) stable; urgency=low
+
+  * mbed TLS updated to 2.8.0.
+  * Removed support for secp192r1 and secp192k1 curves, to make it PCI DSS
+    compliant out of the box.
+  * Small improvements to Let's Encrypt ACMEv2 script.
+
+ -- Hugo Leisink <hugo@leisink.net>  Tue, 10 Apr 2018 21:58:41 +0100
+
 hiawatha (10.8) stable; urgency=low
 
   * New Let's Encrypt script that supports ACME v2.

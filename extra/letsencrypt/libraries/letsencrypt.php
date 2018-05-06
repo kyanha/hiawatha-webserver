@@ -56,7 +56,7 @@
 
 		/* Remove hostnames containing a wildcard from the list
 		 */
-		private function remove_wildcard_hostnames($hostnames, $main) {
+		private function remove_wildcard_hostnames($hostnames) {
 			$result = array();
 
 			foreach ($hostnames as $hostname) {
@@ -69,7 +69,7 @@
 				}
 			}
 
-			return array_diff(array_unique($result), array($main));
+			return $result;
 		}
 
 		/* Remove IP addresses from the list
@@ -254,7 +254,7 @@
 
 				/* Create response for challenge
 				 */
-				printf("> Creating reponse for authorization challenge.\n");
+				printf(" - Creating reponse for authorization challenge.\n");
 				if (file_put_contents($dir."/".$challenge["token"], $challenge["key"]) === false) {
 					printf(" - Can't create token %s/%s.\n", $dir, $challenge["token"]);
 					$this->remove_challenge_files($website_root);
@@ -263,7 +263,7 @@
 
 				/* Request authorization
 				 */
-				printf("> Requesting authorization for host.\n");
+				printf(" - Requesting authorization for host.\n");
 				if ($this->acme->authorize_host($challenge) == false) {
 					printf(" - Error authorizing host %s\n", $identifier["value"]);
 					$this->remove_challenge_files($website_root);
@@ -272,7 +272,7 @@
 
 				/* Poll authorization is valid
 				 */
-				printf("> Polling authorization status.");
+				printf(" - Polling authorization status.");
 				$timer = self::MAX_POLL_DELAY;
 				do {
 					if (($result = $this->acme->authorization_valid($identifier)) === true) {
@@ -363,42 +363,6 @@
 				fclose($fp);
 				chmod($cert_file, 0600);
 			}
-
-			/* Attach CA certificate
-			 */
-/*
-			if (($ca_url = $this->get_CA_url($certificate)) != false) {
-				printf("Retrieving CA certificate.\n");
-				list($protocol,, $ca_hostname, $ca_path) = explode("/", $ca_url, 4);
-				switch ($protocol) {
-					case "http:":
-						$ca = new HTTP($ca_hostname);
-						break;
-					case "https:":
-						$ca = new HTTPS($ca_hostname);
-						break;
-					default:
-						printf(" - Unknown protocol in CA url (%s)\n", $protocol);
-						return false;
-				}
-				$result = $ca->GET("/".$ca_path);
-				if ($result["status"] == 200) {
-					$ca_cert = $result["body"];
-					if ($this->is_pem_format($ca_cert) == false) {
-						$ca_cert = $this->convert_to_pem($ca_cert);
-					}
-
-					if (($fp = fopen($cert_file, "a")) == false) {
-						printf("%s\n", $ca_cert);
-					} else {
-						printf("Writing CA certificate to file.\n");
-						fputs($fp, $ca_cert."\n");
-						fclose($fp);
-						chmod($cert_file, 0400);
-					}
-				}
-			}
-*/
 
 			printf("\n");
 

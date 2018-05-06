@@ -515,7 +515,7 @@ Example: CustomHeaderBackend = X-Custom-Header: some_value
 (requires that Hiawatha was not compiled with -DENABLE_RPROXY=off)
 .TP
 .B DenyBody = <regular expression>
-If the request body matches the case insensitive regular expression, return a 403 Forbidden.
+If the request body matches the case insensitive POSIX regular expression, return a 403 Forbidden.
 .br
 Example: DenyBody = ^.*%3Cscript.*%3C%2Fscript%3E.*$
 .TP
@@ -651,7 +651,7 @@ Default = no     Example: RequireTLS = yes, 2678400
 (requires that Hiawatha was not compiled with -DENABLE_TLS=off)
 .TP
 .B ReverseProxy = [!]<pattern> [<skip directories>] http[s]://<hostname>[:<port>][/<path>]|<unix-socket> [<timeout>] [keep-alive]
-Forward the request with URLs that match the regular expression <pattern> to another webserver, where <path> is placed before the original URL. When <hostname> is an IP address, the value of the Host HTTP header is unchanged. Otherwise, it is replaced with the value of <hostname>. The optional <skip directories> is a number that indicates how many directories in the original URL should be skipped when sending it to the final webserver. The connection is closed after <timeout> seconds, which is set to 5 seconds by default. By default, Hiawatha doesn't use keep-alive connections to the final webserver. You can enable this by adding 'keep-alive' to the configuration line. When specifying multiple reverse proxies for one (virtual) host, Hiawatha prefers reverse proxies with a scheme (HTTP/HTTPS) matching the one of the client connection. See also CAcertificates.
+Forward the request with URLs that match the POSIX regular expression <pattern> to another webserver, where <path> is placed before the original URL. When <hostname> is an IP address, the value of the Host HTTP header is unchanged. Otherwise, it is replaced with the value of <hostname>. The optional <skip directories> is a number that indicates how many directories in the original URL should be skipped when sending it to the final webserver. The connection is closed after <timeout> seconds, which is set to 5 seconds by default. By default, Hiawatha doesn't use keep-alive connections to the final webserver. You can enable this by adding 'keep-alive' to the configuration line. When specifying multiple reverse proxies for one (virtual) host, Hiawatha prefers reverse proxies with a scheme (HTTP/HTTPS) matching the one of the client connection. See also CAcertificates.
 .br
 Example: ReverseProxy = ^/icons/ 1 http://resources.lan/images
 
@@ -876,7 +876,7 @@ Example: Do Call other_rule_set
 .TP
 .B Header <key> [!]<pattern> <action>
 .br
-Perform an action when the HTTP header <key> matches the regular expresion <pattern>, where <action> can be one of the following:
+Perform an action when the HTTP header <key> matches the POSIX regular expresion <pattern>, where <action> can be one of the following:
 .br
 Ban, Call, DenyAccess, Exit, Goto, OmitRequestLog, Return, Skip or Use.
 .br
@@ -884,7 +884,7 @@ A negative pattern (leading exclamation mark) can't be used with the redirect ac
 .TP
 .B Match [!]<pattern> <action>
 .br
-Perform an action when the URL matches the regular expression <pattern>, where <action> can be one of the following:
+Perform an action when the URL matches the POSIX regular expression <pattern>, where <action> can be one of the following:
 .br
 Ban, Call, DenyAccess, Exit, Goto, Redirect, Return, Rewrite, Skip or UseFastCGI.
 .br

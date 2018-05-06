@@ -28,6 +28,10 @@
 						$file = HIAWATHA_CERT_DIR."/".$file;
 					}
 
+					if (is_file($file) == false) {
+						continue;
+					}
+
 					array_push($this->certificate_files, $file);
 				}
 				sort($this->certificate_files);

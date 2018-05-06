@@ -79,7 +79,7 @@
 
 						$this->add_header("Content-Type", "application/x-www-form-urlencoded");
 					} else {
-						$this->add_header("Content-Type", "application/octet-stream");
+						$this->add_header("Content-Type", "application/octet-stream", false);
 					}
 
 					$this->add_header("Content-Length", strlen($body));
@@ -182,12 +182,14 @@
 
 		/* Add HTTP header
 		 *
-		 * INPUT:  string key, string value
+		 * INPUT:  string key, string value,[ bool replace header]
 		 * OUTPUT: -
 		 * ERROR:  -
 		 */
-		public function add_header($key, $value) {
-			$this->headers[$key] = $key.": ".$value;
+		public function add_header($key, $value, $replace = true) {
+			if ($replace || (isset($this->headers[$key]) == false)) {
+				$this->headers[$key] = $key.": ".$value;
+			}
 		}
 
 		/* Add cookie

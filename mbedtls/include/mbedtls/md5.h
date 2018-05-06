@@ -45,11 +45,6 @@
 // Regular implementation
 //
 
-#if ( defined(__ARMCC_VERSION) || defined(_MSC_VER) ) && \
-    !defined(inline) && !defined(__cplusplus)
-#define inline __inline
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -190,11 +185,7 @@ int mbedtls_internal_md5_process( mbedtls_md5_context *ctx,
  *                 stronger message digests instead.
  *
  */
-MBEDTLS_DEPRECATED static inline void mbedtls_md5_starts(
-                                                    mbedtls_md5_context *ctx )
-{
-    mbedtls_md5_starts_ret( ctx );
-}
+MBEDTLS_DEPRECATED void mbedtls_md5_starts( mbedtls_md5_context *ctx );
 
 /**
  * \brief          MD5 process buffer
@@ -210,13 +201,9 @@ MBEDTLS_DEPRECATED static inline void mbedtls_md5_starts(
  *                 stronger message digests instead.
  *
  */
-MBEDTLS_DEPRECATED static inline void mbedtls_md5_update(
-                                                    mbedtls_md5_context *ctx,
-                                                    const unsigned char *input,
-                                                    size_t ilen )
-{
-    mbedtls_md5_update_ret( ctx, input, ilen );
-}
+MBEDTLS_DEPRECATED void mbedtls_md5_update( mbedtls_md5_context *ctx,
+                                            const unsigned char *input,
+                                            size_t ilen );
 
 /**
  * \brief          MD5 final digest
@@ -231,12 +218,8 @@ MBEDTLS_DEPRECATED static inline void mbedtls_md5_update(
  *                 stronger message digests instead.
  *
  */
-MBEDTLS_DEPRECATED static inline void mbedtls_md5_finish(
-                                                    mbedtls_md5_context *ctx,
-                                                    unsigned char output[16] )
-{
-    mbedtls_md5_finish_ret( ctx, output );
-}
+MBEDTLS_DEPRECATED void mbedtls_md5_finish( mbedtls_md5_context *ctx,
+                                            unsigned char output[16] );
 
 /**
  * \brief          MD5 process data block (internal use only)
@@ -251,12 +234,8 @@ MBEDTLS_DEPRECATED static inline void mbedtls_md5_finish(
  *                 stronger message digests instead.
  *
  */
-MBEDTLS_DEPRECATED static inline void mbedtls_md5_process(
-                                                mbedtls_md5_context *ctx,
-                                                const unsigned char data[64] )
-{
-    mbedtls_internal_md5_process( ctx, data );
-}
+MBEDTLS_DEPRECATED void mbedtls_md5_process( mbedtls_md5_context *ctx,
+                                             const unsigned char data[64] );
 
 #undef MBEDTLS_DEPRECATED
 #endif /* !MBEDTLS_DEPRECATED_REMOVED */
@@ -311,12 +290,9 @@ int mbedtls_md5_ret( const unsigned char *input,
  *                 stronger message digests instead.
  *
  */
-MBEDTLS_DEPRECATED static inline void mbedtls_md5( const unsigned char *input,
-                                                   size_t ilen,
-                                                   unsigned char output[16] )
-{
-    mbedtls_md5_ret( input, ilen, output );
-}
+MBEDTLS_DEPRECATED void mbedtls_md5( const unsigned char *input,
+                                     size_t ilen,
+                                     unsigned char output[16] );
 
 #undef MBEDTLS_DEPRECATED
 #endif /* !MBEDTLS_DEPRECATED_REMOVED */

@@ -59,6 +59,12 @@
 
 				$this->config[$key] = $value;
 			}
+
+			/* Script directory
+			 */
+			if (substr($this->config["RENEWAL_SCRIPT_DIR"], 0, 1) != "/") {
+				$this->config["RENEWAL_SCRIPT_DIR"] = $config_dir."/".$this->config["RENEWAL_SCRIPT_DIR"];
+			}
 		}
 
 		/* Magic method get

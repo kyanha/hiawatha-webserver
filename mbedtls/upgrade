@@ -47,9 +47,10 @@ mv ${dir}/library .
 mbedtls_enable MBEDTLS_THREADING_PTHREAD
 mbedtls_enable MBEDTLS_THREADING_C
 
-echo "Disabling SSL3.0 and RC4."
-mbedtls_disable MBEDTLS_SSL_PROTO_SSL3
+echo "Disabling RC4, secp192r1 and secp192k1."
 mbedtls_disable MBEDTLS_ARC4_C
+mbedtls_disable MBEDTLS_ECP_DP_SECP192R1_ENABLED
+mbedtls_disable MBEDTLS_ECP_DP_SECP192K1_ENABLED
 
 if [ -f ${version}.patch ]; then
 	echo "Applying patch."

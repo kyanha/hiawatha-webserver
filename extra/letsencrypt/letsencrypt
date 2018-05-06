@@ -136,7 +136,7 @@
 
 				if ($argv[1] == "expire") {
 					$days_left = ($x509["validTo_time_t"] - $now) / DAY;
-					printf("> %-40s %2d\n", $x509["subject"]["CN"], $days_left);
+					printf(" - %-40s %2d\n", $x509["subject"]["CN"], $days_left);
 				} else {
 					/* Check if certificate is ready to be renewed
 					 */
