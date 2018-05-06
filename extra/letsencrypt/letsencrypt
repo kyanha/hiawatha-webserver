@@ -1,11 +1,33 @@
 #!/usr/bin/php
 <?php
-	chdir(__DIR__);
-	error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
+	/* Copyright (c) by Hugo Leisink <hugo@leisink.net>
+	 *
+	 * This program is free software; you can redistribute it and/or modify
+	 * it under the terms of the GNU General Public License as published by
+	 * the Free Software Foundation; version 2 of the License. For a copy,
+	 * see http://www.gnu.org/licenses/gpl-2.0.html.
+	 *
+	 * This program is distributed in the hope that it will be useful,
+	 * but WITHOUT ANY WARRANTY; without even the implied warranty of
+	 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	 * GNU General Public License for more details.
+	 */
 
+	/* Let's Encrypt / ACME v2
+	 */
+	define("VERSION", "2.0");
 	define("DAY", 86400);
 
-	function __autoload($class_name) {
+	error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
+	$config_locations = array(
+		$_SERVER["HOME"]."/.letsencrypt",
+		"/etc/letsencrypt",
+		"/usr/local/etc/letsencrypt",
+		__DIR__);
+
+	/* Autoloader
+	 */
+	function class_autoloader($class_name) {
 		$library = __DIR__."/libraries/".strtolower($class_name).".php";
 
 		if (file_exists($library) == false) {
@@ -15,10 +37,15 @@
 
 		include($library);
 	}
+	spl_autoload_register("class_autoloader");
 
 	/* Configuration
 	 */
-	$config = new config("letsencrypt.conf");
+	$config = new config($config_locations);
+	if (count($config->content) == 0) {
+		printf(" - Error reading configuration.\n");
+		exit;
+	}
 	foreach ($config->content as $key => $value) {
 		define($key, $value);
 	}
@@ -26,6 +53,7 @@
 	/* Show help information
 	 */
 	function show_help($executable) {
+		printf("Let's Encrypt for Hiawatha, copyright (c) by Hugo Leisink <hugo@leisink.net>\n");
 		printf("Usage: %s <command>\n", $executable);
 		printf("Commands: register: Register your account key at the Let's Encrypt CA.\n");
 		printf("          request <hostname> [<cert.pem>]: Request new certificate for website.\n");
@@ -33,6 +61,7 @@
 		printf("          renew [restart]: Renew the almost expired Let's Encrypt certificates\n");
 		printf("                           in Hiawatha's certificate directory.\n");
 		printf("          revoke <cert.pem>: Revoke the certificate.\n");
+		printf("          version: Show version information.\n");
 		printf("\n");
 	}
 
@@ -44,33 +73,27 @@
 
 	/* Account key
 	 */
-	if (file_exists("account.key") == false) {
+	if (file_exists(ACCOUNT_KEY_FILE) == false) {
 		printf("Generating account key.\n");
 		$account_key = new RSA(ACCOUNT_RSA_KEY_SIZE);
-		if (($fp = fopen("account.key", "w")) === false) {
+		if (($fp = fopen(ACCOUNT_KEY_FILE, "w")) === false) {
 			exit(" - Error writing account.key.\n");
 		}
 		fputs($fp, $account_key->private_key);
 		fclose($fp);
-		chmod("account.key", 0400);
-	} else {
-		$account_key = new RSA("account.key");
+		chmod(ACCOUNT_KEY_FILE, 0400);
 	}
 
-	/* Let's Encrypt
+	/* Process command
 	 */
-	$lets_encrypt = new LetsEncrypt($account_key);
+	$lets_encrypt = new LetsEncrypt(ACCOUNT_KEY_FILE);
 
-	/* Execute commands
-	 */
-	$command = $argv[1];
-
-	switch ($command) {
+	switch ($argv[1]) {
 		case "register":
 			/* Account registration
 			 */
 			printf("Registering account.\n");
-			$lets_encrypt->register_account(ACCOUNT_EMAIL_ADDRESS, LE_CA_TERMS);
+			$lets_encrypt->register_account(ACCOUNT_EMAIL_ADDRESS);
 			break;
 		case "request":
 			/* Request certificate
@@ -82,8 +105,9 @@
 
 			$lets_encrypt->request_certificate($argv[2], $argv[3]);
 			break;
-		case "renew":
 		case "expire":
+			printf("Looking up certificate expire time.\n");
+		case "renew":
 			/* Renew certificates
 			 */
 			$lets_encrypt_issuers = explode("|", LE_ISSUERS);
@@ -110,9 +134,9 @@
 					continue;
 				}
 
-				if ($command == "expire") {
+				if ($argv[1] == "expire") {
 					$days_left = ($x509["validTo_time_t"] - $now) / DAY;
-					printf("%-35s %2d\n", $x509["subject"]["CN"], $days_left);
+					printf("> %-40s %2d\n", $x509["subject"]["CN"], $days_left);
 				} else {
 					/* Check if certificate is ready to be renewed
 					 */
@@ -132,9 +156,15 @@
 					 */
 					$info = pathinfo($cert_file);
 					$renewal_script = RENEWAL_SCRIPT_DIR."/".$info["filename"];
+					if (substr($renewal_script, 0, 1) != "/") {
+						$renewal_script = __DIR__."/".$renewal_script;
+					}
 					if (file_exists($renewal_script)) {
 						printf("Running script %s.\n", $renewal_script);
+						$current_dir = getcwd();
+						chdir(dirname($renewal_script));
 						system($renewal_script);
+						chdir($current_dir);
 					}
 
 					$restart = true;
@@ -145,7 +175,6 @@
 				if ($argv[2] == "restart") {
 					system(HIAWATHA_RESTART_COMMAND);
 				}
-
 				exit(1);
 			}
 			break;
@@ -159,6 +188,10 @@
 
 			printf("Revoking certificate.\n");
 			$lets_encrypt->revoke_certificate($argv[2]);
+			break;
+		case "version":
+			printf("Let's Encrypt for Hiawatha v%s.\n", VERSION);
+			printf("This script uses the Let's Encrypt ACME v2 API.\n");
 			break;
 		default:
 			/* Show help

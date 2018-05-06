@@ -1,6 +1,22 @@
+hiawatha (10.8) stable; urgency=low
+
+  * New Let's Encrypt script that supports ACME v2.
+  * Added Syslog option.
+  * Added GZipExtensions option.
+  * AllowDotFiles now used to show hidden files in directory listings.
+  * mbed TLS updated to 2.7.0.
+  * Removed support for static RSA ciphers.
+  * Hiawatha log format changed.
+  * Small improvements.
+  * Bugfix: certain characters in filenames disrupted directory index output.
+  * Bugfix: requesting non-regular files now results in a 403 instead of
+    blocking that thread.
+ 
+ -- Hugo Leisink <hugo@leisink.net>  Wed, 21 Mar 2018 19:57:44 +0200
+
 hiawatha (10.7) stable; urgency=low
 
-  * Connect to a Unix socket via a reverse proxy.
+  * Connect to a reverse proxy via a Unix socket.
   * Added BlockExtensions setting.
   * mbed TLS updated to 2.6.0.
   * Small improvements.

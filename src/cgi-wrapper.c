@@ -422,17 +422,17 @@ int main(int argc, char *argv[]) {
 	 */
 	if (follow_symlinks == false) {
 		switch (contains_not_allowed_symlink(argv[2], wrap_data.cgiroot)) {
-			case error:
+			case fb_error:
 				log_error("contains_not_allowed_symlink() error");
 				print_code(500);
-			case not_found:
+			case fb_not_found:
 				log_error("CGI program not found");
 				print_code(404);
-			case no_access:
-			case yes:
+			case fb_no_access:
+			case fb_yes:
 				log_error("symlinks not allowed");
 				print_code(403);
-			case no:
+			case fb_no:
 				break;
 		}
 	}
@@ -441,17 +441,17 @@ int main(int argc, char *argv[]) {
 	 */
 	if (usecgi_handler == false) {
 		switch (can_execute(argv[1], wrap_data.uid, wrap_data.gid, &(wrap_data.groups))) {
-			case error:
+			case fb_error:
 				log_error("can_execute() error");
 				print_code(500);
-			case not_found:
+			case fb_not_found:
 				log_error("CGI program not found");
 				print_code(404);
-			case no_access:
-			case no:
+			case fb_no_access:
+			case fb_no:
 				log_error("access to CGI program denied");
 				print_code(403);
-			case yes:
+			case fb_yes:
 				break;
 		}
 

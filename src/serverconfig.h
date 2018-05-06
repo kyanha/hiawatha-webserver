@@ -38,6 +38,14 @@
 #define MAX_RANDOM_HEADER_LENGTH 1000
 #define MAX_RANDOM_HEADER_LENGTH_MASK 1023
 
+#define SYSLOG_NONE     0
+#define SYSLOG_SYSTEM   1
+#define SYSLOG_EXPLOIT  2
+#define SYSLOG_GARBAGE  4
+#define SYSLOG_ACCESS   8
+#define SYSLOG_ERROR   16
+#define SYSLOG_ALL     31
+
 typedef enum { root, part } t_pathmatch;
 typedef enum { no_auth, basic, digest } t_auth_method;
 typedef enum { hiawatha, common, extended } t_log_format;
@@ -321,6 +329,7 @@ typedef struct type_config {
 	t_binding     *binding;
 	t_log_format  log_format;
 	bool          log_timeouts;
+	int           syslog;
 	bool          anonymize_ip;
 	bool          wait_for_cgi;
 	t_charlist    cgi_extension;
@@ -386,6 +395,7 @@ typedef struct type_config {
 	size_t        upload_directory_len;
 	char          *gzipped_directory;
 	size_t        gzipped_directory_len;
+	t_charlist    gzip_extensions;
 
 #ifdef ENABLE_CHALLENGE
 	int           challenge_threshold;

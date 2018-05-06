@@ -33,7 +33,7 @@
 static const struct {
 	const char *text;
 } sqli_detection[] = {
-	{"'\\s*--(\\s|')"},
+	{"'\\s*(;\\s*)?--(\\s|')"},
 	{"\\s+(and|or|xor|&&|\\|\\|)\\s*\\(?\\s*('|[0-9]|`?[a-z\\._-]+`?\\s*(=|like)|[a-z]+\\s*\\()"},
 	{"\\s+(not\\s+)?in\\s*\\(\\s*['0-9]"},
 	{"union(\\s+all)?(\\s*\\(\\s*|\\s+)select(`|\\s)"},
@@ -382,7 +382,7 @@ int load_user_root_config(t_session *session) {
 	memcpy(conffile + session->host->website_root_len, "/.hiawatha\0", 11);
 
 	if ((result = read_user_configfile(conffile, session->host, &(session->tempdata), only_root_config)) != 0) {
-		log_file_error(session, conffile, "error in configuration file on line %d", result);
+		log_error_file(session, conffile, "error in configuration file on line %d", result);
 		result = -1;
 	}
 
@@ -430,7 +430,7 @@ int load_user_config(t_session *session) {
 			result = read_user_configfile(conffile, session->host, &(session->tempdata), read_mode);
 
 			if (result != 0) {
-				log_file_error(session, conffile, "error in configuration file on line %d", result);
+				log_error_file(session, conffile, "error in configuration file on line %d", result);
 				free(conffile);
 				return -1;
 			}
@@ -857,7 +857,7 @@ int prevent_csrf(t_session *session) {
 		session->body = NULL;
 		session->cookies = NULL;
 
-		log_error(session, "invalid referer while checking for CSRF");
+		log_error_session(session, "invalid referer while checking for CSRF");
 
 		return 1;
 	}
@@ -920,9 +920,9 @@ void close_socket(t_session *session) {
 int handle_connection_not_allowed(t_session *session, int connections) {
 	switch (connections) {
 		case ca_TOOMUCH_PERIP:
-			log_system(session, "Maximum number of connections for IP address reached");
+			log_system_session(session, "Maximum number of connections for IP address reached");
 			if ((session->config->ban_on_max_per_ip > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
-				log_system(session, "Client banned because of too many simultaneous connections");
+				log_system_session(session, "Client banned because of too many simultaneous connections");
 				ban_ip(&(session->ip_address), session->config->ban_on_max_per_ip, session->config->kick_on_ban);
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
@@ -932,7 +932,7 @@ int handle_connection_not_allowed(t_session *session, int connections) {
 			}
 			return 444;
 		case ca_TOOMUCH_TOTAL:
-			log_system(session, "Maximum number of total connections reached");
+			log_system_session(session, "Maximum number of total connections reached");
 			return 503;
 		case ca_BANNED:
 			if (session->config->reban_during_ban && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
@@ -948,14 +948,6 @@ int handle_connection_not_allowed(t_session *session, int connections) {
 }
 
 bool file_can_be_compressed(t_session *session) {
-	int i;
-	static const struct {
-		const char *value;
-	} extensions[] = {
-		{"cer"},{"crt"},{"doc"},{"pem"},{"ppt"},{"ttf"},
-		{"xls"},{"xml"},{"xsl"},{"xslt"},{NULL}
-	};
-
 	if (session->mimetype != NULL) {
 		if (strncmp(session->mimetype, "text/", 5) == 0) {
 			return true;
@@ -964,15 +956,7 @@ bool file_can_be_compressed(t_session *session) {
 		}
 	}
 
-	if (session->extension != NULL) {
-		for (i = 0; extensions[i].value != NULL; i++) {
-			if (strcmp(session->extension, extensions[i].value) == 0) {
-				return true;
-			}
-		}
-	}
-
-	return false;
+	return in_charlist(session->extension, &(session->config->gzip_extensions));
 }
 
 #ifdef ENABLE_DEBUG

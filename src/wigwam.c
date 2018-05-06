@@ -146,7 +146,7 @@ int read_directory(char *dir, t_line **config, t_line **aliases) {
 	char *path;
 	int retval = 0;
 
-	if ((filelist = read_filelist(dir)) == NULL) {
+	if ((filelist = read_filelist(dir, false)) == NULL) {
 		return -1;
 	}
 	file = filelist = sort_filelist(filelist);
@@ -231,11 +231,11 @@ int read_file(char *config_file, t_line **config, t_line **aliases, bool handle_
 		}
 
 		if (handle_include && (strncasecmp(data, "include ", 8) == 0)) {
-			switch (is_directory(data + 8)) {
-				case no:
+			switch (file_type(data + 8)) {
+				case ft_file:
 					retval = read_file(strdup(data + 8), config, aliases, false);
 					break;
-				case yes:
+				case ft_dir:
 					retval = read_directory(data + 8, config, aliases);
 					break;
 				default:

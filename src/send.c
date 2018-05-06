@@ -149,10 +149,10 @@ static int send_to_client(t_session *session, const char *buffer, int size) {
 			if (errno != EINTR) {
 				if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
 					if (session->config->log_timeouts) {
-						log_error(session, "send timeout");
+						log_error_session(session, "send timeout");
 					}
 				} else if ((errno != EPIPE) && (errno != ECONNRESET)) {
-					log_error(session, "error while sending response");
+					log_error_session(session, "error while sending response");
 				}
 				close_socket(session);
 				session->keep_alive = false;

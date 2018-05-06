@@ -1,11 +1,30 @@
 <?php
+    /* Copyright (c) by Hugo Leisink <hugo@leisink.net>
+	 *
+	 * This program is free software; you can redistribute it and/or modify
+	 * it under the terms of the GNU General Public License as published by
+	 * the Free Software Foundation; version 2 of the License. For a copy,
+	 * see http://www.gnu.org/licenses/gpl-2.0.html.
+	 *
+	 * This program is distributed in the hope that it will be useful,
+	 * but WITHOUT ANY WARRANTY; without even the implied warranty of
+	 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	 * GNU General Public License for more details.
+	 */
+
 	class config {
+		const CONFIG_FILE = "letsencrypt.conf";
 		private $config = array();
 
-		public function __construct($config_file) {
-			if (file_exists($config_file) == false) {
-				return array();
+		/* Constructor
+		 */
+		public function __construct($locations) {
+			if (($config_dir = $this->find_config_dir($locations)) == false) {
+				return;
 			}
+
+			$config_file = $config_dir."/".self::CONFIG_FILE;
+			$this->config["ACCOUNT_KEY_FILE"] = $config_dir."/account.key";
 
 			/* Read configuration file
 			 */
@@ -42,12 +61,27 @@
 			}
 		}
 
+		/* Magic method get
+		 */
 		public function __get($key) {
 			switch ($key) {
 				case "content": return $this->config;
 			}
 
 			return null;
+		}
+
+		/* Find configuration directory
+		 */
+		private function find_config_dir($locations) {
+			foreach ($locations as $location) {
+				$file = $location."/".self::CONFIG_FILE;
+				if (file_exists($file)) {
+					return $location;
+				}
+			}
+
+			return false;
 		}
 	}
 ?>

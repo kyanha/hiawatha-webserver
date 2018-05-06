@@ -248,7 +248,7 @@ void manage_load_balancer(t_config *config, time_t now) {
 					close(sock);
 					connect_to->available = true;
 				} else {
-					log_string(config->system_logfile, "FastCGI server %s is still (partially) unavailable", fcgi_server->fcgi_id);
+					log_system(config, "FastCGI server %s is still (partially) unavailable", fcgi_server->fcgi_id);
 				}
 			}
 			connect_to = connect_to->next;
@@ -365,7 +365,7 @@ pid_t fork_cgi_process(t_session *session, t_cgi_info *cgi_info) {
 			if (pos != NULL) {
 				*pos = '\0';
 				if (chdir(session->file_on_disk) == -1) {
-					log_file_error(session, session->file_on_disk, "couldn't change to CGI directory");
+					log_error_file(session, session->file_on_disk, "couldn't change to CGI directory");
 				}
 				*pos = slash;
 			}

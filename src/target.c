@@ -157,7 +157,7 @@ no_gzip:
 	if (handle == -1) {
 		if ((handle = open(session->file_on_disk, O_RDONLY)) == -1) {
 			if (errno == EACCES) {
-				log_error(session, fb_filesystem);
+				log_error_session(session, fb_filesystem);
 				return 403;
 			}
 			return 404;
@@ -175,7 +175,7 @@ no_gzip:
 	 */
 	if ((session->host->file_hashes != NULL) && (session->letsencrypt_auth_request == false)) {
 		if (file_hash_match(session->file_on_disk, session->host->file_hashes) == false) {
-			log_file_error(session, session->file_on_disk, "invalid file hash");
+			log_error_file(session, session->file_on_disk, "invalid file hash");
 #ifdef ENABLE_MONITOR
 			if (session->config->monitor_enabled) {
 				monitor_count_exploit_attempt(session);
@@ -192,19 +192,19 @@ no_gzip:
 	 */
 	if (session->host->follow_symlinks == false) {
 		switch (contains_not_allowed_symlink(session->file_on_disk, session->host->website_root)) {
-			case error:
+			case fb_error:
 				close(handle);
-				log_error(session, "error while scanning file for symlinks");
+				log_error_session(session, "error while scanning file for symlinks");
 				return 500;
-			case not_found:
+			case fb_not_found:
 				close(handle);
 				return 404;
-			case no_access:
-			case yes:
+			case fb_no_access:
+			case fb_yes:
 				close(handle);
-				log_error(session, fb_symlink);
+				log_error_session(session, fb_symlink);
 				return 403;
-			case no:
+			case fb_no:
 				break;
 		}
 	}
@@ -251,7 +251,7 @@ no_gzip:
 	}
 	if (file_size == -1) {
 		close(handle);
-		log_error(session, "error while determining filesize");
+		log_error_session(session, "error while determining filesize");
 		return 500;
 	}
 
@@ -272,7 +272,7 @@ no_gzip:
 		if (strncmp(range, "bytes=", 6) == 0) {
 			if ((range = strdup(range + 6)) == NULL) {
 				close(handle);
-				log_error(session, "strdup() error");
+				log_error_session(session, "strdup() error");
 				return 500;
 			}
 
@@ -573,7 +573,7 @@ int execute_cgi(t_session *session) {
 	if (check_file_exists) {
 		if ((handle = open(session->file_on_disk, O_RDONLY)) == -1) {
 			if (errno == EACCES) {
-				log_error(session, fb_filesystem);
+				log_error_session(session, fb_filesystem);
 				return 403;
 			}
 			return 404;
@@ -586,7 +586,7 @@ int execute_cgi(t_session *session) {
 		 */
 		if (session->host->file_hashes != NULL) {
 			if (file_hash_match(session->file_on_disk, session->host->file_hashes) == false) {
-				log_file_error(session, session->file_on_disk, "invalid file hash");
+				log_error_file(session, session->file_on_disk, "invalid file hash");
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
 					monitor_count_exploit_attempt(session);
@@ -600,7 +600,7 @@ int execute_cgi(t_session *session) {
 	}
 
 	if (session->host->execute_cgi == false) {
-		log_error(session, "CGI execution not allowed");
+		log_error_session(session, "CGI execution not allowed");
 		return 403;
 	}
 
@@ -613,32 +613,32 @@ int execute_cgi(t_session *session) {
 	if ((wrap_cgi == false) && (session->cgi_type != fastcgi)) {
 		if (session->cgi_type == binary) {
 			switch (can_execute(session->file_on_disk, session->config->server_uid, session->config->server_gid, &(session->config->groups))) {
-				case error:
-					log_error(session, "error during CGI preprocess");
+				case fb_error:
+					log_error_session(session, "error during CGI preprocess");
 					return 500;
-				case not_found:
+				case fb_not_found:
 					return 404;
-				case no_access:
-				case no:
-					log_error(session, fb_filesystem);
+				case fb_no_access:
+				case fb_no:
+					log_error_session(session, fb_filesystem);
 					return 403;
-				case yes:
+				case fb_yes:
 					break;
 			}
 		}
 
 		if (session->host->follow_symlinks == false) {
 			switch (contains_not_allowed_symlink(session->file_on_disk, session->host->website_root)) {
-				case error:
-					log_error(session, "error while searching for symlinks in CGI path");
+				case fb_error:
+					log_error_session(session, "error while searching for symlinks in CGI path");
 					return 500;
-				case not_found:
+				case fb_not_found:
 					return 404;
-				case no_access:
-				case yes:
-					log_error(session, fb_symlink);
+				case fb_no_access:
+				case fb_yes:
+					log_error_session(session, fb_symlink);
 					return 403;
-				case no:
+				case fb_no:
 					break;
 			}
 		}
@@ -744,19 +744,19 @@ int execute_cgi(t_session *session) {
 			return 503;
 		} else if ((cgi_info.from_cgi = connect_to_fcgi_server(connect_to)) == -1) {
 			connect_to->available = false;
-			log_string(session->config->system_logfile, "can't connect to FastCGI server %s", session->fcgi_server->fcgi_id);
+			log_system(session->config, "can't connect to FastCGI server %s", session->fcgi_server->fcgi_id);
 			return 503;
 		} else {
 			connect_to->available = true;
 			if (send_fcgi_request(session, cgi_info.from_cgi) == -1) {
-				log_error(session, "error while sending data to FastCGI server");
+				log_error_session(session, "error while sending data to FastCGI server");
 				return 500;
 			}
 		}
 	} else {
 		cgi_info.wrap_cgi = wrap_cgi;
 		if ((cgi_pid = fork_cgi_process(session, &cgi_info)) == -1) {
-			log_error(session, "error while forking CGI process");
+			log_error_session(session, "error while forking CGI process");
 			return 500;
 		}
 	}
@@ -792,11 +792,11 @@ int execute_cgi(t_session *session) {
 
 		switch (cgi_result) {
 			case cgi_ERROR:
-				log_error(session, "error while executing CGI");
+				log_error_session(session, "error while executing CGI");
 				retval = 500;
 				break;
 			case cgi_TIMEOUT:
-				log_error(session, "CGI application timeout");
+				log_error_session(session, "CGI application timeout");
 				if (in_body) {
 					retval = rs_DISCONNECT;
 				} else {
@@ -822,7 +822,7 @@ int execute_cgi(t_session *session) {
 					/* Error received from CGI
 					 */
 					*(cgi_info.error_buffer + cgi_info.error_len) = '\0';
-					log_cgi_error(session, cgi_info.error_buffer);
+					log_error_cgi(session, cgi_info.error_buffer);
 					cgi_info.error_len = 0;
 #ifdef ENABLE_MONITOR
 					error_printed = true;
@@ -877,7 +877,7 @@ int execute_cgi(t_session *session) {
 							/* Fix crappy CGI headers
 							 */
 							if ((result = fix_crappy_cgi_headers(&cgi_info)) == -1) {
-								log_error(session, "error fixing crappy CGI headers");
+								log_error_session(session, "error fixing crappy CGI headers");
 								retval = 500;
 								break;
 							} else if (result == 0) {
@@ -908,12 +908,12 @@ int execute_cgi(t_session *session) {
 							}
 
 							if ((return_code <= 0) || (return_code > 999)) {
-								log_error(session, "invalid status code received from CGI");
+								log_error_session(session, "invalid status code received from CGI");
 							} else if (return_code != 200) {
 								session->return_code = return_code;
 
 								if (return_code == 500) {
-									log_error(session, "CGI returned 500 Internal Error");
+									log_error_session(session, "CGI returned 500 Internal Error");
 								}
 								if (session->host->trigger_on_cgi_status) {
 									retval = return_code;
@@ -966,7 +966,7 @@ int execute_cgi(t_session *session) {
 												}
 
 												ban_ip(&(session->ip_address), value, session->config->kick_on_ban);
-												log_system(session, "Client banned for %d seconds by CGI %s", value, session->file_on_disk);
+												log_system_session(session, "Client banned for %d seconds by CGI %s", value, session->file_on_disk);
 #ifdef ENABLE_MONITOR
 												if (session->config->monitor_enabled) {
 													monitor_count_ban(session);
@@ -1000,7 +1000,7 @@ int execute_cgi(t_session *session) {
 										log_exploit_attempt(session, "reported by CGI", NULL);
 									} else if (strcmp(event_value, "failed_login") == 0) {
 										monitor_count_failed_login(session);
-										log_file_error(session, session->request_uri, "failed login");
+										log_error_file(session, session->request_uri, "failed login");
 									} else {
 										monitor_event("%s", event_value);
 									}
@@ -1148,7 +1148,7 @@ int execute_cgi(t_session *session) {
 							in_body = true;
 							cgi_info.input_len = 0;
 						} else if (cgi_info.input_len > MAX_OUTPUT_HEADER) {
-							log_error(session, "CGI header too large");
+							log_error_session(session, "CGI header too large");
 							retval = 500;
 							break;
 						}
@@ -1166,9 +1166,9 @@ int execute_cgi(t_session *session) {
 				} else {
 					retval = 500;
 					if (cgi_info.input_len == 0) {
-						log_error(session, "no output");
+						log_error_session(session, "no output");
 					} else {
-						log_error(session, "CGI only printed a header, no content");
+						log_error_session(session, "CGI only printed a header, no content");
 					}
 				}
 		} /* switch */
@@ -1272,7 +1272,7 @@ int handle_trace_request(t_session *session) {
 	/* Header
 	 */
 	if (snprintf(buffer, MAX_TRACE_HEADER, "%d\r\nContent-Type: message/http\r\n\r\n", body_size) < 0) {
-		log_error(session, "snprintf() error");
+		log_error_session(session, "snprintf() error");
 		return 500;
 	} else if (send_header(session) == -1) {
 		return -1;
@@ -1349,7 +1349,7 @@ int handle_put_request(t_session *session) {
 #endif
 
 	if (session->uploaded_file == NULL) {
-		log_error(session, "no uploaded file available for PUT request");
+		log_error_session(session, "no uploaded file available for PUT request");
 		return 500;
 	}
 
@@ -1358,7 +1358,7 @@ int handle_put_request(t_session *session) {
 	switch (allow_alter(session)) {
 		case deny:
 		case unspecified:
-			log_error(session, fb_alterlist);
+			log_error_session(session, fb_alterlist);
 			return 403;
 		case allow:
 			break;
@@ -1387,7 +1387,7 @@ int handle_put_request(t_session *session) {
 			return 416;
 		}
 		if ((handle_write = open(session->file_on_disk, O_CREAT|O_WRONLY, session->host->alter_fmode)) == -1) {
-			log_error(session, fb_filesystem);
+			log_error_session(session, fb_filesystem);
 			return 403;
 		}
 		file_size = NEW_FILE;
@@ -1396,7 +1396,7 @@ int handle_put_request(t_session *session) {
 		/* Existing file */
 		if ((file_size = filesize(session->file_on_disk)) == -1) {
 			close(handle_write);
-			log_error(session, "filesize() error");
+			log_error_session(session, "filesize() error");
 			return 500;
 		}
 		result = 204;
@@ -1418,7 +1418,7 @@ int handle_put_request(t_session *session) {
 			lock_timeout--;
 			sleep(1);
 		} else {
-			log_error(session, "can't lock file for writing (PUT)");
+			log_error_session(session, "can't lock file for writing (PUT)");
 			close(handle_write);
 			if (file_size == NEW_FILE) {
 				unlink(session->file_on_disk);
@@ -1459,7 +1459,7 @@ int handle_put_request(t_session *session) {
 				result = 416;
 			} else if (write_begin > 0) {
 				if (lseek(handle_write, write_begin, SEEK_SET) == -1) {
-					log_error(session, "lseek() error");
+					log_error_session(session, "lseek() error");
 					result = 500;
 				}
 			}
@@ -1477,13 +1477,13 @@ int handle_put_request(t_session *session) {
 			if (file_size == NEW_FILE) {
 				unlink(session->file_on_disk);
 			}
-			log_error(session, "can't open uploaded file of PUT request");
+			log_error_session(session, "can't open uploaded file of PUT request");
 			return 500;
 		}
 
 		if ((file_size != NEW_FILE) && (range_found == false)) {
 			if (ftruncate(handle_write, session->content_length) == -1) {
-				log_error(session, "ftruncate() error");
+				log_error_session(session, "ftruncate() error");
 				result = 500;
 			}
 		}
@@ -1499,19 +1499,19 @@ int handle_put_request(t_session *session) {
 						} else if (write_buffer(handle_write, buffer, bytes_read) != -1) {
 							total_written += bytes_read;
 						} else {
-							log_error(session, "error writing file of PUT request");
+							log_error_session(session, "error writing file of PUT request");
 							result = 500;
 							break;
 						}
 					} else if (errno != EINTR) {
-						log_error(session, "error reading file of PUT request");
+						log_error_session(session, "error reading file of PUT request");
 						result = 500;
 						break;
 					}
 				}
 				free(buffer);
 			} else {
-				log_error(session, "malloc() error for PUT request");
+				log_error_session(session, "malloc() error for PUT request");
 				result = 500;
 			}
 		}
@@ -1546,7 +1546,7 @@ int handle_delete_request(t_session *session) {
 	switch (allow_alter(session)) {
 		case deny:
 		case unspecified:
-			log_error(session, fb_alterlist);
+			log_error_session(session, fb_alterlist);
 			return 403;
 		case allow:
 			break;
@@ -1571,7 +1571,7 @@ int handle_delete_request(t_session *session) {
 	if (unlink(session->file_on_disk) == -1) {
 		switch (errno) {
 			case EACCES:
-				log_error(session, fb_filesystem);
+				log_error_session(session, fb_filesystem);
 				return 403;
 			case ENOENT:
 				return 404;
@@ -1579,7 +1579,7 @@ int handle_delete_request(t_session *session) {
 			case ENOTDIR:
 				return 405;
 			default:
-				log_error(session, "error deleting file for DELETE request");
+				log_error_session(session, "error deleting file for DELETE request");
 				return 500;
 		}
 	}
@@ -1597,7 +1597,7 @@ int handle_xml_file(t_session *session, char *xslt_file) {
 
 	if ((handle = open(session->file_on_disk, O_RDONLY)) == -1) {
 		if (errno == EACCES) {
-			log_error(session, fb_filesystem);
+			log_error_session(session, fb_filesystem);
 			return 403;
 		}
 		return 404;
@@ -1609,16 +1609,16 @@ int handle_xml_file(t_session *session, char *xslt_file) {
 	 */
 	if (session->host->follow_symlinks == false) {
 		switch (contains_not_allowed_symlink(session->file_on_disk, session->host->website_root)) {
-			case error:
-				log_error(session, "error while scanning file for symlinks");
+			case fb_error:
+				log_error_session(session, "error while scanning file for symlinks");
 				return 500;
-			case not_found:
+			case fb_not_found:
 				return 404;
-			case no_access:
-			case yes:
-				log_error(session, fb_symlink);
+			case fb_no_access:
+			case fb_yes:
+				log_error_session(session, fb_symlink);
 				return 403;
-			case no:
+			case fb_no:
 				break;
 		}
 	}
@@ -1803,7 +1803,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 			webserver.socket = connect_to_server(&(rproxy->ip_addr), rproxy->port);
 		}
 		if (webserver.socket == -1) {
-			log_error(session, "error connecting to reverse proxy");
+			log_error_session(session, "error connecting to reverse proxy");
 			return 503;
 		}
 
@@ -1813,7 +1813,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 		if (webserver.use_tls) {
 			hostname = rproxy->hostname != NULL ? rproxy->hostname : session->hostname;
 			if (tls_connect(&(webserver.tls_context), &(webserver.socket), hostname) != TLS_HANDSHAKE_OKE) {
-				log_error(session, "TLS handshake error with reverse proxy");
+				log_error_session(session, "TLS handshake error with reverse proxy");
 				close(webserver.socket);
 				return 503;
 			}
@@ -1857,7 +1857,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 					} else {
 						reverse_proxy = rproxy->hostname;
 					}
-					log_string(session->host->error_logfile, "Reverse proxy connection error for %s", reverse_proxy);
+					log_error_session(session, "Reverse proxy connection error for %s", reverse_proxy);
 				}
 				break;
 			case 0:
@@ -1871,7 +1871,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 					} else {
 						reverse_proxy = rproxy->hostname;
 					}
-					log_string(session->host->error_logfile, "Reverse proxy timeout for %s", reverse_proxy);
+					log_error_session(session, "Reverse proxy timeout for %s", reverse_proxy);
 				}
 				break;
 			default:
@@ -1898,7 +1898,7 @@ int proxy_request(t_session *session, t_rproxy *rproxy) {
 							} else {
 								reverse_proxy = rproxy->hostname;
 							}
-							log_string(session->host->error_logfile, "Reverse proxy read error for %s", reverse_proxy);
+							log_error_session(session, "Reverse proxy read error for %s", reverse_proxy);
 						}
 						break;
 					case 0:
@@ -2236,14 +2236,14 @@ int forward_to_websocket(t_session *session) {
 	}
 
 	if (ws_socket == -1) {
-		log_error(session, "error connecting to websocket");
+		log_error_session(session, "error connecting to websocket");
 		return 503;
 	}
 
 #ifdef ENABLE_TLS
 	if (ws->use_tls) {
 		if (tls_connect(&ws_tls_context, &ws_socket, NULL) != TLS_HANDSHAKE_OKE) {
-			log_error(session, "TLS handshake error with websocket");
+			log_error_session(session, "TLS handshake error with websocket");
 			close(ws_socket);
 			return -1;
 		}

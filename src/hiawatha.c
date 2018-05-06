@@ -434,7 +434,7 @@ int accept_connection(t_binding *binding, t_config *config) {
 		memset((void*)&caddr4, 0, (size_t)size);
 		if ((session->client_socket = accept(binding->socket, (struct sockaddr*)&caddr4, &size)) == -1) {
 			free(session);
-			log_string(config->system_logfile, "Error accepting incoming IPv4 connection: %s", strerror(errno));
+			log_system(config, "Error accepting incoming IPv4 connection: %s", strerror(errno));
 			if (errno == EINTR) {
 				return 0;
 			}
@@ -452,7 +452,7 @@ int accept_connection(t_binding *binding, t_config *config) {
 		memset((void*)&caddr6, 0, (size_t)size);
 		if ((session->client_socket = accept(binding->socket, (struct sockaddr*)&caddr6, &size)) == -1) {
 			free(session);
-			log_string(config->system_logfile, "Error accepting incoming IPv6 connection: %s", strerror(errno));
+			log_system(config, "Error accepting incoming IPv6 connection: %s", strerror(errno));
 			if (errno == EINTR) {
 				return 0;
 			}
@@ -464,7 +464,7 @@ int accept_connection(t_binding *binding, t_config *config) {
 		memcpy(&(session->ip_address.value), (char*)&caddr6.sin6_addr.s6_addr, session->ip_address.size);
 #endif
 	} else {
-		log_system(session, "Incoming connection via unknown protocol");
+		log_system_session(session, "Incoming connection via unknown protocol");
 		free(session);
 		return -1;
 	}
@@ -476,7 +476,7 @@ int accept_connection(t_binding *binding, t_config *config) {
 		if (current_server_load > session->config->max_server_load) {
 			close(session->client_socket);
 			free(session);
-			log_string(config->system_logfile, "Connection dropped due to high server load.");
+			log_system(config, "Connection dropped due to high server load.");
 			return -1;
 		}
 	}
@@ -500,7 +500,7 @@ int accept_connection(t_binding *binding, t_config *config) {
 			if (setsockopt(session->client_socket, IPPROTO_TCP, TCP_NODELAY, (void*)&optval, sizeof(int)) == -1) {
 				close(session->client_socket);
 				free(session);
-				log_string(config->system_logfile, "error setsockopt(TCP_NODELAY)");
+				log_system(config, "error setsockopt(TCP_NODELAY)");
 				return -1;
 			}
 		}
@@ -511,7 +511,7 @@ int accept_connection(t_binding *binding, t_config *config) {
 			if (setsockopt(session->client_socket, SOL_SOCKET, SO_SNDTIMEO, &timer, sizeof(struct timeval)) == -1) {
 				close(session->client_socket);
 				free(session);
-				log_string(config->system_logfile, "error setsockopt(SO_SNDTIMEO)");
+				log_system(config, "error setsockopt(SO_SNDTIMEO)");
 				return -1;
 			}
 		}
@@ -975,25 +975,25 @@ int run_webserver(t_settings *settings) {
 		if (close(STDERR_FILENO) == -1) {
 			fprintf(stderr, "Warning: error closing STDERR\n");
 		} else if (open("/dev/null", O_WRONLY) == -1) {
-			log_string(config->system_logfile, "Warning: error redirecting stderr\n");
+			log_system(config, "Warning: error redirecting stderr\n");
 		}
 	}
 
-	log_string(config->system_logfile, "Hiawatha v"VERSION" started.");
+	log_system(config, "Hiawatha v"VERSION" started.");
 
 	/* Start task_runner
 	 */
 	if (pthread_attr_init(&task_runner_attr) != 0) {
-		log_string(config->system_logfile, "Task-runner pthread init error.");
+		log_system(config, "Task-runner pthread init error.");
 		return -1;
 	} else if (pthread_attr_setdetachstate(&task_runner_attr, PTHREAD_CREATE_DETACHED) != 0) {
-		log_string(config->system_logfile, "Task-runner pthread set detach state error.");
+		log_system(config, "Task-runner pthread set detach state error.");
 		return -1;
 	} else if (pthread_attr_setstacksize(&task_runner_attr, PTHREAD_STACK_SIZE) != 0) {
-		log_string(config->system_logfile, "Task-runner pthread set stack size error.");
+		log_system(config, "Task-runner pthread set stack size error.");
 		return -1;
 	} else if (pthread_create(&task_runner_thread, &task_runner_attr, (void*)task_runner, (void*)config) != 0) {
-		log_string(config->system_logfile, "Task-runner pthread create error.");
+		log_system(config, "Task-runner pthread create error.");
 		return -1;
 	}
 	pthread_attr_destroy(&task_runner_attr);
@@ -1047,7 +1047,7 @@ int run_webserver(t_settings *settings) {
 #endif
 			case -1:
 				if (errno != EINTR) {
-					log_string(config->system_logfile, "Fatal error selecting connection.");
+					log_system(config, "Fatal error selecting connection.");
 					usleep(1000);
 				}
 				break;
@@ -1081,7 +1081,7 @@ int run_webserver(t_settings *settings) {
 						memset((void*)&caddr, 0, (size_t)size);
 						if ((admin_socket = accept(binding->socket, (struct sockaddr*)&caddr, &size)) == -1) {
 							if (errno != EINTR) {
-								log_string(config->system_logfile, "Fatal error accepting Tomahawk connection.");
+								log_system(config, "Fatal error accepting Tomahawk connection.");
 								usleep(1000);
 								break;
 							}
@@ -1126,7 +1126,7 @@ int run_webserver(t_settings *settings) {
 	}
 #endif
 
-	log_string(config->system_logfile, "Hiawatha v"VERSION" stopped.");
+	log_system(config, "Hiawatha v"VERSION" stopped.");
 	close_logfiles(config->first_host, 0);
 
 	free(poll_data);

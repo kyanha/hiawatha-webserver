@@ -179,7 +179,7 @@ int fetch_request(t_session *session) {
 							}
 						}
 						if (session->uploaded_file == NULL) {
-							log_error(session, "can't create temporary file for PUT request");
+							log_error_session(session, "can't create temporary file for PUT request");
 							result = 500;
 							break;
 						}
@@ -259,7 +259,7 @@ int fetch_request(t_session *session) {
 						/* Chunked transfer encoding
 						 */
 						if (store_on_disk) {
-							log_error(session, "Chunked transfer encoding for PUT requests not supported.");
+							log_error_session(session, "Chunked transfer encoding for PUT requests not supported.");
 							result = -1;
 							break;
 						}
@@ -647,7 +647,7 @@ int uri_to_path(t_session *session) {
 }
 
 int get_path_info(t_session *session) {
-	t_fsbool is_dir;
+	t_fs_type filetype;
 	char *slash;
 
 	if (session->script_alias != NULL) {
@@ -675,23 +675,24 @@ int get_path_info(t_session *session) {
 	while (*slash != '\0') {
 		if (*slash == '/') {
 			*slash = '\0';
-			is_dir = is_directory(session->file_on_disk);
+			filetype = file_type(session->file_on_disk);
 			*slash = '/';
 
-			switch (is_dir) {
-				case error:
+			switch (filetype) {
+				case ft_error:
 					return 500;
-				case not_found:
+				case ft_not_found:
 					return 404;
-				case no_access:
+				case ft_no_access:
+				case ft_other:
 					return 403;
-				case no:
+				case ft_file:
 					if ((session->path_info = strdup(slash)) == NULL) {
 						return -1;
 					}
 					*slash = '\0';
 					return 200;
-				case yes:
+				case ft_dir:
 					break;
 			}
 		}

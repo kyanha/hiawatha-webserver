@@ -160,7 +160,7 @@ static int handle_error(t_session *session, int error_code) {
 	session->encode_gzip = false;
 
 	if ((new_fod = (char*)malloc(session->host->website_root_len + strlen(error_handler->handler) + 1)) == NULL) {
-		log_error(session, "malloc() error while handling error");
+		log_error_session(session, "malloc() error while handling error");
 		return 500;
 	}
 
@@ -184,40 +184,41 @@ static int handle_error(t_session *session, int error_code) {
 		result = handle_xml_file(session, xslt_file);
 		free(xslt_file);
 #endif
-	} else switch (is_directory(session->file_on_disk)) {
-		case error:
+	} else switch (file_type(session->file_on_disk)) {
+		case ft_error:
 			result = 500;
 			break;
-		case yes:
+		case ft_dir:
 			result = 301;
 			break;
-		case no:
+		case ft_file:
 			result = send_file(session);
 			break;
-		case no_access:
+		case ft_other:
+		case ft_no_access:
 			result = 403;
 			break;
-		case not_found:
+		case ft_not_found:
 			result = 404;
 			break;
 	}
 
 	switch (result) {
 		case 301:
-			log_error(session, "ErrorHandler is a directory");
+			log_error_session(session, "ErrorHandler is a directory");
 			break;
 		case 403:
-			log_error(session, "no access to ErrorHandler");
+			log_error_session(session, "no access to ErrorHandler");
 			break;
 		case 404:
-			log_error(session, "ErrorHandler not found");
+			log_error_session(session, "ErrorHandler not found");
 			break;
 		case 500:
-			log_file_error(session, error_handler->handler, "internal error for ErrorHandler");
+			log_error_file(session, error_handler->handler, "internal error for ErrorHandler");
 			session->keep_alive = false;
 			break;
 		case 503:
-			log_file_error(session, error_handler->handler, "FastCGI for ErrorHandler not available");
+			log_error_file(session, error_handler->handler, "FastCGI for ErrorHandler not available");
 			break;
 	}
 
@@ -232,11 +233,11 @@ static int run_program(t_session *session, char *program, int return_code) {
 
 	switch (pid = fork()) {
 		case -1:
-			log_file_error(session, program, "fork() error");
+			log_error_file(session, program, "fork() error");
 			return -1;
 		case 0:
 			if (setsid() == -1) {
-				log_file_error(session, program, "setsid() error");
+				log_error_file(session, program, "setsid() error");
 			} else {
 				/* Close all other open filedescriptors.
 				 */
@@ -283,7 +284,7 @@ static int run_program(t_session *session, char *program, int return_code) {
 				/* Execute program
 				 */
 				execlp(program, program, (char*)NULL);
-				log_file_error(session, program, "exec() error");
+				log_error_file(session, program, "exec() error");
 			}
 			exit(EXIT_FAILURE);
 		default:
@@ -328,7 +329,7 @@ static int process_url_toolkit(t_session *session, t_url_toolkit *toolkit, t_too
 
 	if ((toolkit_options->ban > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
 		ban_ip(&(session->ip_address), toolkit_options->ban, session->config->kick_on_ban);
-		log_system(session, "Client banned because of URL match in UrlToolkit rule");
+		log_system_session(session, "Client banned because of URL match in UrlToolkit rule");
 		session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 		if (session->config->monitor_enabled) {
@@ -343,7 +344,7 @@ static int process_url_toolkit(t_session *session, t_url_toolkit *toolkit, t_too
 	if (toolkit_options->new_url != NULL) {
 		if (register_tempdata(&(session->tempdata), toolkit_options->new_url, tc_data) == -1) {
 			free(toolkit_options->new_url);
-			log_error(session, "error registering temporary data");
+			log_error_session(session, "error registering temporary data");
 			return 500;
 		}
 		session->uri = toolkit_options->new_url;
@@ -358,12 +359,12 @@ static int process_url_toolkit(t_session *session, t_url_toolkit *toolkit, t_too
 	}
 
 	if (result == UT_DENY_ACCESS) {
-		log_error(session, "access denied via URL toolkit rule");
+		log_error_session(session, "access denied via URL toolkit rule");
 		return 403;
 	}
 
 	if (result == UT_NOT_FOUND) {
-		log_error(session, "not found faked via URL toolkit rule");
+		log_error_session(session, "not found faked via URL toolkit rule");
 		return 404;
 	}
 
@@ -471,11 +472,11 @@ tunnel_ssh:
 			}
 		}
 
-		log_system(session, "SSH tunnel requested");
+		log_system_session(session, "SSH tunnel requested");
 		if (tunnel_ssh_connection(session->client_socket) != 0) {
-			log_system(session, "SSH tunnel failed");
+			log_system_session(session, "SSH tunnel failed");
 		} else {
-			log_system(session, "SSH tunnel terminated");
+			log_system_session(session, "SSH tunnel terminated");
 		}
 
 		session->keep_alive = false;
@@ -496,12 +497,12 @@ tunnel_ssh:
 			if (challenge_client_mode == false) {
 				if (total_connections >= session->config->challenge_threshold) {
 					challenge_client_mode = true;
-					log_system(session, "ChallengeClient mode activated");
+					log_system_session(session, "ChallengeClient mode activated");
 				}
 			} else {
 				if (total_connections < 0.9 * session->config->challenge_threshold) {
 					challenge_client_mode = false;
-					log_system(session, "ChallengeClient mode deactivated");
+					log_system_session(session, "ChallengeClient mode deactivated");
 				}
 			}
 
@@ -509,7 +510,7 @@ tunnel_ssh:
 				if ((result = challenge_client(session)) != 0) {
 					if ((result != 200) && (session->config->challenge_ban > 0)) {
 						ban_ip(&(session->ip_address), session->config->challenge_ban, session->config->kick_on_ban);
-						log_system(session, "Client banned due to challenge failure");
+						log_system_session(session, "Client banned due to challenge failure");
 #ifdef ENABLE_MONITOR
 						if (session->config->monitor_enabled) {
 							monitor_count_ban(session);
@@ -530,7 +531,7 @@ tunnel_ssh:
 	 */
 	if (session->hostname != NULL) {
 		if (remove_port_from_hostname(session) == -1) {
-			log_error(session, "error removing port from hostname");
+			log_error_session(session, "error removing port from hostname");
 			return 500;
 		}
 
@@ -549,7 +550,7 @@ tunnel_ssh:
 	 */
 	if (session->binding->use_tls) {
 		if ((session->host->ca_certificate != NULL) && (tls_has_peer_cert(&(session->tls_context)) == false)) {
-			log_error(session, "Missing client TLS certificate");
+			log_error_session(session, "Missing client TLS certificate");
 			return 440;
 		}
 	}
@@ -591,7 +592,7 @@ tunnel_ssh:
 			if (strpcmp(session->body, &(deny_body->pattern)) == 0) {
 				if ((session->config->ban_on_denied_body > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
 					ban_ip(&(session->ip_address), session->config->ban_on_denied_body, session->config->kick_on_ban);
-					log_system(session, "Client banned because of denied body");
+					log_system_session(session, "Client banned because of denied body");
 					session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 					if (session->config->monitor_enabled) {
@@ -646,7 +647,7 @@ tunnel_ssh:
 
 		switch (access = allow_client(session)) {
 			case deny:
-				log_error(session, fb_accesslist);
+				log_error_session(session, fb_accesslist);
 				return 403;
 			case allow:
 				break;
@@ -697,7 +698,7 @@ no_websocket:
 	}
 
 	if (duplicate_host(session) == false) {
-		log_error(session, "duplicate_host() error");
+		log_error_session(session, "duplicate_host() error");
 		return 500;
 	}
 
@@ -765,7 +766,7 @@ no_toolkit:
 
 		if ((session->vars != NULL) && (session->host->secure_url)) {
 			if (forbidden_chars_present(session->vars)) {
-				log_error(session, "URL contains forbidden characters");
+				log_error_session(session, "URL contains forbidden characters");
 				return 403;
 			}
 		}
@@ -787,7 +788,7 @@ no_toolkit:
 
 		switch (access = allow_client(session)) {
 			case deny:
-				log_error(session, fb_accesslist);
+				log_error_session(session, fb_accesslist);
 				return 403;
 			case allow:
 				break;
@@ -854,7 +855,7 @@ no_toolkit:
 
 	switch (access = allow_client(session)) {
 		case deny:
-			log_error(session, fb_accesslist);
+			log_error_session(session, fb_accesslist);
 			return 403;
 		case allow:
 			break;
@@ -865,13 +866,16 @@ no_toolkit:
 			}
 	}
 
-	switch (is_directory(session->file_on_disk)) {
-		case error:
+	switch (file_type(session->file_on_disk)) {
+		case ft_error:
+fprintf(stderr, "[%s]\n", session->file_on_disk);
 			return 500;
-		case yes:
+		case ft_other:
+			return 403;
+		case ft_dir:
 			session->uri_is_dir = true;
 			break;
-		case no:
+		case ft_file:
 			if (((session->request_method != PUT) || session->host->webdav_app) && (session->host->enable_path_info)) {
 				if ((result = get_path_info(session)) != 200) {
 					return result;
@@ -882,10 +886,10 @@ no_toolkit:
 				}
 			}
 			break;
-		case no_access:
-			log_error(session, fb_filesystem);
+		case ft_no_access:
+			log_error_session(session, fb_filesystem);
 			return 403;
-		case not_found:
+		case ft_not_found:
 			if ((session->request_method == DELETE) && (session->host->webdav_app == false)) {
 				return 404;
 			}
@@ -995,7 +999,7 @@ no_toolkit:
 static void handle_timeout(t_session *session) {
 	if ((session->config->ban_on_timeout > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
 		ban_ip(&(session->ip_address), session->config->ban_on_timeout, session->config->kick_on_ban);
-		log_system(session, "Client banned because of connection timeout");
+		log_system_session(session, "Client banned because of connection timeout");
 		session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 		if (session->config->monitor_enabled) {
@@ -1003,7 +1007,7 @@ static void handle_timeout(t_session *session) {
 		}
 #endif
 	} else if (session->config->log_timeouts) {
-		log_system(session, "Timeout while waiting for first request");
+		log_system_session(session, "Timeout while waiting for first request");
 	}
 }
 
@@ -1018,12 +1022,12 @@ static void handle_request_result(t_session *session, int result) {
 
 	if (result == -1) switch (session->error_cause) {
 		case ec_MAX_REQUESTSIZE:
-			log_system(session, "Maximum request size reached");
+			log_system_session(session, "Maximum request size reached");
 			session->return_code = 413;
 			send_code(session);
 			if ((session->config->ban_on_max_request_size > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
 				ban_ip(&(session->ip_address), session->config->ban_on_max_request_size, session->config->kick_on_ban);
-				log_system(session, "Client banned because of sending a too large request");
+				log_system_session(session, "Client banned because of sending a too large request");
 				session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
@@ -1041,12 +1045,12 @@ static void handle_request_result(t_session *session, int result) {
 			break;
 		case ec_CLIENT_DISCONNECTED:
 			if ((session->kept_alive == 0) && session->config->log_timeouts) {
-				log_system(session, "Silent client disconnected");
+				log_system_session(session, "Silent client disconnected");
 			}
 			break;
 		case ec_SOCKET_READ_ERROR:
 			if (errno != ECONNRESET) {
-				log_system(session, "Error while reading request");
+				log_system_session(session, "Error while reading request");
 			}
 			break;
 		case ec_SOCKET_WRITE_ERROR:
@@ -1056,14 +1060,14 @@ static void handle_request_result(t_session *session, int result) {
 			break;
 		case ec_FORCE_QUIT:
 			if (session->config->log_timeouts) {
-				log_system(session, "Client kicked");
+				log_system_session(session, "Client kicked");
 			}
 			break;
 		case ec_SQL_INJECTION:
 			if ((session->config->ban_on_sqli > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
 				ban_ip(&(session->ip_address), session->config->ban_on_sqli, session->config->kick_on_ban);
 				hostname = (session->hostname != NULL) ? session->hostname : unknown_host;
-				log_system(session, "Client banned because of SQL injection at %s", hostname);
+				log_system_session(session, "Client banned because of SQL injection at %s", hostname);
 				session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
@@ -1100,7 +1104,7 @@ static void handle_request_result(t_session *session, int result) {
 			if ((session->config->ban_on_invalid_url > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
 				ban_ip(&(session->ip_address), session->config->ban_on_invalid_url, session->config->kick_on_ban);
 				hostname = (session->hostname != NULL) ? session->hostname : unknown_host;
-				log_system(session, "Client banned because of invalid URL on %s", hostname);
+				log_system_session(session, "Client banned because of invalid URL on %s", hostname);
 				session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
@@ -1155,7 +1159,7 @@ static void handle_request_result(t_session *session, int result) {
 			}
 			if ((session->config->ban_on_garbage > 0) && (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny)) {
 				ban_ip(&(session->ip_address), session->config->ban_on_garbage, session->config->kick_on_ban);
-				log_system(session, "Client banned because of sending garbage");
+				log_system_session(session, "Client banned because of sending garbage");
 				session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 				if (session->config->monitor_enabled) {
@@ -1232,7 +1236,7 @@ static void connection_handler(t_session *session) {
 			case -1:
 				break;
 			case TLS_HANDSHAKE_NO_MATCH:
-				log_system(session, "No cypher overlap during TLS handshake.");
+				log_system_session(session, "No cypher overlap during TLS handshake.");
 				break;
 			case TLS_HANDSHAKE_TIMEOUT:
 				handle_timeout(session);
@@ -1288,7 +1292,7 @@ static void connection_handler(t_session *session) {
 				if (client_is_flooding(session)) {
 					if (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny) {
 						ban_ip(&(session->ip_address), session->config->ban_on_flooding, session->config->kick_on_ban);
-						log_system(session, "Client banned because of flooding");
+						log_system_session(session, "Client banned because of flooding");
 						session->keep_alive = false;
 #ifdef ENABLE_MONITOR
 						if (session->config->monitor_enabled) {
@@ -1468,12 +1472,12 @@ int start_worker(t_session *session) {
 	pthread_t      child_thread;
 
 	if (pthread_attr_init(&child_attr) != 0) {
-		log_system(session, "pthread init error");
+		log_system_session(session, "pthread init error");
 	} else {
 		if (pthread_attr_setdetachstate(&child_attr, PTHREAD_CREATE_DETACHED) != 0) {
-			log_system(session, "pthread set detach state error");
+			log_system_session(session, "pthread set detach state error");
 		} else if (pthread_attr_setstacksize(&child_attr, PTHREAD_STACK_SIZE) != 0) {
-			log_system(session, "pthread set stack size error");
+			log_system_session(session, "pthread set stack size error");
 		} else if (add_client(session) == 0) {
 			if (pthread_create(&child_thread, &child_attr, (void*)connection_handler, (void*)session) == 0) {
 				/* Worker thread started
@@ -1481,7 +1485,7 @@ int start_worker(t_session *session) {
 				result = 0;
 			} else {
 				remove_client(session, false);
-				log_system(session, "pthread create error");
+				log_system_session(session, "pthread create error");
 			}
 		}
 		pthread_attr_destroy(&child_attr);

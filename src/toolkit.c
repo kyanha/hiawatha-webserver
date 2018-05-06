@@ -102,7 +102,7 @@ static bool parse_parameters(t_toolkit_rule *new_rule, char *value, char **opera
 		 */
 		new_rule->operation = to_ban;
 
-		if ((new_rule->value = str_to_int(rest)) == false) {
+		if ((new_rule->value = time_str_to_int(rest)) == -1) {
 			return false;
 		}
 	} else if (strcasecmp(value, "call") == 0) {

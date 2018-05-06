@@ -362,30 +362,30 @@ static int apply_xslt_sheet(t_session *session, xmlDocPtr data_xml, char *xslt_f
 	/* Read XML data
 	 */
 	if (data_xml == NULL) {
-		log_file_error(session, session->file_on_disk, "data is invalid XML");
+		log_error_file(session, session->file_on_disk, "data is invalid XML");
 		return 500;
 	}
 
 	/* Read XSLT sheet
 	 */
 	if (xslt_file == NULL) {
-		log_file_error(session, xslt_file, "XSLT file not set");
+		log_error_file(session, xslt_file, "XSLT file not set");
 		return 500;
 	}
 
 	if ((fp = fopen(xslt_file, "r")) == NULL) {
-		log_file_error(session, xslt_file, "XSLT file does not exist");
+		log_error_file(session, xslt_file, "XSLT file does not exist");
 		return 500;
 	}
 	fclose(fp);
 
 	if ((style_xml = xmlReadFile(xslt_file, NULL, 0)) == NULL) {
-		log_file_error(session, xslt_file, "XSLT file contains invalid XML");
+		log_error_file(session, xslt_file, "XSLT file contains invalid XML");
 		return 500;
 	}
 
 	if ((xslt = xsltParseStylesheetDoc(style_xml)) == NULL) {
-		log_file_error(session, xslt_file, "invalid XSLT");
+		log_error_file(session, xslt_file, "invalid XSLT");
 		xmlFreeDoc(style_xml);
 		return 500;
 	}
@@ -408,13 +408,13 @@ static int apply_xslt_sheet(t_session *session, xmlDocPtr data_xml, char *xslt_f
 	/* Handle transformation result
 	 */
 	if (result_xml == NULL) {
-		log_file_error(session, session->file_on_disk, "transformation error");
+		log_error_file(session, session->file_on_disk, "transformation error");
 		xmlFreeDoc(result_xml);
 		xsltFreeStylesheet(xslt);
 		return 500;
 	}
 	if (xsltSaveResultToString(&raw_xml, &raw_size, result_xml, xslt) == -1) {
-		log_file_error(session, session->file_on_disk, "transformation error");
+		log_error_file(session, session->file_on_disk, "transformation error");
 		xmlFreeDoc(result_xml);
 		xsltFreeStylesheet(xslt);
 		return 500;
@@ -502,7 +502,7 @@ int show_index(t_session *session) {
 #ifdef ENABLE_XSLT
 	xmlDocPtr data_xml;
 #endif
-	char *text_xml, fsize_str[30], timestr[33], value[VALUE_SIZE + 1], *extension, *link, *slash, *uri, *ruri;
+	char *text_xml, fsize_str[30], timestr[33], value[VALUE_SIZE + 1], *extension, *ext_xml, *link, *slash, *uri, *ruri;
 	int text_size, text_max, result, handle;
 	off_t total_fsize = 0;
 	bool root_dir, show_xml;
@@ -525,32 +525,34 @@ int show_index(t_session *session) {
 	}
 	*(slash + 1) = '\0';
 
-	switch (is_directory(session->file_on_disk)) {
-		case error:
+	switch (file_type(session->file_on_disk)) {
+		case ft_error:
 			return 500;
-		case no:
-		case not_found:
+		case ft_other:
+			return 403;
+		case ft_file:
+		case ft_not_found:
 			return 404;
-		case no_access:
-			log_error(session, fb_filesystem);
+		case ft_no_access:
+			log_error_session(session, fb_filesystem);
 			return 403;
 			break;
-		case yes:
+		case ft_dir:
 			break;
 	}
 
 	if (session->host->follow_symlinks == false) {
 		switch (contains_not_allowed_symlink(session->file_on_disk, session->host->website_root)) {
-			case error:
-				log_error(session, "error while scanning file for symlinks");
+			case fb_error:
+				log_error_session(session, "error while scanning file for symlinks");
 				return 500;
-			case not_found:
+			case fb_not_found:
 				return 404;
-			case no_access:
-			case yes:
-				log_error(session, fb_symlink);
+			case fb_no_access:
+			case fb_yes:
+				log_error_session(session, fb_symlink);
 				return 403;
-			case no:
+			case fb_no:
 				break;
 		}
 	}
@@ -576,7 +578,7 @@ int show_index(t_session *session) {
 
 	/* Read directory content
 	 */
-	if ((filelist = read_filelist(session->file_on_disk)) == NULL) {
+	if ((filelist = read_filelist(session->file_on_disk, session->host->allow_dot_files)) == NULL) {
 		return 500;
 	}
 
@@ -711,15 +713,23 @@ int show_index(t_session *session) {
 			/* Extension
 			 */
 			if ((extension = strrchr(file->name, '.')) != NULL) {
-				if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "\" extension=\"") == -1) {
+				ext_xml = NULL;
+				if (xml_special_chars(extension + 1, &ext_xml) == -1) {
 					free(text_xml);
 					remove_filelist(filelist);
 					return -1;
-				} else if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, extension + 1) == -1) {
+				} else if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "\" extension=\"") == -1) {
 					free(text_xml);
+					check_free(ext_xml);
+					remove_filelist(filelist);
+					return -1;
+				} else if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, ext_xml) == -1) {
+					free(text_xml);
+					check_free(ext_xml);
 					remove_filelist(filelist);
 					return -1;
 				}
+				check_free(ext_xml);
 			}
 		}
 
@@ -829,9 +839,9 @@ int show_index(t_session *session) {
 		show_xml = true;
 	} else if ((handle = open(session->host->show_index, O_RDONLY)) == -1) {
 		if (errno == EACCES) {
-			log_file_error(session, session->host->show_index, "access denied");
+			log_error_file(session, session->host->show_index, "access denied");
 		} else {
-			log_file_error(session, session->host->show_index, "file not found");
+			log_error_file(session, session->host->show_index, "file not found");
 		}
 
 		show_xml = true;

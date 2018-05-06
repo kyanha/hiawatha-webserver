@@ -78,7 +78,7 @@ bool group_oke(t_session *session, char *user, t_charlist *group) {
 			default:
 				result = "error while reading group file";
 		}
-		log_file_error(session, session->host->groupfile, result);
+		log_error_file(session, session->host->groupfile, result);
 		return false;
 	}
 
@@ -126,7 +126,7 @@ static FILE *open_password_file(t_session *session) {
 			default:
 				result = "error while reading password file";
 		}
-		log_file_error(session, session->host->passwordfile, result);
+		log_error_file(session, session->host->passwordfile, result);
 		return NULL;
 	}
 

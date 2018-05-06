@@ -128,7 +128,7 @@ int reposition_client(t_session *session, t_ip_addr *ip_address) {
 			}
 		}
 	} else {
-		log_error(session, "Client record not found.");
+		log_error_session(session, "Client record not found.");
 	}
 
 	pthread_mutex_unlock(&client_mutex[old_i]);
@@ -235,7 +235,7 @@ int remove_client(t_session *session, bool free_session) {
 			}
 		}
 	} else {
-		log_error(session, "Client record not found.");
+		log_error_session(session, "Client record not found.");
 	}
 
 	pthread_mutex_unlock(&client_mutex[i]);
@@ -542,7 +542,7 @@ void check_ban_list(t_config *config, time_t now) {
 			} else {
 				prev->next = next;
 			}
-			log_unban(config->system_logfile, &(ban->ip), ban->connect_attempts);
+			log_unban(config, &(ban->ip), ban->connect_attempts);
 			free(ban);
 		} else {
 			/* other
@@ -620,7 +620,7 @@ int register_wrong_password(t_session *session) {
 				if (ip_allowed(&(session->ip_address), session->config->banlist_mask) != deny) {
 					ban_ip(&(session->ip_address), session->config->ban_on_wrong_password, session->config->kick_on_ban);
 					session->keep_alive = false;
-					log_system(session, "Client banned because of too many wrong passwords");
+					log_system_session(session, "Client banned because of too many wrong passwords");
 #ifdef ENABLE_MONITOR
 					if (session->config->monitor_enabled) {
 						monitor_count_ban(session);

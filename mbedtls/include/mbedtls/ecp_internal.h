@@ -3,7 +3,8 @@
  *
  * \brief Function declarations for alternative implementation of elliptic curve
  * point arithmetic.
- *
+ */
+/*
  *  Copyright (C) 2016, ARM Limited, All Rights Reserved
  *  SPDX-License-Identifier: GPL-2.0
  *

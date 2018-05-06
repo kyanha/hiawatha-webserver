@@ -60,23 +60,23 @@ char *make_path(char *dir, char *file) {
 	return path;
 }
 
-static t_fsbool outside_webroot(char *symlink, char *webroot) {
+static t_fs_bool outside_webroot(char *symlink, char *webroot) {
 	char filename[257], *slash;
 	int size, count;
 
 	if ((symlink == NULL) || (webroot == NULL)) {
-		return error;
+		return fb_error;
 	}
 
 	if ((size = readlink(symlink, filename, 256)) > 0) {
 		filename[size] = '\0';
 		if (strchr(filename, '/') == NULL) {
-			return no;
+			return fb_no;
 		}
 		if (filename[0] == '/') {
 			/* Symlink with complete path */
 			if (strncmp(webroot, filename, strlen(webroot)) == 0) {
-				return no;
+				return fb_no;
 			}
 		} else if (strncmp(filename, "../", 3) == 0) {
 			/* Symlink that starts wih ../ */
@@ -96,41 +96,41 @@ static t_fsbool outside_webroot(char *symlink, char *webroot) {
 				}
 			}
 			if ((size_t)(slash - symlink) >= strlen(webroot)) {
-				return no;
+				return fb_no;
 			}
 		}
 	} else switch (errno) {
 		case EACCES:
-			return no_access;
+			return fb_no_access;
 		case ENOENT:
-			return not_found;
+			return fb_not_found;
 		default:
-			return error;
+			return fb_error;
 	}
 
-	return yes;
+	return fb_yes;
 }
 
-t_fsbool contains_not_allowed_symlink(char *filename, char *webroot) {
-	t_fsbool contains = no, outside;
+t_fs_bool contains_not_allowed_symlink(char *filename, char *webroot) {
+	t_fs_bool contains = fb_no, outside;
 	struct stat status;
 	char *slash;
 
 	if ((filename == NULL) || (webroot == NULL)) {
-		return error;
+		return fb_error;
 	}
 
 	if (lstat(filename, &status) == -1) {
 		switch (errno) {
 			case EACCES:
-				return no_access;
+				return fb_no_access;
 			case ENOENT:
-				return not_found;
+				return fb_not_found;
 			default:
-				return error;
+				return fb_error;
 		}
 	} else if (((status.st_mode & S_IFMT) == S_IFLNK) && (status.st_uid != 0)) {
-		if ((outside = outside_webroot(filename, webroot)) != no) {
+		if ((outside = outside_webroot(filename, webroot)) != fb_no) {
 			return outside;
 		}
 	}
@@ -148,63 +148,41 @@ t_fsbool contains_not_allowed_symlink(char *filename, char *webroot) {
 	return contains;
 }
 
-/* Check whether a file is directory or not.
- */
-t_fsbool is_directory(char *file) {
-	DIR *dp;
-
-	if (file == NULL) {
-		return error;
-	} else if ((dp = opendir(file)) != NULL) {
-		closedir(dp);
-		return yes;
-	} else switch (errno) {
-		case EACCES:
-			return no_access;
-		case ENOENT:
-			return not_found;
-		case ENOTDIR:
-			return no;
-		default:
-			return error;
-	}
-}
-
 /* Check whether a file can be executed or not.
  */
-t_fsbool can_execute(char *file, uid_t uid, gid_t gid, t_groups *groups) {
+t_fs_bool can_execute(char *file, uid_t uid, gid_t gid, t_groups *groups) {
 	struct stat status;
 	gid_t *group;
 	int num = 0;
 
 	if ((file == NULL) || (groups == NULL)) {
-		return error;
+		return fb_error;
 	}
 
 	if (stat(file, &status) == 0) {
 		if (status.st_uid == uid) {
 			/* Check user */
 			if ((status.st_mode & S_IXUSR) == S_IXUSR) {
-				return yes;
+				return fb_yes;
 			} else {
-				return no;
+				return fb_no;
 			}
 		} else {
 			/* Check group */
 			if (status.st_gid == gid) {
 				if ((status.st_mode & S_IXGRP) == S_IXGRP) {
-					return yes;
+					return fb_yes;
 				} else {
-					return no;
+					return fb_no;
 				}
 			} else if (groups != NULL) {
 				group = groups->array;
 				while (num < groups->number) {
 					if (status.st_gid == *group) {
 						if ((status.st_mode & S_IXGRP) == S_IXGRP) {
-							return yes;
+							return fb_yes;
 						} else {
-							return no;
+							return fb_no;
 						}
 					}
 					group++;
@@ -214,19 +192,48 @@ t_fsbool can_execute(char *file, uid_t uid, gid_t gid, t_groups *groups) {
 
 			/* Check others */
 			if ((status.st_mode & S_IXOTH) == S_IXOTH) {
-				return yes;
+				return fb_yes;
 			} else {
-				return no;
+				return fb_no;
 			}
 		}
 	} else switch (errno) {
 		case EACCES:
-			return no_access;
+			return fb_no_access;
 		case ENOENT:
-			return not_found;
+			return fb_not_found;
 		default:
-			return error;
+			return fb_error;
 	}
+}
+
+/* Check the type of a file (regular, directory, other)
+ */
+t_fs_type file_type(char *file) {
+	struct stat status;
+
+	if (file == NULL) {
+		return ft_error;
+	}
+
+	if (stat(file, &status) == -1) {
+		switch (errno) {
+			case EACCES: return ft_no_access;
+			case ENOENT: return ft_not_found;
+			case ENOTDIR: return ft_file;
+		}
+		return ft_error;
+	}
+
+	if (S_ISREG(status.st_mode)) {
+		return ft_file;
+	}
+
+	if (S_ISDIR(status.st_mode)) {
+		return ft_dir;
+	}
+
+	return ft_other;
 }
 
 #ifndef CYGWIN
@@ -370,7 +377,7 @@ int wipe_directory(char *directory, char *filter) {
 		}
 
 		sprintf(file, "%s/%s", directory, dir_info->d_name);
-		if (is_directory(file) == false) {
+		if (file_type(file) == ft_file) {
 			unlink(file);
 		}
 	}
@@ -571,7 +578,7 @@ FILE *fopen_neighbour(char *filename, char *mode, char *neighbour) {
 
 /* Read a directory and place the filenames in a list.
  */
-t_filelist *read_filelist(char *directory) {
+t_filelist *read_filelist(char *directory, bool include_hidden_files) {
 	DIR *dp;
 	t_filelist *filelist = NULL, *file;
 	char *filename;
@@ -586,35 +593,43 @@ t_filelist *read_filelist(char *directory) {
 	}
 
 	while ((dir_info = readdir(dp)) != NULL) {
-		if ((dir_info->d_name[0] != '.') || (strcmp(dir_info->d_name, "..") == 0)) {
-			if ((filename = make_path(directory, dir_info->d_name)) == NULL) {
-				remove_filelist(filelist);
-				filelist = NULL;
-				break;
-			}
-			stat_status = stat(filename, &status);
-			free(filename);
-			if (stat_status == -1) {
+		if (strcmp(dir_info->d_name, ".") == 0) {
+			continue;
+		}
+
+		if (strcmp(dir_info->d_name, "..") != 0) {
+			if ((dir_info->d_name[0] == '.') && (include_hidden_files == false)) {
 				continue;
 			}
-
-			if ((file = (t_filelist*)malloc(sizeof(t_filelist))) == NULL) {
-				remove_filelist(filelist);
-				filelist = NULL;
-				break;
-			} else if ((file->name = strdup(dir_info->d_name)) == NULL) {
-				free(file);
-				remove_filelist(filelist);
-				filelist = NULL;
-				break;
-			} else {
-				file->size = status.st_size;
-				file->time = status.st_mtime;
-				file->is_dir = S_ISDIR(status.st_mode);
-				file->next = filelist;
-			}
-			filelist = file;
 		}
+
+		if ((filename = make_path(directory, dir_info->d_name)) == NULL) {
+			remove_filelist(filelist);
+			filelist = NULL;
+			break;
+		}
+		stat_status = stat(filename, &status);
+		free(filename);
+		if (stat_status == -1) {
+			continue;
+		}
+
+		if ((file = (t_filelist*)malloc(sizeof(t_filelist))) == NULL) {
+			remove_filelist(filelist);
+			filelist = NULL;
+			break;
+		} else if ((file->name = strdup(dir_info->d_name)) == NULL) {
+			free(file);
+			remove_filelist(filelist);
+			filelist = NULL;
+			break;
+		} else {
+			file->size = status.st_size;
+			file->time = status.st_mtime;
+			file->is_dir = S_ISDIR(status.st_mode);
+			file->next = filelist;
+		}
+		filelist = file;
 	}
 	closedir(dp);
 

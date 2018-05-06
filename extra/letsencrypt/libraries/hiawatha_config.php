@@ -1,13 +1,24 @@
 <?php
+	/* Copyright (c) by Hugo Leisink <hugo@leisink.net>
+	 *
+ 	 * This program is free software; you can redistribute it and/or modify
+	 * it under the terms of the GNU General Public License as published by
+	 * the Free Software Foundation; version 2 of the License. For a copy,
+	 * see http://www.gnu.org/licenses/gpl-2.0.html.
+	 *
+	 * This program is distributed in the hope that it will be useful,
+	 * but WITHOUT ANY WARRANTY; without even the implied warranty of
+	 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	 * GNU General Public License for more details.
+	 */
+
 	class Hiawatha_config {
 		private $website_root = array();
 		private $website_hostnames = array();
 		private $certificate_files = array();
 
 		public function __construct($config_dir) {
-			if (($dp = opendir(HIAWATHA_CERT_DIR)) == false) {
-				printf(" - Can't read Hiawatha certificate directory.\n");
-			} else {
+			if (($dp = opendir(HIAWATHA_CERT_DIR)) != false) {
 				while (($file = readdir($dp)) !== false) {
 					if (substr($file, 0, 1) == ".") {
 						continue;
@@ -41,7 +52,7 @@
 
 		private function read_config_dir($config_dir) {
 			if (($dp = opendir($config_dir)) === false) {
-				printf("Can't find directory %s.\n", $config_dir);
+				printf(" - Can't find config directory %s.\n", $config_dir);
 				return false;
 			}
 
@@ -60,7 +71,7 @@
 
 		private function read_config_file($config_file) {
 			if (($fp = fopen($config_file, "r")) === false) {
-				printf("Can't find file %s.\n", $config_file);
+				printf(" - Can't find config file %s.\n", $config_file);
 				return false;
 			}
 

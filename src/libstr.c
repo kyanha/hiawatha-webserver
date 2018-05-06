@@ -88,6 +88,42 @@ int str_to_int(char *str) {
 	return value;
 }
 
+/* Convert a time string to an integer
+ */
+int time_str_to_int(char *str) {
+	int value, mul;
+	size_t len;
+
+	if (str == NULL) {
+		return -1;
+	} else if ((len = strlen(str)) == 0) {
+		return -1;
+	}
+
+	if (str[len - 1] == 'm') {
+		mul = MINUTE;
+		str[len - 1] = '\0';
+	} else if (str[len - 1] == 'h') {
+		mul = HOUR;
+		str[len - 1] = '\0';
+	} else if (str[len - 1] == 'd') {
+		mul = DAY;
+		str[len - 1] = '\0';
+	} else {
+		mul = 1;
+	}
+
+	if ((value = str_to_int(str)) == -1) {
+		return -1;
+	}
+
+	if ((mul > 1) && (value > 3650)) {
+		return -1;
+	}
+
+	return value * mul;
+}
+
 /* Check if string is empty
  */
 bool empty_string(char *str) {
@@ -347,7 +383,7 @@ bool valid_uri(char *uri, bool allow_dot_files) {
 /* Encode a string to an URL encoded one
  */
 static bool char_needs_encoding(char c) {
-	return (c <= 32) || (strchr("\"#\%&'+:<>", c) != NULL) || (c >= 126);
+	return (c <= 32) || (strchr("\"#\%&'+:<>?", c) != NULL) || (c >= 126);
 }
 int url_encode(char *str, char **encoded) {
 	char *c, *e;

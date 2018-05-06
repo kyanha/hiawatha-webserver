@@ -284,6 +284,7 @@ static t_binding *new_binding(void) {
 
 t_config *default_config(void) {
 	t_config *config;
+	char *gzip_ext;
 
 	if ((config = (t_config*)malloc(sizeof(t_config))) == NULL) {
 		return NULL;
@@ -326,6 +327,7 @@ t_config *default_config(void) {
 	config->cgi_wrapper        = SBIN_DIR"/cgi-wrapper";
 	config->wrap_user_cgi      = false;
 	config->log_format         = hiawatha;
+	config->syslog             = SYSLOG_NONE;
 	config->log_timeouts       = true;
 	config->rotate_access_logs = false;
 	config->anonymize_ip       = false;
@@ -358,12 +360,16 @@ t_config *default_config(void) {
 	config->flooding_time      = 0;
 	config->reconnect_delay    = 0;
 	config->banlist_mask       = NULL;
-	config->fcgi_server        = NULL;
 	config->work_directory     = WORK_DIR;
 	config->upload_directory   = NULL;
 	config->upload_directory_len = 0;
 	config->gzipped_directory  = NULL;
 	config->gzipped_directory_len = 0;
+	init_charlist(&(config->gzip_extensions));
+	if ((gzip_ext = strdup("cer,crt,doc,pem,ppt,ttf,xls,xml,xsl,xslt")) != NULL) {
+		parse_charlist(gzip_ext, &(config->gzip_extensions));
+		free(gzip_ext);
+	}
 
 #ifdef ENABLE_CHALLENGE
 	config->challenge_threshold = -1;
@@ -491,6 +497,7 @@ static bool valid_directory(char *dir) {
 	}
 
 	if (*(dir + len - 1) == '/') {
+		fprintf(stderr, "- error: trailing slash in %s\n", dir);
 		return false;
 	}
 
@@ -625,23 +632,14 @@ static int parse_hpkp(char *line, t_hpkp_data **hpkp_data) {
 	t_hpkp_data *record;
 	int max_age_i;
 	size_t len;
-	bool days;
 
 	if (split_string(line, &file, &max_age, ',') == 0) {
 		if ((len = strlen(max_age)) == 0) {
 			return -1;
 		}
 
-		if ((days = (max_age[len - 1] == 'd'))) {
-			max_age[len - 1] = '\0';
-		}
-
-		if ((max_age_i = str_to_int(max_age)) == -1) {
+		if ((max_age_i = time_str_to_int(max_age)) == -1) {
 			return -1;
-		}
-
-		if (days) {
-			max_age_i *= DAY;
 		}
 	} else {
 		max_age_i = 30 * DAY;
@@ -1035,45 +1033,45 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			return true;
 		}
 	} else if (strcmp(key, "banondeniedbody") == 0) {
-		if ((config->ban_on_denied_body = str_to_int(value)) != -1) {
+		if ((config->ban_on_denied_body = time_str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "banonflooding") == 0) {
 		if (split_string(value, &value, &rest, '/') == -1) {
 		} else if ((config->flooding_count = str_to_int(value)) <= 0) {
 		} else if (split_string(rest, &value, &rest, ':') != 0) {
-		} else if ((config->flooding_time = str_to_int(value)) <= 0) {
+		} else if ((config->flooding_time = time_str_to_int(value)) <= 0) {
 		} else if ((config->ban_on_flooding = str_to_int(rest)) > 0) {
 			return true;
 		}
 	} else if (strcmp(key, "banongarbage") == 0) {
-		if ((config->ban_on_garbage = str_to_int(value)) != -1) {
+		if ((config->ban_on_garbage = time_str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "banoninvalidurl") == 0) {
-		if ((config->ban_on_invalid_url = str_to_int(value)) != -1) {
+		if ((config->ban_on_invalid_url = time_str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "banonmaxperip") == 0) {
-		if ((config->ban_on_max_per_ip = str_to_int(value)) != -1) {
+		if ((config->ban_on_max_per_ip = time_str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "banonmaxreqsize") == 0) {
-		if ((config->ban_on_max_request_size = str_to_int(value)) != -1) {
+		if ((config->ban_on_max_request_size = time_str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "banonsqli") == 0) {
-		if ((config->ban_on_sqli = str_to_int(value)) != -1) {
+		if ((config->ban_on_sqli = time_str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "banontimeout") == 0) {
-		if ((config->ban_on_timeout = str_to_int(value)) != -1) {
+		if ((config->ban_on_timeout = time_str_to_int(value)) != -1) {
 			return true;
 		}
 	} else if (strcmp(key, "banonwrongpassword") == 0) {
 		if (split_string(value, &value, &rest, ':') == -1) {
 		} else if ((config->max_wrong_passwords = str_to_int(value)) <= 0) {
-		} else if ((config->ban_on_wrong_password = str_to_int(rest)) > 0) {
+		} else if ((config->ban_on_wrong_password = time_str_to_int(rest)) > 0) {
 			return true;
 		}
 	} else if (strcmp(key, "blockextensions") == 0) {
@@ -1204,6 +1202,10 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			if ((config->garbage_logfile = strdup(value)) != NULL) {
 				return true;
 			}
+		}
+	} else if (strcmp(key, "gzipextensions") == 0) {
+		if (parse_charlist(value, &(config->gzip_extensions)) == 0) {
+			return true;
 		}
 	} else if (strcmp(key, "hideproxy") == 0) {
 		if (parse_iplist(value, &(config->hide_proxy)) != -1) {
@@ -1368,6 +1370,27 @@ static bool system_setting(char *key, char *value, t_config *config) {
 		if ((config->socket_send_timeout = str_to_int(value)) >= 0) {
 			return true;
 		}
+	} else if (strcmp(key, "syslog") == 0) {
+		rest = value;
+		do {
+			split_string(rest, &value, &rest, ',');
+			if (strcmp(value, "system") == 0) {
+				config->syslog |= SYSLOG_SYSTEM;
+			} else if (strcmp(value, "exploit") == 0) {
+				config->syslog |= SYSLOG_EXPLOIT;
+			} else if (strcmp(value, "garbage") == 0) {
+				config->syslog |= SYSLOG_GARBAGE;
+			} else if (strcmp(value, "access") == 0) {
+				config->syslog |= SYSLOG_ACCESS;
+			} else if (strcmp(value, "error") == 0) {
+				config->syslog |= SYSLOG_ERROR;
+			} else if (strcmp(value, "all") == 0) {
+				config->syslog |= SYSLOG_ALL;
+			} else {
+				return false;
+			}
+		} while (rest != NULL);
+		return true;
 	} else if (strcmp(key, "systemlogfile") == 0) {
 		if (valid_path(value)) {
 			if ((config->system_logfile = strdup(value)) != NULL) {
@@ -1626,7 +1649,6 @@ static bool host_setting(char *key, char *value, t_host *host) {
 #ifdef ENABLE_TLS
 	int time;
 	size_t size;
-	bool day;
 #endif
 	int sqli_return_code;
 
@@ -1667,7 +1689,7 @@ static bool host_setting(char *key, char *value, t_host *host) {
 		split_string(value, &value, &rest, ',');
 		if (parse_yesno(value, &(host->ban_by_cgi)) == 0) {
 			if (rest != NULL) {
-				if ((host->ban_by_cgi_max = str_to_int(rest)) > 0) {
+				if ((host->ban_by_cgi_max = time_str_to_int(rest)) > 0) {
 					return true;
 				}
 			} else {
@@ -1830,17 +1852,8 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			if ((size = strlen(rest)) == 0) {
 				return false;
 			}
-			if ((day = (rest[size - 1] == 'd'))) {
-				rest[size - 1] = '\0';
-			}
-			if ((time = str_to_int(rest)) <= 0) {
+			if ((time = time_str_to_int(rest)) <= 0) {
 				return false;
-			}
-			if (day) {
-				if (time > 3650) {
-					return false;
-				}
-				time *= DAY;
 			}
 			time = sprintf(host->hsts_time, "%d", time);
 
@@ -2277,7 +2290,7 @@ static int read_config_directory(char *dir, t_config *config, bool config_check)
 	char *path;
 	int retval = 0;
 
-	if ((filelist = read_filelist(dir)) == NULL) {
+	if ((filelist = read_filelist(dir, false)) == NULL) {
 		return -1;
 	}
 	file = filelist = sort_filelist(filelist);
@@ -2495,17 +2508,18 @@ int read_main_configfile(char *configfile, t_config *config, bool config_check) 
 						variables_replaced = replace_variables(&value);
 						if ((section == none) && (including == false)) {
 							including = true;
-							switch (is_directory(value)) {
-								case error:
-								case no_access:
-								case not_found:
+							switch (file_type(value)) {
+								case ft_error:
+								case ft_no_access:
+								case ft_not_found:
+								case ft_other:
 									fprintf(stderr, "Error while including '%s'\n", value);
 									retval = -1;
 									break;
-								case no:
+								case ft_file:
 									retval = read_main_configfile(value, config, config_check);
 									break;
-								case yes:
+								case ft_dir:
 									retval = read_config_directory(value, config, config_check);
 									break;
 							}

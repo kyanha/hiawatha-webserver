@@ -186,13 +186,13 @@ int print_file_hashes(char *directory) {
 		}
 		sprintf(file, "%s/%s", directory, fileinfo->d_name);
 
-		switch (is_directory(file)) {
-			case yes:
+		switch (file_type(file)) {
+			case ft_dir:
 				if (print_file_hashes(file) == -1) {
 					goto hash_fail;
 				}
 				break;
-			case no:
+			case ft_file:
 				if (sha256_file(file, bin_hash, 0) != 0) {
 					goto hash_fail;
 				}

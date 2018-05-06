@@ -22,6 +22,7 @@
 #include <string.h>
 #include <time.h>
 #include <pthread.h>
+#include <syslog.h>
 #include "global.h"
 #include "liblist.h"
 #include "libfs.h"
@@ -120,40 +121,47 @@ void log_pid(t_config *config, pid_t pid, uid_t server_uid) {
 #endif
 }
 
-/* Log a text.
+/* Log a system message
  */
-void log_string(char *logfile, char *mesg, ...) {
+void log_system(t_config *config, char *mesg, ...) {
 	FILE *fp;
 	va_list args;
 	char str[TIMESTAMP_SIZE];
+	char text[256];
 
-	if ((logfile == NULL) || (mesg == NULL)) {
-		return;
-	} else if ((fp = fopen(logfile, "a")) == NULL) {
+	if (mesg == NULL) {
 		return;
 	}
+	
+	print_timestamp(str);
 
 	va_start(args, mesg);
 
-	print_timestamp(str);
-	fprintf(fp, "%s", str);
-	vfprintf(fp, mesg, args);
-	fprintf(fp, EOL);
-	fclose(fp);
+	if ((fp = fopen(config->system_logfile, "a")) != NULL) {
+		fprintf(fp, "%s", str);
+		vfprintf(fp, mesg, args);
+		fprintf(fp, EOL);
+		fclose(fp);
+	}
+
+	if ((config->syslog & SYSLOG_SYSTEM) > 0) {
+		vsnprintf(text, 255, mesg, args);
+		text[255] = '\0';
+		syslog(LOG_INFO, "system|%s%s", str, text);
+	}
 
 	va_end(args);
 }
 
-/* Log a system message.
+/* Log a system message about a session
  */
-void log_system(t_session *session, char *mesg, ...) {
+void log_system_session(t_session *session, char *mesg, ...) {
 	FILE *fp;
 	va_list args;
 	char str[TIMESTAMP_SIZE + IP_ADDRESS_SIZE + 2];
+	char text[256];
 
 	if (mesg == NULL) {
-		return;
-	} else if ((fp = fopen(session->config->system_logfile, "a")) == NULL) {
 		return;
 	}
 
@@ -162,20 +170,30 @@ void log_system(t_session *session, char *mesg, ...) {
 	ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
 	strcat(str, "|");
 	print_timestamp(str + strlen(str));
-	fprintf(fp, "%s", str);
-	vfprintf(fp, mesg, args);
-	fprintf(fp, EOL);
-	fclose(fp);
+
+	if ((fp = fopen(session->config->system_logfile, "a")) != NULL) {
+		fprintf(fp, "%s", str);
+		vfprintf(fp, mesg, args);
+		fprintf(fp, EOL);
+		fclose(fp);
+	}
+
+	if ((session->config->syslog & SYSLOG_SYSTEM) > 0) {
+		vsnprintf(text, 255, mesg, args);
+		text[255] = '\0';
+		syslog(LOG_INFO, "system|%s%s", str, text);
+	}
 
 	va_end(args);
 }
 
 /* Log an error for a specific file
  */
-void log_file_error(t_session *session, char *file, char *mesg, ...) {
+void log_error_file(t_session *session, char *file, char *mesg, ...) {
 	FILE *fp;
 	va_list args;
 	char str[TIMESTAMP_SIZE + IP_ADDRESS_SIZE + 2];
+	char text[256];
 
 	if (mesg == NULL) {
 		return;
@@ -192,7 +210,7 @@ void log_file_error(t_session *session, char *file, char *mesg, ...) {
 		}
 		fp = fopen(session->host->error_logfile, "a");
 	}
-	if (fp == NULL) {
+	if ((fp == NULL) && ((session->config->syslog & SYSLOG_ERROR) == 0)) {
 		return;
 	}
 
@@ -206,35 +224,101 @@ void log_file_error(t_session *session, char *file, char *mesg, ...) {
 
 	strcat(str, "|");
 	print_timestamp(str + strlen(str));
-	if (file == NULL) {
-		fprintf(fp, "%s", str);
-	} else {
-		fprintf(fp, "%s%s|", str, file);
+
+	if (fp != NULL) {
+		if (file == NULL) {
+			fprintf(fp, "%s", str);
+		} else {
+			fprintf(fp, "%s%s|", str, file);
+		}
+		vfprintf(fp, mesg, args);
+		fprintf(fp, EOL);
+		fclose(fp);
 	}
-	vfprintf(fp, mesg, args);
-	fprintf(fp, EOL);
-	fclose(fp);
+
+	if ((session->config->syslog & SYSLOG_ERROR) > 0) {
+		vsnprintf(text, 255, mesg, args);
+		text[255] = '\0';
+		if (file == NULL) {
+			syslog(LOG_ERR, "error|%s%s", str, text);
+		} else {
+			syslog(LOG_ERR, "error|%s%s|%s", str, file, text);
+		}
+	}
 
 	va_end(args);
 }
 
-/* Log an error
+/* Log a CGI error.
  */
-void log_error(t_session *session, char *mesg) {
-	log_file_error(session, session->file_on_disk, mesg);
+void log_error_cgi(t_session *session, char *mesg) {
+	FILE *fp;
+	char *c, str[TIMESTAMP_SIZE + IP_ADDRESS_SIZE];
+	int len = 0;
+
+	if (mesg == NULL) {
+		return;
+	} else if ((session->host->error_logfile == NULL) && ((session->config->syslog & SYSLOG_ERROR) == 0)) {
+		return;
+	}
+
+	c = mesg;
+	while (*c != '\0') {
+		if (*c == '\n') {
+			if (*(c + 1) == '\0') {
+				*c = '\0';
+			} else {
+				*c = '|';
+			}
+		} else {
+			len++;
+		}
+		c++;
+	}
+
+	if (len == 0) {
+		return;
+	}
+
+	if (session->config->anonymize_ip) {
+		anonymized_ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
+	} else {
+		ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
+	}
+
+	strcat(str, "|");
+	print_timestamp(str + strlen(str));
+
+	if ((fp = fopen(session->host->error_logfile, "a")) != NULL) {
+		if (session->file_on_disk == NULL) {
+			fprintf(fp, "%s-|%s"EOL, str, secure_string(mesg));
+		} else {
+			fprintf(fp, "%s%s|%s"EOL, str, session->file_on_disk, secure_string(mesg));
+		}
+		fclose(fp);
+	}
+
+	if ((session->config->syslog & SYSLOG_ERROR) > 0) {
+		if (session->file_on_disk == NULL) {
+			syslog(LOG_ERR, "error|%s-|%s", str, secure_string(mesg));
+		} else {
+			syslog(LOG_ERR, "error|%s%s|%s", str, session->file_on_disk, secure_string(mesg));
+		}
+
+	}
 }
 
 /* Log a HTTP request.
  */
 void log_request(t_session *session) {
 	char str[BUFFER_SIZE + 1], timestamp[TIMESTAMP_SIZE], ip_address[IP_ADDRESS_SIZE];
-	char *user, *field, *uri, *vars, *path_info;
+	char *user, *uri, *vars, *path_info, *referer, *user_agent;
 	t_http_header *http_header;
 	int offset;
 	time_t t;
 	struct tm s;
 
-	if (session->host->access_logfile == NULL) {
+	if ((session->host->access_logfile == NULL) && ((session->config->syslog & SYSLOG_ACCESS) == 0)) {
 		return;
 	} else if (ip_allowed(&(session->ip_address), session->config->logfile_mask) == deny) {
 		return;
@@ -256,8 +340,12 @@ void log_request(t_session *session) {
 	}
 #endif
 
-	if ((user = session->remote_user) != NULL) {
-		user = secure_string(user);
+	if ((referer = get_referer_header(session->http_headers)) != NULL) {
+		referer = secure_string(referer);
+	}
+
+	if ((user_agent = get_http_header("User-Agent:", session->http_headers)) != NULL) {
+		user_agent = secure_string(user_agent);
 	}
 
 	if (session->config->log_format == hiawatha) {
@@ -274,11 +362,7 @@ void log_request(t_session *session) {
 		print_timestamp(str + offset);
 		offset += strlen(str + offset);
 
-		if (user == NULL) {
-			user = "";
-		}
-
-		snprintf(str + offset, BUFFER_SIZE - offset, "%d|%lld|%s|%s %s", session->return_code, (long long)session->bytes_sent, user, secure_string(session->method), uri);
+		snprintf(str + offset, BUFFER_SIZE - offset, "%d|%lld|%s %s", session->return_code, (long long)session->bytes_sent, secure_string(session->method), uri);
 		offset += strlen(str + offset);
 
 		if ((offset < BUFFER_SIZE) && (path_info != NULL)) {
@@ -296,14 +380,46 @@ void log_request(t_session *session) {
 		}
 
 		if (offset < BUFFER_SIZE) {
+			if (referer == NULL) {
+				referer = "";
+			}
+
+			snprintf(str + offset, BUFFER_SIZE - offset, "|%s", referer);
+			offset += strlen(str + offset);
+		}
+
+		if (offset < BUFFER_SIZE) {
+			if (user_agent == NULL) {
+				user_agent = "";
+			}
+
+			snprintf(str + offset, BUFFER_SIZE - offset, "|%s", user_agent);
+			offset += strlen(str + offset);
+		}
+
+		if (offset < BUFFER_SIZE) {
 			http_header = session->http_headers;
 			while (http_header != NULL) {
-				if ((strncasecmp("Cookie:", http_header->data, 7) != 0) && (strncasecmp("Authorization:", http_header->data, 14) != 0) && (strncasecmp("Proxy-Authorization:", http_header->data, 20) != 0)) {
-					snprintf(str + offset, BUFFER_SIZE - offset, "|%s", secure_string(http_header->data));
-					if ((offset += strlen(str + offset)) >= BUFFER_SIZE) {
-						break;
-					}
+				if (strncasecmp("Authorization:", http_header->data, 14) == 0) {
+					goto next_header;
 				}
+				if (strncasecmp("Cookie:", http_header->data, 7) == 0) {
+					goto next_header;
+				}
+				if (strncasecmp("Proxy-Authorization:", http_header->data, 20) == 0) {
+					goto next_header;
+				}
+
+				if ((http_header->data + http_header->value_offset == referer) || (http_header->data + http_header->value_offset == user_agent)) {
+					goto next_header;
+				}
+
+				snprintf(str + offset, BUFFER_SIZE - offset, "|%s", secure_string(http_header->data));
+				if ((offset += strlen(str + offset)) >= BUFFER_SIZE) {
+					break;
+				}
+
+next_header:
 				http_header = http_header->next;
 			}
 		}
@@ -316,7 +432,9 @@ void log_request(t_session *session) {
 			ip_to_str(&(session->ip_address), ip_address, IP_ADDRESS_SIZE);
 		}
 
-		if (user == NULL) {
+		if ((user = session->remote_user) != NULL) {
+			user = secure_string(user);
+		} else {
 			user = "-";
 		}
 
@@ -344,35 +462,44 @@ void log_request(t_session *session) {
 			 */
 			offset += strlen(str + offset);
 			if (offset < BUFFER_SIZE) {
-				if ((field = get_http_header("Referer:", session->http_headers)) != NULL) {
-					snprintf(str + offset, BUFFER_SIZE - offset, " \"%s\"", secure_string(field));
-				} else {
-					snprintf(str + offset, BUFFER_SIZE - offset, " \"-\"");
+				if (referer == NULL) {
+					referer = "-";
 				}
+
+				snprintf(str + offset, BUFFER_SIZE - offset, " \"%s\"", referer);
 				offset += strlen(str + offset);
 			}
 			if (offset < BUFFER_SIZE) {
-				if ((field = get_http_header("User-Agent:", session->http_headers)) != NULL) {
-					snprintf(str + offset, BUFFER_SIZE - offset, " \"%s\"", secure_string(field));
-				} else {
-					snprintf(str + offset, BUFFER_SIZE - offset, " \"-\"");
+				if (user_agent == NULL) {
+					user_agent = "-";
 				}
+
+				snprintf(str + offset, BUFFER_SIZE - offset, " \"%s\"", user_agent);
+				offset += strlen(str + offset);
 			}
 		}
 	}
 
 	pthread_mutex_lock(&accesslog_mutex);
 
-	if (*(session->host->access_fp) == NULL) {
+	if ((session->host->access_logfile != NULL) && (*(session->host->access_fp) == NULL)) {
 		*(session->host->access_fp) = fopen(session->host->access_logfile, "a");
 	}
 
 	if (*(session->host->access_fp) != NULL) {
-		fprintf(*(session->host->access_fp), "%s"EOL, str);
-		fflush(*(session->host->access_fp));
+		if (fprintf(*(session->host->access_fp), "%s"EOL, str) >= 0) {
+			fflush(*(session->host->access_fp));
+		} else {
+			fclose(*(session->host->access_fp));
+			session->host->access_fp = NULL;
+		}
 	}
 
 	pthread_mutex_unlock(&accesslog_mutex);
+
+	if ((session->config->syslog & SYSLOG_ACCESS) > 0) {
+		syslog(LOG_INFO, "access|%s", str);
+	}
 }
 
 /* Log garbage sent by a client.
@@ -382,7 +509,9 @@ void log_garbage(t_session *session) {
 	FILE *fp;
 	char str[TIMESTAMP_SIZE + IP_ADDRESS_SIZE];
 
-	if ((session->config->garbage_logfile == NULL) || (session->request == NULL)) {
+	if (session->request == NULL) {
+		return;
+	} else if ((session->config->garbage_logfile == NULL) && ((session->config->syslog & SYSLOG_GARBAGE) == 0)) {
 		return;
 	}
 
@@ -397,16 +526,21 @@ void log_garbage(t_session *session) {
 		}
 	}
 
-	if ((fp = fopen(session->config->garbage_logfile, "a")) == NULL) {
-		return;
-	}
-
 	ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
 	strcat(str, "|");
 	print_timestamp(str + strlen(str));
-	fprintf(fp, "%s%s"EOL, str, session->request);
 
-	fclose(fp);
+	if (session->config->garbage_logfile != NULL) {
+		if ((fp = fopen(session->config->garbage_logfile, "a")) == NULL) {
+			return;
+		}
+		fprintf(fp, "%s%s"EOL, str, session->request);
+		fclose(fp);
+	}
+
+	if ((session->config->syslog & SYSLOG_GARBAGE) > 0) {
+		syslog(LOG_INFO, "garbage|%s%s", str, session->request);
+	}
 }
 
 /* Log exploit attempt
@@ -415,92 +549,62 @@ void log_exploit_attempt(t_session *session, char *type, char *data) {
 	FILE *fp;
 	char str[TIMESTAMP_SIZE + IP_ADDRESS_SIZE], *host, *uri, *unknown = "<unknown>";
 
-	if ((session->config->exploit_logfile == NULL) || (type == NULL)) {
+	if (type == NULL) {
 		return;
-	} else if ((fp = fopen(session->config->exploit_logfile, "a")) == NULL) {
+	} else if ((session->config->exploit_logfile == NULL) && ((session->config->syslog & SYSLOG_EXPLOIT) == 0)) {
 		return;
 	}
-
+	
 	host = (session->host->hostname.size > 0) ? session->host->hostname.item[0] : unknown;
 	uri = (session->request_uri != NULL) ? session->request_uri : unknown;
 
 	ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
 	strcat(str, "|");
 	print_timestamp(str + strlen(str));
-	if (data == NULL) {
-		fprintf(fp, "%s%s|%s|%s"EOL, str, host, uri, type);
-	} else {
-		fprintf(fp, "%s%s|%s|%s|%s"EOL, str, host, uri, type, data);
+
+	if (session->config->exploit_logfile != NULL) {
+		if ((fp = fopen(session->config->exploit_logfile, "a")) == NULL) {
+			return;
+		}
+		if (data == NULL) {
+			fprintf(fp, "%s%s|%s|%s"EOL, str, host, uri, type);
+		} else {
+			fprintf(fp, "%s%s|%s|%s|%s"EOL, str, host, uri, type, data);
+		}
+		fclose(fp);
 	}
-	fclose(fp);
+
+	if ((session->config->syslog & SYSLOG_EXPLOIT) > 0) {
+		if (data == NULL) {
+			syslog(LOG_WARNING, "exploit|%s%s|%s|%s", str, host, uri, type);
+		} else {
+			syslog(LOG_WARNING, "exploit|%s%s|%s|%s|%s", str, host, uri, type, data);
+		}
+	}
 }
 
 /* Log an unbanning.
  */
-void log_unban(char *logfile, t_ip_addr *ip_address, unsigned long connect_attempts) {
+void log_unban(t_config *config, t_ip_addr *ip_address, unsigned long connect_attempts) {
 	FILE *fp;
 	char str[TIMESTAMP_SIZE + IP_ADDRESS_SIZE];
 
-	if ((logfile == NULL) || (ip_address == NULL)) {
-		return;
-	} else if ((fp = fopen(logfile, "a")) == NULL) {
+	if (ip_address == NULL) {
 		return;
 	}
-
+	
 	ip_to_str(ip_address, str, IP_ADDRESS_SIZE);
 	strcat(str, "|");
 	print_timestamp(str + strlen(str));
-	fprintf(fp, "%sUnbanned (%lu connect attempts during ban)"EOL, str, connect_attempts);
-	fclose(fp);
-}
 
-/* Log a CGI error.
- */
-void log_cgi_error(t_session *session, char *mesg) {
-	FILE *fp;
-	char *c, str[TIMESTAMP_SIZE + IP_ADDRESS_SIZE];
-	int len = 0;
-
-	if ((session->host->error_logfile == NULL) || (mesg == NULL)) {
-		return;
+	if ((fp = fopen(config->system_logfile, "a")) != NULL) {
+		fprintf(fp, "%sUnbanned (%lu connect attempts during ban)"EOL, str, connect_attempts);
+		fclose(fp);
 	}
 
-	c = mesg;
-	while (*c != '\0') {
-		if (*c == '\n') {
-			if (*(c + 1) == '\0') {
-				*c = '\0';
-			} else {
-				*c = '|';
-			}
-		} else {
-			len++;
-		}
-		c++;
+	if ((config->syslog & SYSLOG_SYSTEM) > 0) {
+		syslog(LOG_INFO, "system|%sUnbanned (%lu connect attempts during ban)", str, connect_attempts);
 	}
-
-	if (len == 0) {
-		return;
-	}
-
-	if ((fp = fopen(session->host->error_logfile, "a")) == NULL) {
-		return;
-	}
-
-	if (session->config->anonymize_ip) {
-		anonymized_ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
-	} else {
-		ip_to_str(&(session->ip_address), str, IP_ADDRESS_SIZE);
-	}
-
-	strcat(str, "|");
-	print_timestamp(str + strlen(str));
-	if (session->file_on_disk == NULL) {
-		fprintf(fp, "%s-|%s"EOL, str, secure_string(mesg));
-	} else {
-		fprintf(fp, "%s%s|%s"EOL, str, session->file_on_disk, secure_string(mesg));
-	}
-	fclose(fp);
 }
 
 /* Close open access logfiles.
@@ -690,7 +794,7 @@ void rotate_access_logfiles(t_config *config, time_t now) {
 		}
 
 		if (result == -1) {
-			log_string(config->system_logfile, "Error rotating %s", host->access_logfile);
+			log_system(config, "Error rotating %s", host->access_logfile);
 		}
 
 		host = host->next;

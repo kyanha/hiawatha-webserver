@@ -17,18 +17,18 @@
 #include "session.h"
 
 #define LOG_PERM (S_IRUSR|S_IWUSR|S_IRGRP)
+#define log_error_session(session, ...) log_error_file(session, NULL, __VA_ARGS__)
 
 int  init_log_module(void);
 void log_pid(t_config *config, pid_t pid, uid_t server_uid);
-void log_string(char *logfile, char *mesg, ...);
-void log_system(t_session *session, char *mesg, ...);
-void log_file_error(t_session *session, char *file, char *mesg, ...);
-void log_error(t_session *session, char *mesg);
+void log_system(t_config *config, char *mesg, ...);
+void log_system_session(t_session *session, char *mesg, ...);
+void log_error_file(t_session *session, char *file, char *mesg, ...);
+void log_error_cgi(t_session *session, char *mesg);
 void log_request(t_session *session);
 void log_garbage(t_session *session);
 void log_exploit_attempt(t_session *session, char *type, char *data);
-void log_unban(char *logfile, t_ip_addr *ip_address, unsigned long connect_attempts);
-void log_cgi_error(t_session *session, char *mesg);
+void log_unban(t_config *config, t_ip_addr *ip_address, unsigned long connect_attempts);
 void close_logfiles(t_host *host, time_t now);
 void close_logfiles_for_cgi_run(t_host *host);
 void rotate_access_logfiles(t_config *config, time_t now);

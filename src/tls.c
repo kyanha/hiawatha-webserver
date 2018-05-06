@@ -42,6 +42,10 @@
 #endif
 #include "memdbg.h"
 
+#if !defined(MBEDTLS_THREADING_PTHREAD) || !defined(MBEDTLS_THREADING_C)
+#error "The mbed TLS library must be compiled with MBEDTLS_THREADING_PTHREAD and MBEDTLS_THREADING_C enabled."
+#endif
+
 #define TIMESTAMP_SIZE          40
 #define SNI_MAX_HOSTNAME_LEN   128
 #define PK_DER_BUFFER_SIZE    2048
@@ -74,10 +78,6 @@ static int ciphersuites_tls10[] = {
 	MBEDTLS_TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA,
 	MBEDTLS_TLS_DHE_RSA_WITH_AES_128_CBC_SHA,
 	MBEDTLS_TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA,
-	MBEDTLS_TLS_RSA_WITH_AES_256_CBC_SHA,
-	MBEDTLS_TLS_RSA_WITH_CAMELLIA_256_CBC_SHA,
-	MBEDTLS_TLS_RSA_WITH_AES_128_CBC_SHA,
-	MBEDTLS_TLS_RSA_WITH_CAMELLIA_128_CBC_SHA,
 	0
 };
 
@@ -97,9 +97,6 @@ static int ciphersuites_tls12[] = {
 	MBEDTLS_TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
 	MBEDTLS_TLS_DHE_RSA_WITH_AES_256_CBC_SHA256,
 	MBEDTLS_TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256,
-	MBEDTLS_TLS_RSA_WITH_AES_256_GCM_SHA384,
-	MBEDTLS_TLS_RSA_WITH_AES_256_CBC_SHA256,
-	MBEDTLS_TLS_RSA_WITH_CAMELLIA_256_CBC_SHA256,
 	0
 };
 
@@ -345,7 +342,7 @@ int tls_set_config(mbedtls_ssl_config **tls_config, t_tls_setup *tls_setup) {
 	mbedtls_ssl_conf_own_cert(*tls_config, tls_setup->certificate, tls_setup->private_key);
 
 	if (tls_setup->dh_size == 2048) {
-		mbedtls_ssl_conf_dh_param(*tls_config, MBEDTLS_DHM_RFC5114_MODP_2048_P, MBEDTLS_DHM_RFC5114_MODP_2048_G);
+		mbedtls_ssl_conf_dh_param(*tls_config, MBEDTLS_DHM_RFC3526_MODP_2048_P, MBEDTLS_DHM_RFC3526_MODP_2048_G);
 	} else if (tls_setup->dh_size == 4096) {
 		mbedtls_ssl_conf_dh_param(*tls_config, dhm_4096_P, dhm_4096_G);
 	} else if (tls_setup->dh_size == 8192) {
@@ -486,7 +483,7 @@ int tls_load_ca_root_certs(char *source, mbedtls_x509_crt **ca_root_certs) {
 	}
 	mbedtls_x509_crt_init(*ca_root_certs);
 
-	if (is_directory(source)) {
+	if (file_type(source) == ft_dir) {
 		if ((result = mbedtls_x509_crt_parse_path(*ca_root_certs, source)) != 0) {
 			print_tls_error(result, error_msg, source);
 			return -1;
