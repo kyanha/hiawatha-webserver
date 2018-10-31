@@ -12,6 +12,7 @@
 #ifndef _CHALLENGE_H
 #define _CHALLENGE_H
 
+#include "config.h"
 #include "global.h"
 
 #ifdef ENABLE_CHALLENGE

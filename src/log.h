@@ -12,6 +12,7 @@
 #ifndef _LOG_H
 #define _LOG_H
 
+#include "config.h"
 #include "global.h"
 #include "ip.h"
 #include "session.h"

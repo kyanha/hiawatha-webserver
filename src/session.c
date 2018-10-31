@@ -157,6 +157,10 @@ void init_session(t_session *session) {
 #ifdef ENABLE_RPROXY
 	session->rproxy_kept_alive = false;
 #endif
+
+#ifdef ENABLE_HTTP2
+	session->use_http2 = false;
+#endif
 }
 
 /* Reset a session-record for reuse.

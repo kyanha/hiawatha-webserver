@@ -12,6 +12,7 @@
 #ifndef _CLIENT_H
 #define _CLIENT_H
 
+#include "config.h"
 #include <stdbool.h>
 #include <time.h>
 #include "global.h"

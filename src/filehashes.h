@@ -12,6 +12,7 @@
 #ifndef _FILEHASHES_H
 #define _FILEHASHES_H
 
+#include "config.h"
 #include "global.h"
 
 #ifdef ENABLE_FILEHASHES

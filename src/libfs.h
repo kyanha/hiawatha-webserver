@@ -12,6 +12,7 @@
 #ifndef _LIBFS_H
 #define _LIBFS_H
 
+#include "config.h"
 #include <stdio.h>
 #include <stdbool.h>
 #include <sys/types.h>

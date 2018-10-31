@@ -12,6 +12,7 @@
 #ifndef _SESSION_H
 #define _SESSION_H
 
+#include "config.h"
 #include <time.h>
 #ifdef ENABLE_TLS
 #include "tls.h"
@@ -141,6 +142,10 @@ typedef struct type_session {
 	bool            rproxy_use_tls;
 	mbedtls_ssl_context rproxy_ssl;
 #endif
+#endif
+
+#ifdef ENABLE_HTTP2
+	bool            use_http2;
 #endif
 } t_session;
 

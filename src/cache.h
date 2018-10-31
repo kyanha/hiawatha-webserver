@@ -16,7 +16,6 @@
 
 #ifdef ENABLE_CACHE
 
-#include "config.h"
 #include <stdbool.h>
 #include "global.h"
 #include "ip.h"

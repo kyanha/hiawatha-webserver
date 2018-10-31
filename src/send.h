@@ -12,6 +12,7 @@
 #ifndef _SEND_H
 #define _SEND_H
 
+#include "config.h"
 #include <stdbool.h>
 #include "global.h"
 #include "session.h"

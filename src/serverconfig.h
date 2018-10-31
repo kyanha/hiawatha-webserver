@@ -12,6 +12,7 @@
 #ifndef _SERVERCONFIG_H
 #define _SERVERCONFIG_H
 
+#include "config.h"
 #include <stdbool.h>
 #include <pthread.h>
 #include <poll.h>
@@ -179,6 +180,10 @@ typedef struct type_binding {
 	int           time_for_request;
 
 	struct type_binding *next;
+
+#ifdef ENABLE_HTTP2
+	bool          accept_http2;
+#endif
 } t_binding;
 
 typedef struct type_directory {

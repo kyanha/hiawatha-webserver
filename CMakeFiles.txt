@@ -45,6 +45,7 @@ if(NOT ENABLE_TLS AND NOT USE_SYSTEM_MBEDTLS)
 		mbedtls/library/base64.c
 		mbedtls/library/md5.c
 		mbedtls/library/sha256.c
+		mbedtls/library/platform_util.c
 	)
 endif()
 
@@ -75,6 +76,7 @@ if(NOT ENABLE_TLS AND NOT USE_SYSTEM_MBEDTLS)
 	set(wigwam_src ${wigwam_src}
 		mbedtls/library/md5.c
 		mbedtls/library/sha256.c
+		mbedtls/library/platform_util.c
 	)
 endif()
 

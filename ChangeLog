@@ -1,3 +1,11 @@
+hiawatha (10.8.3) stable; urgency=low
+
+  * Several fixes in build system.
+  * mbed TLS updated to 2.13.0.
+  * Added build system for nghttp2.
+
+ -- Hugo Leisink <hugo@leisink.net>  Sun, 16 Sep 2018 10:50:23 +0200
+
 hiawatha (10.8.2) stable; urgency=low
 
   * mbed TLS updated to 2.12.0.

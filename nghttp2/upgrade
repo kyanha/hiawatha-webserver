@@ -1,0 +1,47 @@
+#!/bin/sh
+
+cd `dirname $0`
+
+replace() {
+	line=`grep "^$1" nghttp2/CMakeLists.txt`
+	sed "s/^${1}.*$/${line}/" CMakeLists.txt > cmake.tmp
+	mv -f cmake.tmp CMakeLists.txt
+}
+
+if [ "$1" = "clean" ]; then
+	rm -rf lib
+	rm -f AUTHORS COPYING
+	exit
+fi
+
+echo "Downloading latest nghttp2 library."
+git clone https://github.com/nghttp2/nghttp2.git 2> /dev/null
+
+if [ ! -d nghttp2 ]; then 
+	echo "Download error."
+	exit
+fi
+
+echo "Removing current nghttp2 library."
+rm -rf lib
+
+echo "Installing new nghttp2 library."
+mv nghttp2/AUTHORS .
+mv nghttp2/COPYING .
+mv -f nghttp2/cmake/Version.cmake cmake
+mv nghttp2/lib .
+rm -f lib/CMakeLists.txt
+ln -s ../cmake/CMakeLists.txt lib
+rm lib/Makefile.*
+rm lib/libnghttp2.pc.in
+rm lib/version.rc.in
+rm lib/includes/CMakeLists.txt
+rm lib/includes/Makefile.am
+
+replace "project(nghttp2"
+replace "set(LT_CURRENT"
+replace "set(LT_REVISION"
+replace "set(LT_AGE"
+
+echo "Cleaning up."
+rm -rf nghttp2

@@ -877,11 +877,11 @@ static const uint8_t aria_test2_ctr_ct[3][48] =         // CTR ciphertext
 #define ARIA_SELF_TEST_IF_FAIL              \
         {                                   \
             if( verbose )                   \
-                printf( "failed\n" );       \
+                mbedtls_printf( "failed\n" );       \
             return( 1 );                    \
         } else {                            \
             if( verbose )                   \
-                printf( "passed\n" );       \
+                mbedtls_printf( "passed\n" );       \
         }
 
 /*
@@ -910,7 +910,7 @@ int mbedtls_aria_self_test( int verbose )
     {
         /* test ECB encryption */
         if( verbose )
-            printf( "  ARIA-ECB-%d (enc): ", 128 + 64 * i );
+            mbedtls_printf( "  ARIA-ECB-%d (enc): ", 128 + 64 * i );
         mbedtls_aria_setkey_enc( &ctx, aria_test1_ecb_key, 128 + 64 * i );
         mbedtls_aria_crypt_ecb( &ctx, aria_test1_ecb_pt, blk );
         if( memcmp( blk, aria_test1_ecb_ct[i], MBEDTLS_ARIA_BLOCKSIZE ) != 0 )
@@ -918,14 +918,14 @@ int mbedtls_aria_self_test( int verbose )
 
         /* test ECB decryption */
         if( verbose )
-            printf( "  ARIA-ECB-%d (dec): ", 128 + 64 * i );
+            mbedtls_printf( "  ARIA-ECB-%d (dec): ", 128 + 64 * i );
         mbedtls_aria_setkey_dec( &ctx, aria_test1_ecb_key, 128 + 64 * i );
         mbedtls_aria_crypt_ecb( &ctx, aria_test1_ecb_ct[i], blk );
         if( memcmp( blk, aria_test1_ecb_pt, MBEDTLS_ARIA_BLOCKSIZE ) != 0 )
             ARIA_SELF_TEST_IF_FAIL;
     }
     if( verbose )
-        printf( "\n" );
+        mbedtls_printf( "\n" );
 
     /*
      * Test set 2
@@ -935,7 +935,7 @@ int mbedtls_aria_self_test( int verbose )
     {
         /* Test CBC encryption */
         if( verbose )
-            printf( "  ARIA-CBC-%d (enc): ", 128 + 64 * i );
+            mbedtls_printf( "  ARIA-CBC-%d (enc): ", 128 + 64 * i );
         mbedtls_aria_setkey_enc( &ctx, aria_test2_key, 128 + 64 * i );
         memcpy( iv, aria_test2_iv, MBEDTLS_ARIA_BLOCKSIZE );
         memset( buf, 0x55, sizeof( buf ) );
@@ -946,7 +946,7 @@ int mbedtls_aria_self_test( int verbose )
 
         /* Test CBC decryption */
         if( verbose )
-            printf( "  ARIA-CBC-%d (dec): ", 128 + 64 * i );
+            mbedtls_printf( "  ARIA-CBC-%d (dec): ", 128 + 64 * i );
         mbedtls_aria_setkey_dec( &ctx, aria_test2_key, 128 + 64 * i );
         memcpy( iv, aria_test2_iv, MBEDTLS_ARIA_BLOCKSIZE );
         memset( buf, 0xAA, sizeof( buf ) );
@@ -956,7 +956,7 @@ int mbedtls_aria_self_test( int verbose )
             ARIA_SELF_TEST_IF_FAIL;
     }
     if( verbose )
-        printf( "\n" );
+        mbedtls_printf( "\n" );
 
 #endif /* MBEDTLS_CIPHER_MODE_CBC */
 
@@ -965,7 +965,7 @@ int mbedtls_aria_self_test( int verbose )
     {
         /* Test CFB encryption */
         if( verbose )
-            printf( "  ARIA-CFB-%d (enc): ", 128 + 64 * i );
+            mbedtls_printf( "  ARIA-CFB-%d (enc): ", 128 + 64 * i );
         mbedtls_aria_setkey_enc( &ctx, aria_test2_key, 128 + 64 * i );
         memcpy( iv, aria_test2_iv, MBEDTLS_ARIA_BLOCKSIZE );
         memset( buf, 0x55, sizeof( buf ) );
@@ -977,7 +977,7 @@ int mbedtls_aria_self_test( int verbose )
 
         /* Test CFB decryption */
         if( verbose )
-            printf( "  ARIA-CFB-%d (dec): ", 128 + 64 * i );
+            mbedtls_printf( "  ARIA-CFB-%d (dec): ", 128 + 64 * i );
         mbedtls_aria_setkey_enc( &ctx, aria_test2_key, 128 + 64 * i );
         memcpy( iv, aria_test2_iv, MBEDTLS_ARIA_BLOCKSIZE );
         memset( buf, 0xAA, sizeof( buf ) );
@@ -988,7 +988,7 @@ int mbedtls_aria_self_test( int verbose )
             ARIA_SELF_TEST_IF_FAIL;
     }
     if( verbose )
-        printf( "\n" );
+        mbedtls_printf( "\n" );
 #endif /* MBEDTLS_CIPHER_MODE_CFB */
 
 #if defined(MBEDTLS_CIPHER_MODE_CTR)
@@ -996,7 +996,7 @@ int mbedtls_aria_self_test( int verbose )
     {
         /* Test CTR encryption */
         if( verbose )
-            printf( "  ARIA-CTR-%d (enc): ", 128 + 64 * i );
+            mbedtls_printf( "  ARIA-CTR-%d (enc): ", 128 + 64 * i );
         mbedtls_aria_setkey_enc( &ctx, aria_test2_key, 128 + 64 * i );
         memset( iv, 0, MBEDTLS_ARIA_BLOCKSIZE );                    // IV = 0
         memset( buf, 0x55, sizeof( buf ) );
@@ -1008,7 +1008,7 @@ int mbedtls_aria_self_test( int verbose )
 
         /* Test CTR decryption */
         if( verbose )
-            printf( "  ARIA-CTR-%d (dec): ", 128 + 64 * i );
+            mbedtls_printf( "  ARIA-CTR-%d (dec): ", 128 + 64 * i );
         mbedtls_aria_setkey_enc( &ctx, aria_test2_key, 128 + 64 * i );
         memset( iv, 0, MBEDTLS_ARIA_BLOCKSIZE );                    // IV = 0
         memset( buf, 0xAA, sizeof( buf ) );
@@ -1019,7 +1019,7 @@ int mbedtls_aria_self_test( int verbose )
             ARIA_SELF_TEST_IF_FAIL;
     }
     if( verbose )
-        printf( "\n" );
+        mbedtls_printf( "\n" );
 #endif /* MBEDTLS_CIPHER_MODE_CTR */
 
     return( 0 );

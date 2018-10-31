@@ -88,6 +88,9 @@ char *enabled_modules = ""
 #ifdef ENABLE_FILEHASHES
 	", FileHashes"
 #endif
+#ifdef ENABLE_HTTP2
+	", HTTP/2"
+#endif
 #ifdef ENABLE_IPV6
 	", IPv6"
 #endif
@@ -655,6 +658,12 @@ int run_webserver(t_settings *settings) {
 			if (tls_set_config(&(binding->tls_config), &tls_setup) != 0) {
 				return -1;
 			}
+
+#ifdef ENABLE_HTTP2
+			if (binding->use_tls && binding->accept_http2) {
+				tls_accept_http2(binding->tls_config);
+			}
+#endif
 		}
 #endif
 

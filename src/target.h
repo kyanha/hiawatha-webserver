@@ -12,6 +12,7 @@
 #ifndef _TARGET_H
 #define _TARGET_H
 
+#include "config.h"
 #include "session.h"
 #ifdef ENABLE_RPROXY
 #include "rproxy.h"

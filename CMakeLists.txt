@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(Hiawatha VERSION 10.8.2 LANGUAGES C)
+project(Hiawatha VERSION 10.8.3 LANGUAGES C)
 
 # Compiler
 set(CMAKE_C_FLAGS "-O2 -Wall -Wextra ${CMAKE_C_FLAGS}")
@@ -7,6 +7,7 @@ set(CMAKE_BUILD_TYPE "RelWithDebInfo")
 
 # Options
 option(ENABLE_CACHE    "Enable cache support in Hiawatha." on)
+option(ENABLE_HTTP2    "Enable HTTP2 support in Hiawatha." off)
 option(ENABLE_IPV6     "Enable IPv6 support in Hiawatha." on)
 option(ENABLE_MONITOR  "Enable support for the Hiawatha Monitor." off)
 option(ENABLE_RPROXY   "Enable reverse proxy support in Hiawatha." on)
@@ -16,6 +17,7 @@ option(ENABLE_TOOLKIT  "Enable the URL toolkit in Hiawatha" on)
 option(ENABLE_XSLT     "Enable XSLT support in Hiawatha." on)
 
 option(USE_SYSTEM_MBEDTLS "Use the system's mbed TLS (>=2.0.0) library." off)
+option(USE_SYSTEM_NGHTTP2 "Use the system's nghttp2 library." off)
 
 # Includes
 include(CMakeFiles.txt)
@@ -111,10 +113,24 @@ if(ENABLE_TLS)
 	set(MBEDTLS_LIBRARIES "mbedtls" "mbedx509" "mbedcrypto")
 endif()
 
+# nghttp2
+if (ENABLE_HTTP2)
+	set(CMAKE_INSTALL_LIBDIR ${CMAKE_INSTALL_LIBDIR}/hiawatha)
+	if(USE_SYSTEM_NGHTTP2)
+		find_library(NGHTTP2 nghttp2)
+	else()
+		add_subdirectory(nghttp2)
+	endif()
+	set(NGHTTP2_LIBRARIES "nghttp2")
+endif()
+
 # Hiawatha
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 if(NOT USE_SYSTEM_MBEDTLS)
 	include_directories(mbedtls/include)
+endif()
+if(NOT USE_SYSTEM_NGHTTP2)
+	include_directories(nghttp2/lib/includes)
 endif()
 if(ENABLE_XSLT)
 	include_directories(${LIBXML2_INCLUDE_DIR} ${LIBXSLT_INCLUDE_DIR})
@@ -145,6 +161,12 @@ if(ENABLE_TLS)
 	if(NOT USE_SYSTEM_MBEDTLS)
 		set_target_properties(hiawatha PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/hiawatha)
 		set_target_properties(wigwam PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/hiawatha)
+	endif()
+endif()
+if(ENABLE_HTTP2)
+	target_link_libraries(hiawatha ${NGHTTP2_LIBRARIES})
+	if(NOT USE_SYSTEM_NGHTTP2)
+		set_target_properties(hiawatha PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/hiawatha)
 	endif()
 endif()
 if(ENABLE_XSLT)

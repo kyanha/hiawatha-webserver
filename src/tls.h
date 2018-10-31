@@ -69,6 +69,10 @@ void tls_close(mbedtls_ssl_context *context);
 int  tls_connect(mbedtls_ssl_context *context, int *sock, char *hostname);
 int  tls_send_buffer(mbedtls_ssl_context *context, const char *buffer, int size);
 int  create_hpkp_header(t_hpkp_data *hpkp_data);
+#ifdef ENABLE_HTTP2
+int tls_accept_http2(mbedtls_ssl_config *config);
+bool tls_http2_accepted(mbedtls_ssl_context *context);
+#endif
 
 #endif
 

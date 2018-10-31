@@ -276,6 +276,9 @@ static t_binding *new_binding(void) {
 
 	binding->socket               = -1;
 	binding->poll_data            = NULL;
+#ifdef ENABLE_HTTP2
+	binding->accept_http2         = false;
+#endif
 
 	binding->next                 = NULL;
 
@@ -2157,6 +2160,13 @@ static bool directory_setting(char *key, char *value, t_directory *directory) {
 static bool binding_setting(char *key, char *value, t_binding *binding) {
 	char *rest;
 
+#ifdef ENABLE_HTTP2
+	if (strcmp(key, "accepthttp2") == 0) {
+		if (parse_yesno(value, &(binding->accept_http2)) == 0) {
+			return true;
+		}
+	} else
+#endif
 #ifdef HAVE_ACCF
 	if (strcmp(key, "enableaccf") == 0) {
 		if (parse_yesno(value, &(binding->enable_accf)) == 0) {
