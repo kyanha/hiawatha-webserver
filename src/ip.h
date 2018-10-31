@@ -52,7 +52,8 @@ int  default_ipv4(t_ip_addr *ip_addr);
 #ifdef ENABLE_IPV6
 int  default_ipv6(t_ip_addr *ip_addr);
 #endif
-int  set_to_localhost(t_ip_addr *ip_addr);
+int  set_localhost_ipv4(t_ip_addr *ip_addr);
+int  set_localhost_ipv6(t_ip_addr *ip_addr);
 int  parse_ip(char *str, t_ip_addr *ip_addr);
 unsigned char index_by_ip(t_ip_addr *ip);
 int  copy_ip(t_ip_addr *dest, t_ip_addr *src);

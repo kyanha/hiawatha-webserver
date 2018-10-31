@@ -32,6 +32,7 @@
 #include "mbedtls/pk.h"
 #include "mbedtls/asn1.h"
 #include "mbedtls/oid.h"
+#include "mbedtls/platform_util.h"
 
 #include <string.h>
 
@@ -60,14 +61,6 @@
 #include <stdlib.h>
 #define mbedtls_calloc    calloc
 #define mbedtls_free       free
-#endif
-
-#if defined(MBEDTLS_FS_IO) || \
-    defined(MBEDTLS_PKCS12_C) || defined(MBEDTLS_PKCS5_C)
-/* Implementation that should never be optimized out by the compiler */
-static void mbedtls_zeroize( void *v, size_t n ) {
-    volatile unsigned char *p = v; while( n-- ) *p++ = 0;
-}
 #endif
 
 #if defined(MBEDTLS_FS_IO)
@@ -107,7 +100,7 @@ int mbedtls_pk_load_file( const char *path, unsigned char **buf, size_t *n )
     {
         fclose( f );
 
-        mbedtls_zeroize( *buf, *n );
+        mbedtls_platform_zeroize( *buf, *n );
         mbedtls_free( *buf );
 
         return( MBEDTLS_ERR_PK_FILE_IO_ERROR );
@@ -142,7 +135,7 @@ int mbedtls_pk_parse_keyfile( mbedtls_pk_context *ctx,
         ret = mbedtls_pk_parse_key( ctx, buf, n,
                 (const unsigned char *) pwd, strlen( pwd ) );
 
-    mbedtls_zeroize( buf, n );
+    mbedtls_platform_zeroize( buf, n );
     mbedtls_free( buf );
 
     return( ret );
@@ -162,7 +155,7 @@ int mbedtls_pk_parse_public_keyfile( mbedtls_pk_context *ctx, const char *path )
 
     ret = mbedtls_pk_parse_public_key( ctx, buf, n );
 
-    mbedtls_zeroize( buf, n );
+    mbedtls_platform_zeroize( buf, n );
     mbedtls_free( buf );
 
     return( ret );
@@ -863,7 +856,10 @@ static int pk_parse_key_sec1_der( mbedtls_ecp_keypair *eck,
             mbedtls_ecp_keypair_free( eck );
             return( MBEDTLS_ERR_PK_KEY_INVALID_FORMAT + ret );
         }
+    }
 
+    if( p != end )
+    {
         /*
          * Is 'publickey' present? If not, or if we can't read it (eg because it
          * is compressed), create it from the private key.
@@ -1267,7 +1263,6 @@ int mbedtls_pk_parse_key( mbedtls_pk_context *pk,
         return( ret );
 #endif /* MBEDTLS_PKCS12_C || MBEDTLS_PKCS5_C */
 #else
-    ((void) ret);
     ((void) pwd);
     ((void) pwdlen);
 #endif /* MBEDTLS_PEM_PARSE_C */
@@ -1294,7 +1289,7 @@ int mbedtls_pk_parse_key( mbedtls_pk_context *pk,
         ret = pk_parse_key_pkcs8_encrypted_der( pk, key_copy, keylen,
                                                 pwd, pwdlen );
 
-        mbedtls_zeroize( key_copy, keylen );
+        mbedtls_platform_zeroize( key_copy, keylen );
         mbedtls_free( key_copy );
     }
 

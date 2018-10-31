@@ -328,6 +328,7 @@ t_config *default_config(void) {
 	config->wrap_user_cgi      = false;
 	config->log_format         = hiawatha;
 	config->syslog             = SYSLOG_NONE;
+	config->syslog_ident       = NULL;
 	config->log_timeouts       = true;
 	config->rotate_access_logs = false;
 	config->anonymize_ip       = false;
@@ -1371,7 +1372,8 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			return true;
 		}
 	} else if (strcmp(key, "syslog") == 0) {
-		rest = value;
+		split_string(value, &rest, &uid, ';');
+
 		do {
 			split_string(rest, &value, &rest, ',');
 			if (strcmp(value, "system") == 0) {
@@ -1390,6 +1392,13 @@ static bool system_setting(char *key, char *value, t_config *config) {
 				return false;
 			}
 		} while (rest != NULL);
+
+		if (uid != NULL) {
+			if ((config->syslog_ident = strdup(remove_spaces(uid))) == NULL) {
+				return false;
+			}
+		}
+
 		return true;
 	} else if (strcmp(key, "systemlogfile") == 0) {
 		if (valid_path(value)) {
@@ -1439,7 +1448,7 @@ static bool system_setting(char *key, char *value, t_config *config) {
 			if ((binding = new_binding()) == NULL) {
 				return false;
 			}
-			set_to_localhost(&(binding->interface));
+			set_localhost_ipv4(&(binding->interface));
 
 			binding->next = config->tomahawk_port;
 			config->tomahawk_port = binding;
@@ -2231,8 +2240,12 @@ static bool binding_setting(char *key, char *value, t_binding *binding) {
 static bool fcgi_server_setting(char *key, char *value, t_fcgi_server *fcgi_server) {
 	char *rest;
 	t_connect_to *connect_to;
+	t_ip_addr localhost_ipv4, localhost_ipv6;
 
 	if (strcmp(key, "connectto") == 0) {
+		set_localhost_ipv4(&localhost_ipv4);
+		set_localhost_ipv6(&localhost_ipv6);
+
 		while (value != NULL) {
 			split_string(value, &value, &rest, ',');
 
@@ -2253,7 +2266,13 @@ static bool fcgi_server_setting(char *key, char *value, t_fcgi_server *fcgi_serv
 				if (parse_ip_port(value, &(connect_to->ip_addr), &(connect_to->port)) == -1) {
 					return false;
 				}
-				connect_to->localhost = false;
+				if (same_ip(&(connect_to->ip_addr), &localhost_ipv4)) {
+					connect_to->localhost = true;
+				} else if (same_ip(&(connect_to->ip_addr), &localhost_ipv6)) {
+					connect_to->localhost = true;
+				} else {
+					connect_to->localhost = false;
+				}
 			}
 			value = rest;
 		}

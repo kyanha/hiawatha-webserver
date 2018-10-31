@@ -35,6 +35,7 @@
 #if defined(MBEDTLS_CTR_DRBG_C)
 
 #include "mbedtls/ctr_drbg.h"
+#include "mbedtls/platform_util.h"
 
 #include <string.h>
 
@@ -50,11 +51,6 @@
 #define mbedtls_printf printf
 #endif /* MBEDTLS_PLATFORM_C */
 #endif /* MBEDTLS_SELF_TEST */
-
-/* Implementation that should never be optimized out by the compiler */
-static void mbedtls_zeroize( void *v, size_t n ) {
-    volatile unsigned char *p = v; while( n-- ) *p++ = 0;
-}
 
 /*
  * CTR_DRBG context initialization
@@ -127,7 +123,7 @@ void mbedtls_ctr_drbg_free( mbedtls_ctr_drbg_context *ctx )
     mbedtls_mutex_free( &ctx->mutex );
 #endif
     mbedtls_aes_free( &ctx->aes_ctx );
-    mbedtls_zeroize( ctx, sizeof( mbedtls_ctr_drbg_context ) );
+    mbedtls_platform_zeroize( ctx, sizeof( mbedtls_ctr_drbg_context ) );
 }
 
 void mbedtls_ctr_drbg_set_prediction_resistance( mbedtls_ctr_drbg_context *ctx, int resistance )
@@ -247,16 +243,16 @@ exit:
     /*
     * tidy up the stack
     */
-    mbedtls_zeroize( buf, sizeof( buf ) );
-    mbedtls_zeroize( tmp, sizeof( tmp ) );
-    mbedtls_zeroize( key, sizeof( key ) );
-    mbedtls_zeroize( chain, sizeof( chain ) );
+    mbedtls_platform_zeroize( buf, sizeof( buf ) );
+    mbedtls_platform_zeroize( tmp, sizeof( tmp ) );
+    mbedtls_platform_zeroize( key, sizeof( key ) );
+    mbedtls_platform_zeroize( chain, sizeof( chain ) );
     if( 0 != ret )
     {
         /*
         * wipe partial seed from memory
         */
-        mbedtls_zeroize( output, MBEDTLS_CTR_DRBG_SEEDLEN );
+        mbedtls_platform_zeroize( output, MBEDTLS_CTR_DRBG_SEEDLEN );
     }
 
     return( ret );
@@ -495,7 +491,7 @@ int mbedtls_ctr_drbg_write_seed_file( mbedtls_ctr_drbg_context *ctx, const char 
         ret = 0;
 
 exit:
-    mbedtls_zeroize( buf, sizeof( buf ) );
+    mbedtls_platform_zeroize( buf, sizeof( buf ) );
 
     fclose( f );
     return( ret );
@@ -528,7 +524,7 @@ int mbedtls_ctr_drbg_update_seed_file( mbedtls_ctr_drbg_context *ctx, const char
 
     fclose( f );
 
-    mbedtls_zeroize( buf, sizeof( buf ) );
+    mbedtls_platform_zeroize( buf, sizeof( buf ) );
 
     if( ret != 0 )
         return( ret );

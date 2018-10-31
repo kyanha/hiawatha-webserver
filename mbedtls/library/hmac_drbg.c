@@ -36,6 +36,7 @@
 #if defined(MBEDTLS_HMAC_DRBG_C)
 
 #include "mbedtls/hmac_drbg.h"
+#include "mbedtls/platform_util.h"
 
 #include <string.h>
 
@@ -51,11 +52,6 @@
 #define mbedtls_printf printf
 #endif /* MBEDTLS_SELF_TEST */
 #endif /* MBEDTLS_PLATFORM_C */
-
-/* Implementation that should never be optimized out by the compiler */
-static void mbedtls_zeroize( void *v, size_t n ) {
-    volatile unsigned char *p = v; while( n-- ) *p++ = 0;
-}
 
 /*
  * HMAC_DRBG context initialization
@@ -340,7 +336,7 @@ void mbedtls_hmac_drbg_free( mbedtls_hmac_drbg_context *ctx )
     mbedtls_mutex_free( &ctx->mutex );
 #endif
     mbedtls_md_free( &ctx->md_ctx );
-    mbedtls_zeroize( ctx, sizeof( mbedtls_hmac_drbg_context ) );
+    mbedtls_platform_zeroize( ctx, sizeof( mbedtls_hmac_drbg_context ) );
 }
 
 #if defined(MBEDTLS_FS_IO)
@@ -366,7 +362,7 @@ int mbedtls_hmac_drbg_write_seed_file( mbedtls_hmac_drbg_context *ctx, const cha
 
 exit:
     fclose( f );
-    mbedtls_zeroize( buf, sizeof( buf ) );
+    mbedtls_platform_zeroize( buf, sizeof( buf ) );
 
     return( ret );
 }
@@ -398,7 +394,7 @@ int mbedtls_hmac_drbg_update_seed_file( mbedtls_hmac_drbg_context *ctx, const ch
 
     fclose( f );
 
-    mbedtls_zeroize( buf, sizeof( buf ) );
+    mbedtls_platform_zeroize( buf, sizeof( buf ) );
 
     if( ret != 0 )
         return( ret );

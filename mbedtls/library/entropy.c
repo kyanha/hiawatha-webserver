@@ -37,6 +37,7 @@
 
 #include "mbedtls/entropy.h"
 #include "mbedtls/entropy_poll.h"
+#include "mbedtls/platform_util.h"
 
 #include <string.h>
 
@@ -60,11 +61,6 @@
 #if defined(MBEDTLS_HAVEGE_C)
 #include "mbedtls/havege.h"
 #endif
-
-/* Implementation that should never be optimized out by the compiler */
-static void mbedtls_zeroize( void *v, size_t n ) {
-    volatile unsigned char *p = v; while( n-- ) *p++ = 0;
-}
 
 #define ENTROPY_MAX_LOOP    256     /**< Maximum amount to loop before error */
 
@@ -142,7 +138,7 @@ void mbedtls_entropy_free( mbedtls_entropy_context *ctx )
     ctx->initial_entropy_run = 0;
 #endif
     ctx->source_count = 0;
-    mbedtls_zeroize( ctx->source, sizeof( ctx->source ) );
+    mbedtls_platform_zeroize( ctx->source, sizeof( ctx->source ) );
     ctx->accumulator_started = 0;
 }
 
@@ -234,7 +230,7 @@ static int entropy_update( mbedtls_entropy_context *ctx, unsigned char source_id
 #endif
 
 cleanup:
-    mbedtls_zeroize( tmp, sizeof( tmp ) );
+    mbedtls_platform_zeroize( tmp, sizeof( tmp ) );
 
     return( ret );
 }
@@ -302,7 +298,7 @@ static int entropy_gather_internal( mbedtls_entropy_context *ctx )
         ret = MBEDTLS_ERR_ENTROPY_NO_STRONG_SOURCE;
 
 cleanup:
-    mbedtls_zeroize( buf, sizeof( buf ) );
+    mbedtls_platform_zeroize( buf, sizeof( buf ) );
 
     return( ret );
 }
@@ -435,7 +431,7 @@ int mbedtls_entropy_func( void *data, unsigned char *output, size_t len )
     ret = 0;
 
 exit:
-    mbedtls_zeroize( buf, sizeof( buf ) );
+    mbedtls_platform_zeroize( buf, sizeof( buf ) );
 
 #if defined(MBEDTLS_THREADING_C)
     if( mbedtls_mutex_unlock( &ctx->mutex ) != 0 )
@@ -488,7 +484,7 @@ int mbedtls_entropy_write_seed_file( mbedtls_entropy_context *ctx, const char *p
     ret = 0;
 
 exit:
-    mbedtls_zeroize( buf, sizeof( buf ) );
+    mbedtls_platform_zeroize( buf, sizeof( buf ) );
 
     fclose( f );
     return( ret );
@@ -518,7 +514,7 @@ int mbedtls_entropy_update_seed_file( mbedtls_entropy_context *ctx, const char *
 
     fclose( f );
 
-    mbedtls_zeroize( buf, sizeof( buf ) );
+    mbedtls_platform_zeroize( buf, sizeof( buf ) );
 
     if( ret != 0 )
         return( ret );

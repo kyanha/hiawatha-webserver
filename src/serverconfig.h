@@ -330,6 +330,7 @@ typedef struct type_config {
 	t_log_format  log_format;
 	bool          log_timeouts;
 	int           syslog;
+	char          *syslog_ident;
 	bool          anonymize_ip;
 	bool          wait_for_cgi;
 	t_charlist    cgi_extension;

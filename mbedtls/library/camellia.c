@@ -36,6 +36,7 @@
 #if defined(MBEDTLS_CAMELLIA_C)
 
 #include "mbedtls/camellia.h"
+#include "mbedtls/platform_util.h"
 
 #include <string.h>
 
@@ -49,11 +50,6 @@
 #endif /* MBEDTLS_SELF_TEST */
 
 #if !defined(MBEDTLS_CAMELLIA_ALT)
-
-/* Implementation that should never be optimized out by the compiler */
-static void mbedtls_zeroize( void *v, size_t n ) {
-    volatile unsigned char *p = (unsigned char*)v; while( n-- ) *p++ = 0;
-}
 
 /*
  * 32-bit integer manipulation macros (big endian)
@@ -335,7 +331,7 @@ void mbedtls_camellia_free( mbedtls_camellia_context *ctx )
     if( ctx == NULL )
         return;
 
-    mbedtls_zeroize( ctx, sizeof( mbedtls_camellia_context ) );
+    mbedtls_platform_zeroize( ctx, sizeof( mbedtls_camellia_context ) );
 }
 
 /*

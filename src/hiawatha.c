@@ -883,7 +883,7 @@ int run_webserver(t_settings *settings) {
 		return -1;
 	}
 	init_send_module();
-	if (init_log_module() == -1) {
+	if (init_log_module(config) == -1) {
 		fprintf(stderr, "Error initializing log module.\n");
 		return -1;
 	}

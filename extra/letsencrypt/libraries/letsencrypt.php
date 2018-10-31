@@ -342,7 +342,7 @@
 			/* Write certificates
 			 */
 			if ($cert_file == null) {
-				$dir = (posix_getuid() == 0) ? HIAWATHA_CERT_DIR."/" : "";
+				$dir = (getmyuid() == 0) ? HIAWATHA_CERT_DIR."/" : "";
 				$cert_file = $dir.$website_hostname.".pem";
 				$number = 1;
 				while (file_exists($cert_file)) {

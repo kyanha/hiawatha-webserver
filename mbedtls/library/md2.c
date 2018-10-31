@@ -36,6 +36,7 @@
 #if defined(MBEDTLS_MD2_C)
 
 #include "mbedtls/md2.h"
+#include "mbedtls/platform_util.h"
 
 #include <string.h>
 
@@ -49,11 +50,6 @@
 #endif /* MBEDTLS_SELF_TEST */
 
 #if !defined(MBEDTLS_MD2_ALT)
-
-/* Implementation that should never be optimized out by the compiler */
-static void mbedtls_zeroize( void *v, size_t n ) {
-    volatile unsigned char *p = v; while( n-- ) *p++ = 0;
-}
 
 static const unsigned char PI_SUBST[256] =
 {
@@ -95,7 +91,7 @@ void mbedtls_md2_free( mbedtls_md2_context *ctx )
     if( ctx == NULL )
         return;
 
-    mbedtls_zeroize( ctx, sizeof( mbedtls_md2_context ) );
+    mbedtls_platform_zeroize( ctx, sizeof( mbedtls_md2_context ) );
 }
 
 void mbedtls_md2_clone( mbedtls_md2_context *dst,

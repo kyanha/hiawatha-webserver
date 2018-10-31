@@ -564,8 +564,8 @@ int execute_cgi(t_session *session) {
 
 	if ((wrap_cgi == false) && (session->cgi_type != fastcgi)) {
 		check_file_exists = true;
-	} else if ((session->cgi_type == fastcgi) && (session->fcgi_server != NULL)) {
-		check_file_exists = false;
+	} else if ((session->cgi_type == fastcgi) && session->fcgi_server->localhost && session->host->show_index) {
+		check_file_exists = true;
 	} else {
 		check_file_exists = false;
 	}

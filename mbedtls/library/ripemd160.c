@@ -36,6 +36,7 @@
 #if defined(MBEDTLS_RIPEMD160_C)
 
 #include "mbedtls/ripemd160.h"
+#include "mbedtls/platform_util.h"
 
 #include <string.h>
 
@@ -73,11 +74,6 @@
 }
 #endif
 
-/* Implementation that should never be optimized out by the compiler */
-static void mbedtls_zeroize( void *v, size_t n ) {
-    volatile unsigned char *p = v; while( n-- ) *p++ = 0;
-}
-
 void mbedtls_ripemd160_init( mbedtls_ripemd160_context *ctx )
 {
     memset( ctx, 0, sizeof( mbedtls_ripemd160_context ) );
@@ -88,7 +84,7 @@ void mbedtls_ripemd160_free( mbedtls_ripemd160_context *ctx )
     if( ctx == NULL )
         return;
 
-    mbedtls_zeroize( ctx, sizeof( mbedtls_ripemd160_context ) );
+    mbedtls_platform_zeroize( ctx, sizeof( mbedtls_ripemd160_context ) );
 }
 
 void mbedtls_ripemd160_clone( mbedtls_ripemd160_context *dst,

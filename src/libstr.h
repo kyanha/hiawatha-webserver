@@ -29,6 +29,7 @@ int time_str_to_int(char *str);
 bool empty_string(char *str);
 short hex_char_to_int(char c);
 int  hex_to_int(char *str);
+int  str_count(char *str, char c);
 char *remove_spaces(char *str);
 char *uncomment(char *str);
 char *strlower(char *str);

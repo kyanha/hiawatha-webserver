@@ -181,6 +181,25 @@ int hex_to_int(char *str) {
 	return value;
 }
 
+/* Count chars in string
+ */
+int str_count(char *str, char c) {
+	int count = 0;
+
+	if (str == NULL) {
+		return -1;
+	}
+
+	while (*str != '\0') {
+		if (*str == c) {
+			count++;
+		}
+		str++;
+	}
+
+	return count;
+}
+
 /* Remove the leading and trailing spaces in a string.
  */
 char *remove_spaces(char *str) {

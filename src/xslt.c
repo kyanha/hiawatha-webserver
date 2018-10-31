@@ -474,8 +474,9 @@ static int add_tag(char **buffer, int *size, int extra_size, int *len, char *tag
 	if ((result = snprintf(data, 31, "<%s>", tag)) == -1) {
 		return -1;
 	} else if (result >= 30) {
-		return false;
+		return -1;
 	}
+
 	if (add_str(buffer, size, extra_size, len, data) == -1) {
 		return -1;
 	}
@@ -486,8 +487,8 @@ static int add_tag(char **buffer, int *size, int extra_size, int *len, char *tag
 
 	if ((result = snprintf(data, 31, "</%s>", tag)) == -1) {
 		return -1;
-	} else if (result >= 30) {
-		return false;
+	} else if (result >= 62) {
+		return -1;
 	}
 	if (add_str(buffer, size, extra_size, len, data) == -1) {
 		return -1;
@@ -502,10 +503,10 @@ int show_index(t_session *session) {
 #ifdef ENABLE_XSLT
 	xmlDocPtr data_xml;
 #endif
-	char *text_xml, fsize_str[30], timestr[33], value[VALUE_SIZE + 1], *extension, *ext_xml, *link, *slash, *uri, *ruri;
-	int text_size, text_max, result, handle;
+	char *text_xml, fsize_str[30], time_str[33], depth_str[8], value[VALUE_SIZE + 1], *extension, *ext_xml, *link, *slash, *uri, *ruri;
+	int text_size, text_max, result, handle, depth;
 	off_t total_fsize = 0;
-	bool root_dir, show_xml;
+	bool root_dir, show_xml, previous_slash;
 	struct tm s;
 	t_filelist *filelist = NULL, *file;
 	t_keyvalue *alias;
@@ -651,6 +652,29 @@ int show_index(t_session *session) {
 	}
 	free(ruri);
 
+	depth = 0;
+	previous_slash = true;
+	uri = session->request_uri;
+	while (*uri != '\0') {
+		if (*uri == '/') {
+			if (previous_slash == false) {
+				depth++;
+			}
+			previous_slash = true;
+		} else {
+			previous_slash = false;
+		}
+		uri++;
+	}
+
+	snprintf(depth_str, 7, "%d", depth);
+	if (add_tag(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "uri_depth", depth_str) == -1) {
+		free(text_xml);
+		free(ruri);
+		remove_filelist(filelist);
+		return -1;
+	}
+
 	if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "<files>") == -1) {
 		free(text_xml);
 		remove_filelist(filelist);
@@ -680,14 +704,14 @@ int show_index(t_session *session) {
 		/* Timestamp
 		 */
 		localtime_r(&(file->time), &s);
-		strftime(timestr, 32, "%d %b %Y, %X", &s);
-		*(timestr + 32) = '\0';
+		strftime(time_str, 32, "%d %b %Y, %X", &s);
+		*(time_str + 32) = '\0';
 
 		if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "\" timestamp=\"") == -1) {
 			free(text_xml);
 			remove_filelist(filelist);
 			return -1;
-		} else if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, timestr) == -1) {
+		} else if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, time_str) == -1) {
 			free(text_xml);
 			remove_filelist(filelist);
 			return -1;
@@ -776,14 +800,6 @@ int show_index(t_session *session) {
 			return -1;
 		} else {
 			check_free(link);
-		}
-
-		if (file->is_dir) {
-			if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "/") == -1) {
-				free(text_xml);
-				remove_filelist(filelist);
-				return -1;
-			}
 		}
 
 		if (add_str(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "</file>") == -1) {

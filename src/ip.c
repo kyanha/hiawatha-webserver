@@ -54,21 +54,20 @@ int default_ipv6(t_ip_addr *ip_addr) {
 }
 #endif
 
-int set_to_localhost(t_ip_addr *ip_addr) {
-	t_ipv4 *ipv4;
-
-	/* Set to 127.0.0.1
-	 */
+int set_localhost_ipv4(t_ip_addr *ip_addr) {
 	if (ip_addr == NULL) {
 		return -1;
 	}
 
-	ipv4 = (t_ipv4*)&(ip_addr->value);
-	*ipv4 = htonl(0x7F000001);
-	ip_addr->family = AF_INET;
-	ip_addr->size = IPv4_LEN;
+	return parse_ip("127.0.0.1", ip_addr);
+}
 
-	return 0;
+int set_localhost_ipv6(t_ip_addr *ip_addr) {
+	if (ip_addr == NULL) {
+		return -1;
+	}
+
+	return parse_ip("::1", ip_addr);
 }
 
 int parse_ip(char *str, t_ip_addr *ip_addr) {
@@ -257,7 +256,7 @@ int anonymized_ip_to_str(t_ip_addr *ip, char *str, int max_len) {
 		mask = 24;
 #ifdef ENABLE_IPV6
 	} else if (ip->family == AF_INET6) {
-		mask = 32;
+		mask = 48;
 #endif
 	} else {
 		strncpy(str, unknown_ip, max_len);

@@ -1,3 +1,11 @@
+hiawatha (10.8.2) stable; urgency=low
+
+  * mbed TLS updated to 2.12.0.
+  * New style for directory index.
+  * uri_depth added to XML for directory index.
+
+ -- Hugo Leisink <hugo@leisink.net>  Sat, 28 Jul 2018 09:51:07 +0200
+
 hiawatha (10.8.1) stable; urgency=low
 
   * mbed TLS updated to 2.8.0.
@@ -5,7 +13,7 @@ hiawatha (10.8.1) stable; urgency=low
     compliant out of the box.
   * Small improvements to Let's Encrypt ACMEv2 script.
 
- -- Hugo Leisink <hugo@leisink.net>  Tue, 10 Apr 2018 21:58:41 +0100
+ -- Hugo Leisink <hugo@leisink.net>  Tue, 10 Apr 2018 21:58:41 +0200
 
 hiawatha (10.8) stable; urgency=low
 
@@ -21,7 +29,7 @@ hiawatha (10.8) stable; urgency=low
   * Bugfix: requesting non-regular files now results in a 403 instead of
     blocking that thread.
  
- -- Hugo Leisink <hugo@leisink.net>  Wed, 21 Mar 2018 19:57:44 +0200
+ -- Hugo Leisink <hugo@leisink.net>  Wed, 21 Mar 2018 19:57:44 +0100
 
 hiawatha (10.7) stable; urgency=low
 
@@ -31,7 +39,7 @@ hiawatha (10.7) stable; urgency=low
   * Small improvements.
   * Bugfix: error in handling renewal scripts in Let's Encrypt script.
 
- -- Hugo Leisink <hugo@leisink.net>  Mon, 16 Oct 2017 19:31:54 +0200
+ -- Hugo Leisink <hugo@leisink.net>  Mon, 16 Oct 2017 19:31:54 +0100
 
 hiawatha (10.6) stable; urgency=low
 

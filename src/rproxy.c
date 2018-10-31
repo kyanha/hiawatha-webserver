@@ -701,7 +701,7 @@ int tunnel_ssh_connection(int client_sock) {
 	struct pollfd poll_data[2];
 	bool quit = false;
 
-	set_to_localhost(&localhost);
+	set_localhost_ipv4(&localhost);
 	if ((server_sock = connect_to_server(&localhost, 22)) == -1) {
 		return -1;
 	}

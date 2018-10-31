@@ -40,13 +40,13 @@
 
 #define MBEDTLS_ERR_ARC4_HW_ACCEL_FAILED                  -0x0019  /**< ARC4 hardware accelerator failed. */
 
-#if !defined(MBEDTLS_ARC4_ALT)
-// Regular implementation
-//
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#if !defined(MBEDTLS_ARC4_ALT)
+// Regular implementation
+//
 
 /**
  * \brief     ARC4 context structure
@@ -62,6 +62,10 @@ typedef struct
     unsigned char m[256];       /*!< permutation table */
 }
 mbedtls_arc4_context;
+
+#else  /* MBEDTLS_ARC4_ALT */
+#include "arc4_alt.h"
+#endif /* MBEDTLS_ARC4_ALT */
 
 /**
  * \brief          Initialize ARC4 context
@@ -119,18 +123,6 @@ void mbedtls_arc4_setup( mbedtls_arc4_context *ctx, const unsigned char *key,
  */
 int mbedtls_arc4_crypt( mbedtls_arc4_context *ctx, size_t length, const unsigned char *input,
                 unsigned char *output );
-
-#ifdef __cplusplus
-}
-#endif
-
-#else  /* MBEDTLS_ARC4_ALT */
-#include "arc4_alt.h"
-#endif /* MBEDTLS_ARC4_ALT */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /**
  * \brief          Checkup routine

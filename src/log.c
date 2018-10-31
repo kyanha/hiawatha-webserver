@@ -47,7 +47,7 @@ static int day_of_year;
 
 /* Initialize log module
  */
-int init_log_module(void) {
+int init_log_module(t_config *config) {
 	time_t now;
 	struct tm s;
 
@@ -58,6 +58,10 @@ int init_log_module(void) {
 	now = time(NULL);
 	localtime_r(&now, &s);
 	day_of_year = s.tm_yday;
+
+	if ((config->syslog != SYSLOG_NONE) && (config->syslog_ident != NULL)) {
+		openlog(config->syslog_ident, 0, 0);
+	}
 
 	return 0;
 }

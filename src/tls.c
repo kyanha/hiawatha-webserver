@@ -82,19 +82,22 @@ static int ciphersuites_tls10[] = {
 };
 
 static int ciphersuites_tls12[] = {
+	MBEDTLS_TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
 	MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 	MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	MBEDTLS_TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+	MBEDTLS_TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+	MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	MBEDTLS_TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
 	MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384,
 	MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
 	MBEDTLS_TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_CBC_SHA384,
 	MBEDTLS_TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_CBC_SHA256,
-	MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-	MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	MBEDTLS_TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384,
-	MBEDTLS_TLS_ECDHE_RSA_WITH_CAMELLIA_128_CBC_SHA256,
 	MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,
 	MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-	MBEDTLS_TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
+	MBEDTLS_TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384,
+	MBEDTLS_TLS_ECDHE_RSA_WITH_CAMELLIA_128_CBC_SHA256,
 	MBEDTLS_TLS_DHE_RSA_WITH_AES_256_CBC_SHA256,
 	MBEDTLS_TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256,
 	0
@@ -704,7 +707,7 @@ int create_hpkp_header(t_hpkp_data *hpkp_data) {
 	mbedtls_x509_csr signing_request;
 	mbedtls_pk_context public_key, *pk;
 	int result = -1, fd, count, chars, der_len, err;
-	char *content = NULL, *pos, *header, *end, *pem_begin = "-----BEGIN ";
+	char *content = NULL, *pos, *header, *s_end, *end, *pem_begin = "-----BEGIN ";
 	struct stat file_info;
 	ssize_t bytes, total;
 	unsigned char pk_der[PK_DER_BUFFER_SIZE], sha256_hash[32], hash[64];
@@ -763,12 +766,12 @@ int create_hpkp_header(t_hpkp_data *hpkp_data) {
 
 	pos = content;
 	while ((pos = strstr(pos, pem_begin)) != NULL) {
-		if ((end = strstr(pos, "-----END ")) == NULL) {
+		if ((s_end = strstr(pos, "-----END ")) == NULL) {
 			goto hpkp_error;
 		}
-		if ((end = strchr(end, '\n')) != NULL) {
+		if ((end = strchr(s_end, '\n')) != NULL) {
 			*end = '\0';
-		} else if ((end = strchr(end, '\0')) == NULL) {
+		} else if ((end = strchr(s_end, '\0')) == NULL) {
 			goto hpkp_error;
 		}
 

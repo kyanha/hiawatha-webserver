@@ -69,7 +69,7 @@ Example: set local_net = 192.168.1.0/24
          AccessList = allow local_net, deny 0.0.0.0/0 (see AccessList for more information about this option)
 .TP
 .B AnonymizeIP = yes|no
-Anonymize IP addresses before writing them to the access and error logfiles or sending them to the Hiawatha Monitor.
+Anonymize IP addresses before writing them to the access and error logfiles.
 .br
 Default = no     Example: AnonymizeIP = yes
 .TP
@@ -325,7 +325,7 @@ Sets the SO_SNDTIMEO value for all client connection sockets. Use 0 to disable t
 .br
 Default = 3     Example: SocketSendTimeout = 10
 .TP
-.B Syslog = [system][, exploit][, garbage][, access][, error][, all]
+.B Syslog = [system][, exploit][, garbage][, access][, error][, all][;<syslog identifier>]
 Log information to syslog.
 .br
 Example: Syslog = system, access, error
@@ -632,8 +632,8 @@ Adds an X-Random HTTP header to the response for HTTPS connections. The header c
 .br
 Example: RandomHeader = 250
 .TP
-.B RequiredCA = ...
-Use this option inside a virtualhost block if you want to make use of the SNI capabilities of Hiawatha. See the RequiredCA option in the BINDING CONFIGURATION chapter for more information.
+.B RequiredCA = <CA certificate file>[, <CA CRL file>
+Use the CA certificates in this file to authenticate users. Users without a certificate from one of the listed CAs will not be allowed.
 .TP
 .B RequiredGroup = <groupname>[, <groupname>, ...]
 The <groupname> is the name of the group a user must be a member of to have access (see PasswordFile for more information).
