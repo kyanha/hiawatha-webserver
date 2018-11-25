@@ -653,6 +653,8 @@ Default = no     Example: RequireTLS = yes, 2678400
 .B ReverseProxy = [!]<pattern> [<skip directories>] http[s]://<hostname>[:<port>][/<path>]|<unix-socket> [<timeout>] [keep-alive]
 Forward the request with URLs that match the POSIX regular expression <pattern> to another webserver, where <path> is placed before the original URL. When <hostname> is an IP address, the value of the Host HTTP header is unchanged. Otherwise, it is replaced with the value of <hostname>. The optional <skip directories> is a number that indicates how many directories in the original URL should be skipped when sending it to the final webserver. The connection is closed after <timeout> seconds, which is set to 5 seconds by default. By default, Hiawatha doesn't use keep-alive connections to the final webserver. You can enable this by adding 'keep-alive' to the configuration line. When specifying multiple reverse proxies for one (virtual) host, Hiawatha prefers reverse proxies with a scheme (HTTP/HTTPS) matching the one of the client connection. See also CAcertificates.
 .br
+Hiawatha will ignore this setting for files in /.well-known/acme-challenge/, which are used for authentication in the Let's Encrypt certificate request process.
+.br
 Example: ReverseProxy = ^/icons/ 1 http://resources.lan/images
 
 (requires that Hiawatha was not compiled with -DENABLE_RPROXY=off)
