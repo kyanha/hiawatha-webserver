@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(Hiawatha VERSION 10.8.3 LANGUAGES C)
+project(Hiawatha VERSION 10.9 LANGUAGES C)
 
 # Compiler
 set(CMAKE_C_FLAGS "-O2 -Wall -Wextra ${CMAKE_C_FLAGS}")
@@ -7,7 +7,7 @@ set(CMAKE_BUILD_TYPE "RelWithDebInfo")
 
 # Options
 option(ENABLE_CACHE    "Enable cache support in Hiawatha." on)
-option(ENABLE_HTTP2    "Enable HTTP2 support in Hiawatha." off)
+#option(ENABLE_HTTP2    "Enable HTTP2 support in Hiawatha." off)
 option(ENABLE_IPV6     "Enable IPv6 support in Hiawatha." on)
 option(ENABLE_MONITOR  "Enable support for the Hiawatha Monitor." off)
 option(ENABLE_RPROXY   "Enable reverse proxy support in Hiawatha." on)
@@ -192,6 +192,16 @@ foreach(manpage ${manual_pages_in})
 endforeach()
 
 install(FILES extra/index.html DESTINATION ${WEBROOT_DIR})
+
+if(ENABLE_TLS AND NOT CYGWIN)
+	configure_file(extra/letsencrypt/lefh.in lefh)
+	install(FILES ${PROJECT_BINARY_DIR}/lefh DESTINATION ${CMAKE_INSTALL_SBINDIR}
+		PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+	install(DIRECTORY extra/letsencrypt/letsencrypt DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/hiawatha)
+	configure_file(extra/letsencrypt/letsencrypt.conf.in letsencrypt.conf)
+	install(FILES ${PROJECT_BINARY_DIR}/letsencrypt.conf DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/hiawatha/letsencrypt)
+	install(FILES man/lefh.1 DESTINATION ${CMAKE_INSTALL_FULL_MANDIR}/man1)
+endif()
 
 # Create directories
 install(DIRECTORY DESTINATION ${LOG_DIR})

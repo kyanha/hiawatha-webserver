@@ -503,7 +503,7 @@ int show_index(t_session *session) {
 #ifdef ENABLE_XSLT
 	xmlDocPtr data_xml;
 #endif
-	char *text_xml, fsize_str[30], time_str[33], depth_str[8], value[VALUE_SIZE + 1], *extension, *ext_xml, *link, *slash, *uri, *ruri;
+	char *text_xml, fsize_str[30], time_str[33], depth_str[12], value[VALUE_SIZE + 1], *extension, *ext_xml, *link, *slash, *uri, *ruri;
 	int text_size, text_max, result, handle, depth;
 	off_t total_fsize = 0;
 	bool root_dir, show_xml, previous_slash;
@@ -667,7 +667,7 @@ int show_index(t_session *session) {
 		uri++;
 	}
 
-	snprintf(depth_str, 7, "%d", depth);
+	snprintf(depth_str, 11, "%d", depth);
 	if (add_tag(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "uri_depth", depth_str) == -1) {
 		free(text_xml);
 		free(ruri);

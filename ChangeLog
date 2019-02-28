@@ -1,3 +1,17 @@
+hiawatha (10.9) stable; urgency=low
+
+  * Let's Encrypt script installed via CMake.
+  * mbed TLS updated to 2.16.0.
+  * Small improvements.
+
+ -- Hugo Leisink <hugo@leisink.net>  Mon, 18 Feb 2019 19:15:46 +0100
+
+hiawatha (10.8.4) stable; urgency=high
+
+  * Bugfix: Directory traversal when AllowDotFiles is enabled.
+
+ -- Hugo Leisink <hugo@leisink.net>  Tue, 12 Feb 2018 21:37:04 +0100
+
 hiawatha (10.8.3) stable; urgency=low
 
   * Several fixes in build system.

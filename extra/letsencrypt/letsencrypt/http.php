@@ -182,7 +182,7 @@
 
 		/* Add HTTP header
 		 *
-		 * INPUT:  string key, string value,[ bool replace header]
+		 * INPUT:  string key, string value[, bool replace header]
 		 * OUTPUT: -
 		 * ERROR:  -
 		 */

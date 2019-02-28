@@ -444,7 +444,7 @@ Example: RequiredCA = /etc/ssl/cacert.pem, /etc/ssl/cacrl.pem
 (requires that Hiawatha was not compiled with -DENABLE_TLS=off)
 .TP
 .B TLScertFile = <TLS private key and certificate file>
-Encrypt the connections of the current binding with the TLS private key and certificate in the specified file. Intermediate certificates also go in this file. Make sure the order matches the TLS chain order: host certificate first, CA certificate last.
+Encrypt the connections of the current binding with the TLS private key and certificate in the specified file. Intermediate certificates also go in this file. Make sure the order matches the TLS chain order: host certificate first, CA certificate last. Use the tool 'lefh' (Let's Encrypt For Hiawatha) to obtain and maintain Let's Encrypt certificates.
 .br
 Example: TLScertFile = my_domain.pem
 .br
@@ -1100,4 +1100,4 @@ cgi-wrapper(1), ssi-cgi(1), wigwam(1)
 
 
 .SH AUTHOR
-Hugo Leisink <hugo@hiawatha-webserver.org> - \fIhttp://www.hiawatha-webserver.org/\fP
+Hugo Leisink <hugo@hiawatha-webserver.org> - \fIhttps://www.hiawatha-webserver.org/\fP

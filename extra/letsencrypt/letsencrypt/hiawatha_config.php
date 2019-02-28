@@ -81,6 +81,7 @@
 
 			$inside_virtual_host = false;
 			while (($line = fgets($fp)) !== false) {
+				$line = preg_replace('/(^|\s)#.*/', '', $line);
 				list($command, $param) = explode(" ", trim($line), 2);
 				$command = strtolower($command);
 				$param = trim($param, " =");

@@ -27,33 +27,6 @@
 			$this->hiawatha = new Hiawatha_config(HIAWATHA_CONFIG_DIR);
 		}
 
-		/* Extract CA url from certificate
-		 */
-		private function get_CA_url($certificate) {
-			if (($x509 = openssl_x509_parse($certificate)) == false) {
-				return false;
-			}
-
-			$ca_info = $x509["extensions"]["authorityInfoAccess"];
-
-			$ca_info = explode("\n", $ca_info);
-			foreach ($ca_info as $item) {
-				list($label, $info) = explode(" - ", $item);
-				if ($label != "CA Issuers") {
-					continue;
-				}
-
-				list($type, $url) = explode(":", $info, 2);
-				if ($type != "URI") {
-					return false;
-				}
-
-				return $url;
-			}
-
-			return false;
-		}
-
 		/* Remove hostnames containing a wildcard from the list
 		 */
 		private function remove_wildcard_hostnames($hostnames) {
@@ -86,17 +59,16 @@
 			return $result;
 		}
 
-		/* Check if certificate is in PEM format
+		/* Get process user id
 		 */
-		private function is_pem_format($cert) {
-			return substr($cert, 0, 10) == "-----BEGIN";
-		}
+		private function get_uid() {
+			if (function_exists("posix_geteuid")) {
+				return posix_geteuid();
+			} else if (($uid = exec("id -u")) !== false) {
+				return (int)$uid;
+			}
 
-		/* Convert certificate in DER format to PEM format
-		 */
-		private function convert_to_pem($der_cert) {
-			$pem_data = chunk_split(base64_encode($der_cert), 64, "\n");
-			return "-----BEGIN CERTIFICATE-----\n".$pem_data."-----END CERTIFICATE-----\n";
+			return 0;
 		}
 
 		/* Get all Hiawatha certificates
@@ -333,16 +305,12 @@
 				return false;
 			}
 
-			if ($this->is_pem_format($certificate) == false) {
-				$certificate = $this->convert_to_pem($certificate);
-			}
-
 			$certificate = str_replace("\r", "", $certificate);
 
 			/* Write certificates
 			 */
 			if ($cert_file == null) {
-				$dir = (getmyuid() == 0) ? HIAWATHA_CERT_DIR."/" : "";
+				$dir = ($this->get_uid() == 0) ? HIAWATHA_CERT_DIR."/" : "";
 				$cert_file = $dir.$website_hostname.".pem";
 				$number = 1;
 				while (file_exists($cert_file)) {

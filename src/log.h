@@ -21,6 +21,9 @@
 #define log_error_session(session, ...) log_error_file(session, NULL, __VA_ARGS__)
 
 int  init_log_module(t_config *config);
+#ifdef ENABLE_DEBUG
+void log_string(char *logfile, char *mesg, ...);
+#endif
 void log_pid(t_config *config, pid_t pid, uid_t server_uid);
 void log_system(t_config *config, char *mesg, ...);
 void log_system_session(t_session *session, char *mesg, ...);

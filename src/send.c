@@ -503,6 +503,7 @@ int send_http_code_header(t_session *session) {
 		session->return_code = 500;
 	}
 
+	session->encode_gzip = false;
 	session->mimetype = NULL;
 	if (send_header(session) == -1) {
 		return -1;

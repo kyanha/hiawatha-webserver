@@ -142,7 +142,7 @@ void log_system(t_config *config, char *mesg, ...) {
 	va_start(args, mesg);
 
 	if ((fp = fopen(config->system_logfile, "a")) != NULL) {
-		fprintf(fp, "%s", str);
+		fprintf(fp, "0.0.0.0|%s", str);
 		vfprintf(fp, mesg, args);
 		fprintf(fp, EOL);
 		fclose(fp);
@@ -825,6 +825,30 @@ void log_debug(t_session *session, char *mesg, ...) {
 	strcat(str, "|");
 	print_timestamp(str + strlen(str));
 	fprintf(fp, "%s%05d|", str, session->thread_id);
+	vfprintf(fp, mesg, args);
+	fprintf(fp, EOL);
+	fclose(fp);
+
+	va_end(args);
+}
+
+/* Log a text.
+ */
+void log_string(char *logfile, char *mesg, ...) {
+	FILE *fp;
+	va_list args;
+	char str[TIMESTAMP_SIZE];
+
+	if ((logfile == NULL) || (mesg == NULL)) {
+		return;
+	} else if ((fp = fopen(logfile, "a")) == NULL) {
+		return;
+	}
+
+	va_start(args, mesg);
+
+	print_timestamp(str);
+	fprintf(fp, "%s", str);
 	vfprintf(fp, mesg, args);
 	fprintf(fp, EOL);
 	fclose(fp);

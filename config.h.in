@@ -30,9 +30,9 @@
 /* Other Hiawatha features
  */
 #define ENABLE_CHALLENGE ON
-/* #define ENABLE_DEBUG ON */
+//#define ENABLE_DEBUG ON
 #define ENABLE_FILEHASHES ON
-/* #define ENABLE_MEMDBG ON */
+//#define ENABLE_MEMDBG ON
 #define ENABLE_THREAD_POOL ON
 
 /* Includes

@@ -1315,7 +1315,8 @@ static void connection_handler(t_session *session) {
 	if (session->config->reconnect_delay > 0) {
 		mark_client_for_removal(session, session->config->reconnect_delay);
 	} else {
-		remove_client(session, true);
+		remove_client(session);
+		free(session);
 	}
 
 #ifdef ENABLE_MEMDBG
@@ -1483,7 +1484,7 @@ int start_worker(t_session *session) {
 				 */
 				result = 0;
 			} else {
-				remove_client(session, false);
+				remove_client(session);
 				log_system_session(session, "pthread create error");
 			}
 		}

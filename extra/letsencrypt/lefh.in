@@ -15,20 +15,21 @@
 
 	/* Let's Encrypt / ACME v2
 	 */
-	define("VERSION", "2.0");
+	define("VERSION", "2.1");
 	define("DAY", 86400);
 
 	error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
-	$config_locations = array(
-		$_SERVER["HOME"]."/.letsencrypt",
-		"/etc/letsencrypt",
-		"/usr/local/etc/letsencrypt",
-		__DIR__);
+
+	$config_dir = $_SERVER["HOME"]."/.letsencrypt";
+	if (file_exists($config_dir) == false) {	
+		mkdir($config_dir);
+		copy("@CMAKE_INSTALL_FULL_LIBDIR@/hiawatha/letsencrypt/letsencrypt.conf", $config_dir."/letsencrypt.conf");
+	}
 
 	/* Autoloader
 	 */
 	function class_autoloader($class_name) {
-		$library = __DIR__."/libraries/".strtolower($class_name).".php";
+		$library ="@CMAKE_INSTALL_FULL_LIBDIR@/hiawatha/letsencrypt/".strtolower($class_name).".php";
 
 		if (file_exists($library) == false) {
 			printf("Error including library for class %s.\n", $class_name);
@@ -41,7 +42,7 @@
 
 	/* Configuration
 	 */
-	$config = new config($config_locations);
+	$config = new config($config_dir);
 	if (count($config->content) == 0) {
 		printf(" - Error reading configuration.\n");
 		exit;
@@ -68,7 +69,7 @@
 	/* Check configuration
 	 */
 	if (ACCOUNT_EMAIL_ADDRESS == "info@example.org") {
-		exit("Read README.txt before using this tool.\n");
+		exit("Read the lefh manual page and follow its instructions before using this tool.\n");
 	}
 
 	/* Account key
@@ -173,6 +174,7 @@
 
 			if ($restart) {
 				if ($argv[2] == "restart") {
+					printf("Restarting webserver.\n");
 					system(HIAWATHA_RESTART_COMMAND);
 				}
 				exit(1);

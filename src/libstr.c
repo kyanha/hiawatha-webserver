@@ -368,8 +368,12 @@ bool valid_uri(char *uri, bool allow_dot_files) {
 		}
 	}
 
-	if ((pos = strstr(uri, "\\.")) != NULL) {
-		if ((allow_dot_files == false) || (*(pos + 2) == '.')) {
+	if (allow_dot_files == false) {
+		if ((pos = strstr(uri, "\\.")) != NULL) {
+			return false;
+		}
+	} else {
+		if ((pos = strstr(uri, "\\..")) != NULL) {
 			return false;
 		}
 	}
@@ -384,8 +388,12 @@ bool valid_uri(char *uri, bool allow_dot_files) {
 		return *(uri + 12) == '\0';
 	}
 
-	if ((pos = strstr(pos, "/.")) != NULL) {
-		if ((allow_dot_files == false) || (*(pos + 2) == '.')) {
+	if (allow_dot_files == false) {
+		if ((pos = strstr(pos, "/.")) != NULL) {
+			return false;
+		}
+	} else {
+		if ((pos = strstr(pos, "/..")) != NULL) {
 			return false;
 		}
 	}

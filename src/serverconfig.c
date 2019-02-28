@@ -527,11 +527,9 @@ static int parse_mode(char *line, mode_t *mode) {
 	return 0;
 }
 
-static int parse_prevent(char *prevent, t_prevent *result, t_prevent yes) {
-	if ((strcmp(prevent, "no") == 0) || (strcmp(prevent, "false") == 0)) {
+static int parse_prevent(char *prevent, t_prevent *result) {
+	if (strcmp(prevent, "no") == 0) {
 		*result = p_no;
-	} else if ((strcmp(prevent, "yes") == 0) || (strcmp(prevent, "true") == 0)) {
-		*result = yes;
 	} else if (strcmp(prevent, "detect") == 0) {
 		*result = p_detect;
 	} else if (strcmp(prevent, "prevent") == 0) {
@@ -1662,7 +1660,6 @@ static bool host_setting(char *key, char *value, t_host *host) {
 	int time;
 	size_t size;
 #endif
-	int sqli_return_code;
 
 	if (strcmp(key, "accesslogfile") == 0) {
 		if (strcasecmp(value, "none") == 0) {
@@ -1791,26 +1788,16 @@ static bool host_setting(char *key, char *value, t_host *host) {
 			return true;
 		}
 	} else if ((strcmp(key, "preventcsrf") == 0) || (strcmp(key, "preventxsrf") == 0)) {
-		if (parse_prevent(value, &(host->prevent_csrf), p_prevent) == 0) {
+		if (parse_prevent(value, &(host->prevent_csrf)) == 0) {
 			return true;
 		}
 	} else if (strcmp(key, "preventsqli") == 0) {
 		split_string(value, &value, &rest, ',');
-		if (parse_prevent(value, &(host->prevent_sqli), p_block) == 0) {
-			if ((rest != NULL) && (host->prevent_sqli != p_no)) {
-				sqli_return_code = str_to_int(rest);
-				if ((sqli_return_code == 403) || (sqli_return_code == 404)) {
-					host->prevent_sqli = p_prevent;
-				} else if (sqli_return_code == 441) {
-					host->prevent_sqli = p_block;
-					return true;
-				}
-			} else {
-				return true;
-			}
+		if (parse_prevent(value, &(host->prevent_sqli)) == 0) {
+			return true;
 		}
 	} else if (strcmp(key, "preventxss") == 0) {
-		if (parse_prevent(value, &(host->prevent_xss), p_prevent) == 0) {
+		if (parse_prevent(value, &(host->prevent_xss)) == 0) {
 			return true;
 		}
 #ifdef ENABLE_TLS

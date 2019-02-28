@@ -51,6 +51,10 @@
 #endif /* MBEDTLS_PLATFORM_C */
 #endif /* MBEDTLS_SELF_TEST */
 
+#define SHA256_VALIDATE_RET(cond)                           \
+    MBEDTLS_INTERNAL_VALIDATE_RET( cond, MBEDTLS_ERR_SHA256_BAD_INPUT_DATA )
+#define SHA256_VALIDATE(cond)  MBEDTLS_INTERNAL_VALIDATE( cond )
+
 #if !defined(MBEDTLS_SHA256_ALT)
 
 /*
@@ -78,6 +82,8 @@ do {                                                    \
 
 void mbedtls_sha256_init( mbedtls_sha256_context *ctx )
 {
+    SHA256_VALIDATE( ctx != NULL );
+
     memset( ctx, 0, sizeof( mbedtls_sha256_context ) );
 }
 
@@ -92,6 +98,9 @@ void mbedtls_sha256_free( mbedtls_sha256_context *ctx )
 void mbedtls_sha256_clone( mbedtls_sha256_context *dst,
                            const mbedtls_sha256_context *src )
 {
+    SHA256_VALIDATE( dst != NULL );
+    SHA256_VALIDATE( src != NULL );
+
     *dst = *src;
 }
 
@@ -100,6 +109,9 @@ void mbedtls_sha256_clone( mbedtls_sha256_context *dst,
  */
 int mbedtls_sha256_starts_ret( mbedtls_sha256_context *ctx, int is224 )
 {
+    SHA256_VALIDATE_RET( ctx != NULL );
+    SHA256_VALIDATE_RET( is224 == 0 || is224 == 1 );
+
     ctx->total[0] = 0;
     ctx->total[1] = 0;
 
@@ -194,6 +206,9 @@ int mbedtls_internal_sha256_process( mbedtls_sha256_context *ctx,
     uint32_t A[8];
     unsigned int i;
 
+    SHA256_VALIDATE_RET( ctx != NULL );
+    SHA256_VALIDATE_RET( (const unsigned char *)data != NULL );
+
     for( i = 0; i < 8; i++ )
         A[i] = ctx->state[i];
 
@@ -265,6 +280,9 @@ int mbedtls_sha256_update_ret( mbedtls_sha256_context *ctx,
     size_t fill;
     uint32_t left;
 
+    SHA256_VALIDATE_RET( ctx != NULL );
+    SHA256_VALIDATE_RET( ilen == 0 || input != NULL );
+
     if( ilen == 0 )
         return( 0 );
 
@@ -322,6 +340,9 @@ int mbedtls_sha256_finish_ret( mbedtls_sha256_context *ctx,
     int ret;
     uint32_t used;
     uint32_t high, low;
+
+    SHA256_VALIDATE_RET( ctx != NULL );
+    SHA256_VALIDATE_RET( (unsigned char *)output != NULL );
 
     /*
      * Add padding: 0x80 then 0x00 until 8 bytes remain for the length
@@ -396,6 +417,10 @@ int mbedtls_sha256_ret( const unsigned char *input,
 {
     int ret;
     mbedtls_sha256_context ctx;
+
+    SHA256_VALIDATE_RET( is224 == 0 || is224 == 1 );
+    SHA256_VALIDATE_RET( ilen == 0 || input != NULL );
+    SHA256_VALIDATE_RET( (unsigned char *)output != NULL );
 
     mbedtls_sha256_init( &ctx );
 

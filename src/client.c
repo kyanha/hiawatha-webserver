@@ -42,6 +42,7 @@ typedef struct type_banned {
 	struct type_banned *next;
 } t_banned;
 
+static int total_clients_connected = 0;
 static t_client *client_list[256];
 static pthread_mutex_t client_mutex[256];
 static t_banned *banlist;
@@ -91,6 +92,8 @@ int add_client(t_session *session) {
 
 	new->next = client_list[i];
 	client_list[i] = new;
+
+	__sync_add_and_fetch(&total_clients_connected, 1);
 
 	pthread_mutex_unlock(&client_mutex[i]);
 
@@ -161,6 +164,7 @@ int mark_client_for_removal(t_session *session, int delay) {
 	while (list != NULL) {
 		if (list->session == session) {
 			list->remove_deadline = time(NULL) + delay;
+			__sync_sub_and_fetch(&total_clients_connected, 1);
 			result = 1;
 			break;
 		}
@@ -212,7 +216,7 @@ void check_remove_deadlines(t_config *config, time_t now) {
 
 /* Remove a client from the client_list.
  */
-int remove_client(t_session *session, bool free_session) {
+int remove_client(t_session *session) {
 	t_client *to_be_removed = NULL, *list;
 	unsigned char i;
 
@@ -223,12 +227,14 @@ int remove_client(t_session *session, bool free_session) {
 		if (client_list[i]->session == session) {
 			to_be_removed = client_list[i];
 			client_list[i] = client_list[i]->next;
+			__sync_sub_and_fetch(&total_clients_connected, 1);
 		} else {
 			list = client_list[i];
 			while (list->next != NULL) {
 				if (list->next->session == session) {
 					to_be_removed = list->next;
 					list->next = to_be_removed->next;
+					__sync_sub_and_fetch(&total_clients_connected, 1);
 					break;
 				}
 				list = list->next;
@@ -244,10 +250,6 @@ int remove_client(t_session *session, bool free_session) {
 		return -1;
 	}
 
-	if (free_session) {
-		close_socket(to_be_removed->session);
-		free(to_be_removed->session);
-	}
 	free(to_be_removed);
 
 	return 0;
@@ -320,24 +322,7 @@ int connection_allowed(t_ip_addr *ip, bool ip_of_proxy, int max_per_ip, int max_
 /* Return the number of total connections
  */
 int count_registered_connections(void) {
-	int i, total = 0;
-	t_client *client;
-
-	for (i = 0; i < 256; i++) {
-		pthread_mutex_lock(&client_mutex[i]);
-
-		client = client_list[i];
-		while (client != NULL) {
-			if (client->remove_deadline == TIMER_OFF) {
-				total++;
-			}
-			client = client->next;
-		}
-
-		pthread_mutex_unlock(&client_mutex[i]);
-	}
-
-	return total;
+	return total_clients_connected;
 }
 
 /* Disconnect all connected clients.

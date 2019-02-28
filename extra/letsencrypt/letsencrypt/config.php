@@ -18,11 +18,7 @@
 
 		/* Constructor
 		 */
-		public function __construct($locations) {
-			if (($config_dir = $this->find_config_dir($locations)) == false) {
-				return;
-			}
-
+		public function __construct($config_dir) {
 			$config_file = $config_dir."/".self::CONFIG_FILE;
 			$this->config["ACCOUNT_KEY_FILE"] = $config_dir."/account.key";
 
@@ -75,19 +71,6 @@
 			}
 
 			return null;
-		}
-
-		/* Find configuration directory
-		 */
-		private function find_config_dir($locations) {
-			foreach ($locations as $location) {
-				$file = $location."/".self::CONFIG_FILE;
-				if (file_exists($file)) {
-					return $location;
-				}
-			}
-
-			return false;
 		}
 	}
 ?>
