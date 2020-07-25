@@ -65,7 +65,7 @@ check_function_exists(strncasestr HAVE_STRNCASESTR)
 
 check_library_exists(crypt crypt_r "" HAVE_CRYPT_R)
 check_library_exists(crypt crypt "" HAVE_CRYPT_LIBRARY)
-check_library_exists(${ZLIB_LIBRARY} gzdopen "" HAVE_Z_LIBRARY)
+check_library_exists(${ZLIB_LIBRARIES} gzdopen "" HAVE_Z_LIBRARY)
 
 check_symbol_exists("SO_ACCEPTFILTER" "sys/socket.h" HAVE_ACCF)
 
@@ -73,7 +73,7 @@ if(HAVE_CRYPT_LIBRARY)
 	set(CRYPT_LIBRARY "crypt")
 endif()
 if(HAVE_Z_LIBRARY)
-	set(Z_LIBRARY ${ZLIB_LIBRARY})
+	set(Z_LIBRARY ${ZLIB_LIBRARIES})
 	include_directories(${ZLIB_INCLUDE_DIR})
 endif()
 if(APPLE OR CYGWIN)
