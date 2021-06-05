@@ -2,7 +2,7 @@ Source: hiawatha
 Section: web
 Priority: optional
 Maintainer: Hugo Leisink <hugo@leisink.net>
-Homepage: http://www.hiawatha-webserver.org/
+Homepage: https://www.hiawatha-webserver.org/
 Standards-Version: 3.6.2
 Build-Depends: libc6-dev, dpkg-dev, debhelper, fakeroot, libxml2-dev, libxslt1-dev
 
