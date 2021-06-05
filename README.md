@@ -10,4 +10,4 @@ The Hiawatha Monitor is a monitoring tool for Hiawatha. It helps you to keep tra
 
 The Banshee PHP framework has also been written with security in mind. It has a Model-View-Controller architecture (XSLT for the views) and requires a MySQL database. More information about Banshee can be found at https://www.banshee-php.org/.
 
-Other interesting projects can be found at https://github.com/hsleisink/.
+Other interesting projects can be found at https://gitlab.com/hsleisink.
