@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=forking
-PIDFile=/var/run/hiawatha.pid
+PIDFile=/run/hiawatha.pid
 ExecStartPre=/usr/sbin/wigwam -q
 ExecStart=/usr/sbin/hiawatha
 ExecStop=/bin/kill $MAINPID
