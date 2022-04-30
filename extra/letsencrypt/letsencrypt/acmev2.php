@@ -146,7 +146,8 @@
 			$protected["nonce"] = $this->nonce;
 			$protected["url"] = "https://".$this->hostname.$uri;
 			$protected = $this->b64u_encode(json_encode($protected));
-			$payload = $this->b64u_encode(str_replace('\\/', '/', json_encode($payload)));
+			//$payload = $this->b64u_encode(str_replace('\\/', '/', json_encode($payload)));
+			$payload = is_array($payload) ? $this->b64u_encode(str_replace('\\/', '/', json_encode($payload))) : '';
 
 			openssl_sign($protected.".".$payload, $signature, $this->account_key->private_key, "SHA256");
 			$signature = $this->b64u_encode($signature);
@@ -244,7 +245,7 @@
 		/* Get challenge
 		 */
 		public function get_challenge($order) {
-			if (($result = $this->GET($order["path"])) === false) {
+			if (($result = $this->POST($order["path"], null)) === false) {
 				return false;
 			}
 
@@ -287,7 +288,7 @@
 		/* Poll authorization is valid
 		 */
 		public function authorization_valid($order) {
-			if (($result = $this->GET($order["path"])) === false) {
+			if (($result = $this->POST($order["path"], null)) === false) {
 				return false;
 			}
 
@@ -350,7 +351,7 @@
 		/* Get certificate
 		 */
 		public function get_certificate($certificate) {
-			if (($result = $this->GET($certificate["path"])) == false) {
+			if (($result = $this->POST($certificate["path"], null)) == false) {
 				return false;
 			}
 
