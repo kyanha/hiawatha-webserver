@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.0)
-project(Hiawatha VERSION 11.2 LANGUAGES C)
+project(Hiawatha VERSION 11.3 LANGUAGES C)
 
 # Compiler
-set(CMAKE_C_FLAGS "-O2 -Wall -Wextra ${CMAKE_C_FLAGS}")
+set(CMAKE_C_FLAGS "-O2 -Wall -Wextra ${CMAKE_C_FLAGS} -gdwarf-4")
 set(CMAKE_BUILD_TYPE "RelWithDebInfo")
 
 # Options
@@ -36,7 +36,8 @@ include(FindZLIB)
 include(cmake/CopyIfNotExists.cmake)
 
 # Settings
-if(EXISTS "/proc/loadavg")
+check_function_exists(getloadavg HAVE_GETLOADAVG)
+if(HAVE_GETLOADAVG OR EXISTS "/proc/loadavg")
 	option(ENABLE_LOADCHECK "Enable the ability to check for server load." on)
 endif()
 set(CONFIG_DIR ${CMAKE_INSTALL_FULL_SYSCONFDIR}/hiawatha CACHE STRING "Configuration directory")

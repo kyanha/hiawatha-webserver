@@ -218,6 +218,8 @@ int init_tls_module(mbedtls_x509_crt *ca_certificates) {
 	return 0;
 }
 
+/* Set TLS configuration
+ */
 int tls_set_config(mbedtls_ssl_config **tls_config, t_tls_setup *tls_setup) {
 	if ((*tls_config = (mbedtls_ssl_config*)malloc(sizeof(mbedtls_ssl_config))) == NULL) {
 		return -1;
@@ -227,6 +229,10 @@ int tls_set_config(mbedtls_ssl_config **tls_config, t_tls_setup *tls_setup) {
 	if (mbedtls_ssl_config_defaults(*tls_config, MBEDTLS_SSL_IS_SERVER, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT) != 0) {
 		return -1;
 	}
+
+	//mbedtls_ssl_conf_tls13_key_exchange_modes(*tls_config, MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_ALL);
+	//mbedtls_ssl_conf_min_tls_version(*tls_config, MBEDTLS_SSL_VERSION_TLS1_3);
+	//mbedtls_ssl_conf_max_tls_version(*tls_config, MBEDTLS_SSL_VERSION_TLS1_3);
 
 	mbedtls_ssl_conf_renegotiation(*tls_config, MBEDTLS_SSL_RENEGOTIATION_DISABLED);
 	mbedtls_ssl_conf_rng(*tls_config, tls_random, &ctr_drbg);
@@ -248,12 +254,12 @@ int tls_set_config(mbedtls_ssl_config **tls_config, t_tls_setup *tls_setup) {
 	mbedtls_ssl_conf_own_cert(*tls_config, tls_setup->certificate, tls_setup->private_key);
 
 	if (tls_setup->dh_size == 2048) {
-		const unsigned char dhm_p[] = MBEDTLS_DHM_RFC3526_MODP_2048_P_BIN;
-		const unsigned char dhm_g[] = MBEDTLS_DHM_RFC3526_MODP_2048_G_BIN;
+		const unsigned char dhm_p[] = MBEDTLS_DHM_RFC7919_FFDHE2048_P_BIN;
+		const unsigned char dhm_g[] = MBEDTLS_DHM_RFC7919_FFDHE2048_G_BIN;
 		mbedtls_ssl_conf_dh_param_bin(*tls_config, dhm_p, sizeof(dhm_p), dhm_g, sizeof(dhm_g));
 	} else if (tls_setup->dh_size == 4096) {
-		const unsigned char dhm_p[] = MBEDTLS_DHM_RFC3526_MODP_4096_P_BIN;
-		const unsigned char dhm_g[] = MBEDTLS_DHM_RFC3526_MODP_4096_G_BIN;
+		const unsigned char dhm_p[] = MBEDTLS_DHM_RFC7919_FFDHE4096_P_BIN;
+		const unsigned char dhm_g[] = MBEDTLS_DHM_RFC7919_FFDHE4096_G_BIN;
 		mbedtls_ssl_conf_dh_param_bin(*tls_config, dhm_p, sizeof(dhm_p), dhm_g, sizeof(dhm_g));
 	} else if (tls_setup->dh_size == 8192) {
 		const unsigned char dhm_p[] = MBEDTLS_DHM_RFC7919_FFDHE8192_P_BIN;

@@ -1192,6 +1192,7 @@ static void handle_request_result(t_session *session, int result) {
 			break;
 		case 500:
 			session->keep_alive = false;
+			/* FALLTHROUGH */
 		default:
 			if (session->data_sent == false) {
 				session->return_code = result;

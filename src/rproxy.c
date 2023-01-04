@@ -545,9 +545,7 @@ int send_request_to_webserver(t_rproxy_webserver *webserver, t_rproxy_options *o
 			}
 
 			forwarded_found = true;
-		}
-
-		if (strncasecmp(http_header->data, hs_x_forwarded_for, 16) == 0) {
+		} else if (strncasecmp(http_header->data, hs_x_forwarded_for, 16) == 0) {
 			/* Add IP to X-Forwarded-For header
 			 */
 

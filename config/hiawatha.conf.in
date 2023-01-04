@@ -55,8 +55,8 @@ Binding {
 #CGIextension = cgi
 #
 #FastCGIserver {
-#	FastCGIid = PHP7
-#	ConnectTo = /run/php/php8.0-fpm.sock
+#	FastCGIid = PHP8
+#	ConnectTo = /run/php/php8.1-fpm.sock
 #	Extension = php
 #}
 
@@ -113,7 +113,7 @@ ErrorLogfile = @LOG_DIR@/error.log
 #	AccessLogfile = /var/www/my-domain/log/access.log
 #	ErrorLogfile = /var/www/my-domain/log/error.log
 #	TimeForCGI = 5
-#	UseFastCGI = PHP7
+#	UseFastCGI = PHP8
 #	UseToolkit = banshee
 #	UseDirectory = static, files
 #}

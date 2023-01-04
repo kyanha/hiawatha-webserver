@@ -229,7 +229,7 @@ static int find_algoritm_and_salt(char *line) {
 	}
 	end++;
 
-	if ((*end != '1') && (*end != '5') && (*end != '6')) {
+	if ((*end != '1') && (*end != '2') && (*end != '5') && (*end != '6')) {
 		return -1;
 	}
 	end++;

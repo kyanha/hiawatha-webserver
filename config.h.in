@@ -35,6 +35,7 @@
 /* Includes
  */
 #cmakedefine HAVE_CRYPT_H ${HAVE_CRYPT_H}
+#cmakedefine HAVE_GETLOADAVG ${HAVE_GETLOADAVG}
 #cmakedefine HAVE_ARPA_INET_H ${HAVE_ARPA_INET_H}
 #cmakedefine HAVE_NETINET_IN_H ${HAVE_NETINET_IN_H}
 #cmakedefine HAVE_NETINET_TCP_H ${HAVE_NETINET_TCP_H}

@@ -45,6 +45,22 @@
 			return $result;
 		}
 
+		/* Remove all special .onion hostnames
+		 */
+		private function remove_tor_hostnames($hostnames) {
+			$result = array();
+
+			foreach ($hostnames as $el) {
+				if (preg_match("/[[:alnum:]]{16,56}\.onion/i", $el) == 0) {
+					array_push($result, $el);
+				} else {
+					printf("Ignoring '%s'...\n", $el);
+				}
+			}
+
+			return $result;
+		}
+
 		/* Remove IP addresses from the list
 		 */
 		private function remove_ip_addresses($hostnames) {
@@ -176,6 +192,7 @@
 			$website_hostnames = $this->hiawatha->get_website_hostnames($website_hostname);
 			array_unshift($website_hostnames, $website_hostname);
 			$website_hostnames = $this->remove_wildcard_hostnames($website_hostnames);
+			$website_hostnames = $this->remove_tor_hostnames($website_hostnames);
 			$website_hostnames = $this->remove_ip_addresses($website_hostnames);
 
 			/* Generate RSA key

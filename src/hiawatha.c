@@ -134,6 +134,40 @@ void create_logfiles(t_config *config) {
 	}
 }
 
+#ifndef HAVE_GETLOADAVG
+int getloadavg(double loadavg[], int nelem) {
+	FILE *load_fp = NULL;
+	char load_str[50], *c;
+
+	if (nelem < 1) {
+		return -1;
+	}
+
+	loadavg[0] = 0;
+
+	if ((load_fp = fopen("/proc/loadavg", "r")) == NULL) {
+		return -1;
+	}
+
+	if (fgets(load_str, 49, load_fp) == NULL) {
+		fclose(load_fp);
+		return -1;
+	}
+
+	fclose(load_fp);
+
+	load_str[49] = '\0';
+	if ((c = strchr(load_str, ' ')) == NULL) {
+		return -1;
+	}
+
+	*c = '\0';
+	loadavg[0] = atof(load_str);
+
+	return 1;
+}
+#endif
+
 /* Task-runner starts periodic tasks
  */
 void task_runner(t_config *config) {
@@ -141,8 +175,7 @@ void task_runner(t_config *config) {
 	int delay = 0;
 	time_t now;
 #ifdef ENABLE_LOADCHECK
-	FILE *load_fp = NULL;
-	char load_str[50], *c;
+	double loadavg[1];
 #ifdef ENABLE_MONITOR
 	int  load_monitor_timer = 0;
 #endif
@@ -213,28 +246,16 @@ void task_runner(t_config *config) {
 
 #ifdef ENABLE_LOADCHECK
 		if (config->max_server_load > 0) {
-			if ((load_fp = fopen("/proc/loadavg", "r")) != NULL) {
-				if (fgets(load_str, 49, load_fp) != NULL) {
-					load_str[49] = '\0';
-					if ((c = strchr(load_str, ' ')) != NULL) {
-						*c = '\0';
-						current_server_load = atof(load_str);
+			if (getloadavg(loadavg, 1) >= 1) {
+				current_server_load = loadavg[0];
 #ifdef ENABLE_MONITOR
-						if (config->monitor_enabled) {
-							if ((current_server_load > config->max_server_load) && (load_monitor_timer == 0)) {
-								monitor_event("High server load (%0.2f)", current_server_load);
-								load_monitor_timer = 60;
-							}
-						}
-#endif
-					} else {
-						current_server_load = 0;
+				if (config->monitor_enabled) {
+					if ((current_server_load > config->max_server_load) && (load_monitor_timer == 0)) {
+						monitor_event("High server load (%0.2f)", current_server_load);
+						load_monitor_timer = 60;
 					}
-				} else {
-					current_server_load = 0;
 				}
-
-				fclose(load_fp);
+#endif
 			} else {
 				current_server_load = 0;
 			}

@@ -1219,6 +1219,7 @@ int execute_cgi(t_session *session) {
 		case rs_DISCONNECT:
 		case rs_FORCE_QUIT:
 			session->keep_alive = false;
+			/* FALLTHROUGH */
 		case rs_QUIT:
 			retval = 200;
 	}

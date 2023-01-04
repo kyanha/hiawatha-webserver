@@ -1,3 +1,11 @@
+hiawatha (11.3) stable; urgency=low
+
+  * PHP 8 compatibility for Let's Encrypt script.
+  * Applied some patches from the FreeBSD community.
+  * mbed TLS updated to 3.3.0.
+
+ -- Hugo Leisink <hugo@leisink.net>  Wed,  4 Jan 2023 09:07:31 +0100
+
 hiawatha (11.2) stable; urgency=low
 
   * mbed TLS updated to 3.2.1.

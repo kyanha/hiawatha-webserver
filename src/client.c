@@ -477,7 +477,7 @@ int ban_ip(t_ip_addr *ip, int timer, bool kick_on_ban) {
 
 	pthread_mutex_unlock(&ban_mutex);
 
-	if (kick_on_ban && new_ip) {
+	if (kick_on_ban && (new_ip == false)) {
 		retval = kick_ip(ip);
 	}
 

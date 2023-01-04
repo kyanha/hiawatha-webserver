@@ -81,10 +81,14 @@
 
 			$inside_virtual_host = false;
 			while (($line = fgets($fp)) !== false) {
-				$line = preg_replace('/(^|\s)#.*/', '', $line);
+				$line = preg_replace('/(^|\s)#.*/', '', rtrim($line));
+				if (strlen($line) == 0) {
+					continue;
+				}
+
 				list($command, $param) = explode(" ", trim($line), 2);
 				$command = strtolower($command);
-				$param = trim($param, " =");
+				$param = trim($param ?? "", " =");
 
 				if ($inside_virtual_host) {
 					if ($command == "hostname") {

@@ -43,11 +43,11 @@
 #define MAX_INPUT_SIZE KILOBYTE
 #define MAX_PATH 1024
 
-#define HASH_MD5    1
-#define HASH_SHA256 5
-#define HASH_SHA512 6
+#define HASH_MD5      1
+#define HASH_SHA256   5
+#define HASH_SHA512   6
 
-#define HASH_ALGORITM HASH_MD5
+#define HASH_ALGORITM HASH_SHA256
 
 #ifdef ENABLE_TLS
 #define RSA_MIN_SIZE 2048

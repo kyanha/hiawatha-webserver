@@ -702,7 +702,7 @@ Default = no     Example: UseLocalConfig = yes
 .B UseFastCGI = <fcgi_server_id>[, <fcgi_server_id>, ...]
 The FastCGI server to use for this virtual host. The first FastCGI server record that matches (including extension), will be used. See chapter FASTCGI CONFIGURATION for more information. This option sets ExecuteCGI to 'yes' for this host.
 .br
-Example: UseFastCGI = PHP7
+Example: UseFastCGI = PHP8
 .TP
 .B UserWebsites = yes|no
 Activates user websites for this (virtual) host (the /~user/ URL's) (see UserDirectory for more information).
@@ -837,7 +837,7 @@ Example: Extension = php
 .B FastCGIid = <fcgi_server_id>
 Give each FastCGI server an unique Id. Use this Id with the UseFastCGI setting in a virtual host.
 .br
-Example: FastCGIid = PHP7
+Example: FastCGIid = PHP8
 .TP
 .B ServerRoot = <path>
 If the FastCGI server is running in a chroot, use this setting to specify that chroot directory.
