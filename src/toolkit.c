@@ -678,16 +678,22 @@ int use_toolkit(char *url, t_url_toolkit *toolkit, t_toolkit_options *options) {
 			case tc_request_uri:
 				/* Request URI
 				 */
+				if ((qmark = strchr(url, '?')) != NULL) {
+					*qmark = '\0';
+				}
+
 				if (valid_uri(url, options->allow_dot_files) == false) {
+					if (qmark != NULL) *qmark = '?';
 					break;
 				}
-				if ((file = make_path(options->website_root, url)) == NULL) {
+
+				file = make_path(options->website_root, url);
+				if (qmark != NULL) *qmark = '?';
+
+				if (file == NULL) {
 					return UT_ERROR;
 				}
 
-				if ((qmark = strchr(file, '?')) != NULL) {
-					*qmark = '\0';
-				}
 				url_decode(file);
 
 				if (stat(file, &fileinfo) != -1) {

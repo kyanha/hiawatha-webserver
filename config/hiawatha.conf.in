@@ -56,7 +56,7 @@ Binding {
 #
 #FastCGIserver {
 #	FastCGIid = PHP7
-#	ConnectTo = /run/php/php7.0-fpm.sock
+#	ConnectTo = /run/php/php8.0-fpm.sock
 #	Extension = php
 #}
 

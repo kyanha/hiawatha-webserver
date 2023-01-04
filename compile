@@ -16,13 +16,13 @@ function custom_compile {
 		--clear --notags \
 		--cancel-button "Exit" \
 		--checklist "" 0 0 0 \
-    	"+DENABLE_CACHE=on"    "Enable internal cache support." ON \
-		"+DENABLE_MONITOR=on"  "Enable support for the Hiawatha Monitor." OFF \
-		"+DENABLE_RPROXY=on"   "Enable reverse proxy support." ON \
-		"+DENABLE_TLS=on"      "Enable TLS (mbed TLS) support." ON \
-		"+DENABLE_TOMAHAWK=on" "Enable Tomahawk, the Hiawatha command shell." OFF \
-		"+DENABLE_TOOLKIT=on"  "Enable the URL Toolkit." ON \
-		"+DENABLE_XSLT=on"     "Enable XSLT support." ON \
+    	"+DENABLE_CACHE=ON"    "Enable internal cache support." ON \
+		"+DENABLE_MONITOR=ON"  "Enable support for the Hiawatha Monitor." OFF \
+		"+DENABLE_RPROXY=ON"   "Enable reverse proxy support." ON \
+		"+DENABLE_TLS=ON"      "Enable TLS (mbed TLS) support." ON \
+		"+DENABLE_TOMAHAWK=ON" "Enable Tomahawk, the Hiawatha command shell." OFF \
+		"+DENABLE_TOOLKIT=ON"  "Enable the URL Toolkit." ON \
+		"+DENABLE_XSLT=ON"     "Enable XSLT support." ON \
 		3>&1 1>&2 2>&3)
 
 	if [ $? = 1 ]; then
@@ -30,7 +30,7 @@ function custom_compile {
 	fi
 
 	declare -A settings=()
-	settings[CMAKE_INSTALL_PREFIX]=""
+	settings[CMAKE_INSTALL_PREFIX]="/usr/local"
 	settings[CMAKE_INSTALL_BINDIR]="usr/bin"
 	settings[CMAKE_INSTALL_SBINDIR]="usr/sbin"
 	settings[CMAKE_INSTALL_SYSCONFDIR]="etc"
@@ -91,11 +91,13 @@ function custom_compile {
 	for setting in "${!settings[@]}"; do
 		if [ "${settings[${setting}]}" != "" ]; then
 			params+=-D${setting}=${settings[${setting}]}" "
+		elif [ "${setting}" = "CMAKE_INSTALL_PREFIX" ]; then
+			params+=-D${setting}='"" '
 		fi
 	done
 
 	rm -rf build
-	mkdir -p build
+	mkdir build
 	cd build && cmake .. ${params} && make
 
 	echo "The result of the compilation is in the build directory."

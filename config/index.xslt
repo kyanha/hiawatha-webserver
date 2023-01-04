@@ -162,6 +162,11 @@
 		}
 	}
 </style>
+<script type="text/javascript">
+    function click_anchor(obj) {
+        document.location = obj.children[0].children[0]['href'];
+    }
+</script>
 </head>
 
 <body>
@@ -177,7 +182,7 @@
 </thead>
 <tbody>
 <xsl:for-each select="files/file">
-<tr class="{@type}" onClick="javascript:window.location.href='{.}'">
+<tr class="{@type}" onClick="javascript:click_anchor(this)">
 	<td class="{@type}"><a href="{@url_encoded}"><xsl:value-of select="." /></a></td>
 	<td><xsl:value-of select="@timestamp" /></td>
 	<td class="size"><xsl:value-of select="@size" /></td>

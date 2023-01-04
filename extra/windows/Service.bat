@@ -2,7 +2,10 @@
 
 SET INSTALL_DIR=%~dp0
 SET CYGWIN=nodosfilewarning
-FOR /f %%i IN ('whoami') DO SET USERNAME=%%i
+
+WHOAMI /groups | FINDSTR Administrators | FINDSTR /c:"Enabled group" > NUL && GOTO MAIN
+ECHO You need to have Administrator rights to do this.
+GOTO END
 
 SET /p task="[I]nstall or [U]ninstall Hiawatha as a Windows service? "
 ECHO.
