@@ -65,7 +65,6 @@ int init_rproxy_module(void) {
 	char str[50], *format = "%s %s\r\n";
 	struct tm s;
 	time_t t;
-	size_t len;
 
 	time(&t);
 	localtime_r(&t, &s);
@@ -76,12 +75,11 @@ int init_rproxy_module(void) {
 	md5_bin2hex(digest, rproxy_id);
 	rproxy_id[RPROXY_ID_LEN] = '\0';
 
-	len = strlen(format) - 4 + strlen(rproxy_id_key) + RPROXY_ID_LEN;
-	if ((rproxy_header = (char*)malloc(len + 1)) == NULL) {
+	rproxy_header_len = strlen(format) - 4 + strlen(rproxy_id_key) + RPROXY_ID_LEN;
+	if ((rproxy_header = (char*)malloc(rproxy_header_len + 1)) == NULL) {
 		return -1;
 	}
 	sprintf(rproxy_header, format, rproxy_id_key, rproxy_id);
-	rproxy_header_len = strlen(rproxy_header);
 
 	return 0;
 }

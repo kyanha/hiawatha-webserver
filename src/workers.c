@@ -444,15 +444,13 @@ static int serve_client(t_session *session) {
 			goto tunnel_ssh;
 		}
 
-		if (session->config->tunnel_ssh_credential != NULL) {
-			if ((header = get_http_header("Proxy-Authorization:", session->http_headers)) != NULL) {
-				if (strcmp(header, session->config->tunnel_ssh_credential) == 0) {
-					goto tunnel_ssh;
-				}
-			}
+		if (session->config->tunnel_ssh_credential == NULL) {
+			return 405;
+		} else if ((header = get_http_header("Proxy-Authorization:", session->http_headers)) == NULL) {
+			return 407;
+		} else if (strcmp(header, session->config->tunnel_ssh_credential) != 0) {
+			return 405;
 		}
-
-		return 405;
 
 tunnel_ssh:
 

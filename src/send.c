@@ -590,6 +590,11 @@ int send_http_code_header(t_session *session) {
 				}
 			}
 			break;
+		case 407:
+			if (send_buffer(session, "Proxy-Authenticate: Basic\r\n", 27) == -1) {
+				return -1;
+			}
+			break;
 	}
 
 	return 0;

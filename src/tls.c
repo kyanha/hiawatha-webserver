@@ -230,9 +230,10 @@ int tls_set_config(mbedtls_ssl_config **tls_config, t_tls_setup *tls_setup) {
 		return -1;
 	}
 
-	//mbedtls_ssl_conf_tls13_key_exchange_modes(*tls_config, MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_ALL);
-	//mbedtls_ssl_conf_min_tls_version(*tls_config, MBEDTLS_SSL_VERSION_TLS1_3);
-	//mbedtls_ssl_conf_max_tls_version(*tls_config, MBEDTLS_SSL_VERSION_TLS1_3);
+	/*
+	mbedtls_ssl_conf_min_tls_version(*tls_config, MBEDTLS_SSL_VERSION_TLS1_3);
+	mbedtls_ssl_conf_max_tls_version(*tls_config, MBEDTLS_SSL_VERSION_TLS1_3);
+	 */
 
 	mbedtls_ssl_conf_renegotiation(*tls_config, MBEDTLS_SSL_RENEGOTIATION_DISABLED);
 	mbedtls_ssl_conf_rng(*tls_config, tls_random, &ctr_drbg);

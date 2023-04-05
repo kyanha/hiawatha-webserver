@@ -44,6 +44,7 @@ if(NOT ENABLE_TLS AND NOT USE_SYSTEM_MBEDTLS)
 	set(hiawatha_src ${hiawatha_src}
 		mbedtls/library/base64.c
 		mbedtls/library/bignum.c
+		mbedtls/library/bignum_core.c
 		mbedtls/library/constant_time.c
 		mbedtls/library/md.c
 		mbedtls/library/md5.c
@@ -81,6 +82,7 @@ set(wigwam_src
 if(NOT ENABLE_TLS AND NOT USE_SYSTEM_MBEDTLS)
 	set(wigwam_src ${wigwam_src}
 		mbedtls/library/bignum.c
+		mbedtls/library/bignum_core.c
 		mbedtls/library/constant_time.c
 		mbedtls/library/md.c
 		mbedtls/library/md5.c

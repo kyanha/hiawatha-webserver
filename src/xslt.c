@@ -233,8 +233,8 @@ static const char **get_transform_parameters(t_session *session) {
 		http_headers = http_headers->next;
 	}
 
+	snprintf(value, 20, "%d", session->return_code);
 	value[19] = '\0';
-	snprintf(value, 19, "%d", session->return_code);
 	add_parameter(params, "HTTP_RETURN_CODE", value, &i);
 	if (session->error_code != -1) {
 		snprintf(value, 9, "%d", session->error_code);
@@ -243,8 +243,8 @@ static const char **get_transform_parameters(t_session *session) {
 
 	add_parameter(params, "QUERY_STRING", session->vars, &i);
 	if (session->body != NULL) {
+		snprintf(value, 20, "%ld", session->content_length);
 		value[19] = '\0';
-		snprintf(value, 19, "%ld", session->content_length);
 		add_parameter(params, "CONTENT_LENGTH", value, &i);
 		add_http_header(session, params, "Content-Type:", "CONTENT_TYPE", &i);
 	}
@@ -471,6 +471,7 @@ static int add_tag(char **buffer, int *size, int extra_size, int *len, char *tag
 		return 0;
 	}
 
+	data[31] = '\0';
 	if ((result = snprintf(data, 31, "<%s>", tag)) == -1) {
 		return -1;
 	} else if (result >= 30) {
@@ -667,6 +668,7 @@ int show_index(t_session *session) {
 		uri++;
 	}
 
+	depth_str[11] = '\0';
 	snprintf(depth_str, 11, "%d", depth);
 	if (add_tag(&text_xml, &text_max, XML_CHUNK_LEN, &text_size, "uri_depth", depth_str) == -1) {
 		free(text_xml);

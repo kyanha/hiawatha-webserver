@@ -56,7 +56,7 @@ int init_config_module(char *config_dir) {
 		return -1;
 	}
 
-	snprintf(line, 1024, "CONFIG_DIR=%s", config_dir);
+	sprintf(line, "CONFIG_DIR=%s", config_dir);
 	if (parse_keyvalue(line, &variables, "=") == -1) {
 		return -1;
 	}
