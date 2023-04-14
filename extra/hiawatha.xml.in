@@ -53,7 +53,7 @@
                     type="application">
             <propval name="pidfile"
                     type="astring"
-                    value="{CMAKE_INSTALL_FULL_LOCALSTATEDIR}/run/hiawatha.pid" />
+                    value="${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/run/hiawatha.pid" />
             <propval name="hiawatha"
                     type="astring"
                     value="${CMAKE_INSTALL_SBINDIR}/hiawatha" />
