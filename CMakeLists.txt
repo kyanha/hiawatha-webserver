@@ -131,7 +131,7 @@ endforeach()
 configure_file(extra/logrotate.in logrotate.d/hiawatha)
 if(__sun)
 	configure_file(extra/hiawatha.xml.in extra/hiawatha.xml)
-endif
+endif()
 
 # Binaries
 add_executable(cgi-wrapper ${cgi_wrapper_src})
