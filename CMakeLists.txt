@@ -131,7 +131,7 @@ foreach(manpage ${manual_pages_in})
 endforeach()
 configure_file(extra/logrotate.in logrotate.d/hiawatha)
 if(SUN)
-	configure_file(extra/hiawatha.xml.in extra/hiawatha.xml)
+	configure_file(extra/illumos/hiawatha.xml.in extra/illumos/hiawatha.xml)
 endif()
 
 # Binaries
