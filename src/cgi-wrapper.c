@@ -262,7 +262,7 @@ bool get_wrap_data(char *wrapid, char *handler, char *cgi, t_wrap *wrap_data, ch
 }
 
 int main(int argc, char *argv[]) {
-	char buffer[8], *wrapid, *var, *user_directory;
+	char buffer[10], *wrapid, *var, *user_directory;
 	FILE *fp;
 	int i, handle, arg_offset, time_for_cgi;
 	size_t len;
@@ -280,14 +280,15 @@ int main(int argc, char *argv[]) {
 
 	/* Check if parent is Hiawatha
 	 */
-	buffer[0] = buffer[7] = '\0';
 	if ((fp = fopen(PID_DIR"/hiawatha.pid", "r")) == NULL) {
 		print_code(-1);
 	}
-	if (fgets(buffer, 7, fp) == NULL) {
+	if (fgets(buffer, 9, fp) == NULL) {
 		print_code(-1);
 	}
 	fclose(fp);
+
+	buffer[9] = '\0';
 
 	if ((len = strlen(buffer)) == 0) {
 		print_code(-1);
