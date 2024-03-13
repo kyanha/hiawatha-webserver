@@ -80,9 +80,16 @@
 		/* Get path part from URI
 		 */
 		private function get_path($uri) {
-			list(,, $hostname, $path) = explode("/", $uri, 4);
+			$parts = explode("/", $uri, 4);
+
+			if (count($parts) < 4) {
+				printf(" - URI %s is invalid.\n", $uri);
+				return false;
+			}
+
+			list(,, $hostname, $path) = $parts;
 			if ($hostname != $this->hostname) {
-				printf(" - Hostname %s in URL does not match.\n");
+				printf(" - Hostname %s in URL does not match.\n", $hostname);
 				return false;
 			}
 

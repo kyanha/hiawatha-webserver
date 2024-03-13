@@ -42,6 +42,7 @@ echo "Enabling threading support."
 mbedtls_enable MBEDTLS_THREADING_PTHREAD
 mbedtls_enable MBEDTLS_THREADING_C
 #mbedtls_enable MBEDTLS_SSL_PROTO_TLS1_3
+#mbedtls_enable MBEDTLS_SSL_TLS1_3_COMPATIBILITY_MODE
 
 echo "Disabling secp192r1 and secp192k1."
 mbedtls_disable MBEDTLS_ECP_DP_SECP192R1_ENABLED

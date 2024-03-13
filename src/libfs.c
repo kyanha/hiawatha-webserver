@@ -274,7 +274,7 @@ int create_file(char *file, mode_t mode, uid_t uid, gid_t gid) {
 		return 0;
 	}
 
-	if (stat(file, &status) == -1) {
+	if (lstat(file, &status) == -1) {
 		if (errno != ENOENT) {
 			return -1;
 		}
@@ -289,12 +289,14 @@ int create_file(char *file, mode_t mode, uid_t uid, gid_t gid) {
 	}
 
 #ifndef CYGWIN
-	if (set_protection(file, &status, mode) == -1) {
-		return -3;
-	}
+	if (S_ISREG(status.st_mode)) {
+		if (set_protection(file, &status, mode) == -1) {
+			return -3;
+		}
 
-	if (set_ownership(file, &status, uid, gid) == -1) {
-		return -4;
+		if (set_ownership(file, &status, uid, gid) == -1) {
+			return -4;
+		}
 	}
 #else
 	/* prevent unused warning */

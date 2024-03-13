@@ -36,7 +36,7 @@
 			exit;
 		}
 
-		include($library);
+		include $library;
 	}
 	spl_autoload_register("class_autoloader");
 
