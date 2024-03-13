@@ -866,6 +866,14 @@ int last_forwarded_ip(t_http_header *http_headers, t_ip_addr *ip_addr) {
 				return -1;
 			}
 		}
+		
+		if (*begin == '[') {
+			begin++;
+			end--;
+			if (*end != ']') {
+				return -1;
+			}
+		}
 
 		len = end - begin;
 		if (len > MAX_IP_STR_LEN) {
