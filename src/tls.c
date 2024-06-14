@@ -52,7 +52,7 @@
 #define SNI_MAX_HOSTNAME_LEN   128
 #define PK_DER_BUFFER_SIZE    2048
 #ifdef ENABLE_DEBUG
-#define TLS_DEBUG_LEVEL          6
+#define TLS_DEBUG_LEVEL          5
 #endif
 
 typedef struct type_sni_list {
@@ -66,9 +66,10 @@ typedef struct type_sni_list {
 } t_sni_list;
 
 static int ciphersuites[] = {
-//	MBEDTLS_TLS1_3_CHACHA20_POLY1305_SHA256,
-//	MBEDTLS_TLS1_3_AES_256_GCM_SHA384,
-//	MBEDTLS_TLS1_3_AES_128_GCM_SHA256,
+	MBEDTLS_TLS1_3_CHACHA20_POLY1305_SHA256,
+	MBEDTLS_TLS1_3_AES_256_GCM_SHA384,
+	MBEDTLS_TLS1_3_AES_128_GCM_SHA256,
+	MBEDTLS_TLS1_3_AES_128_CCM_SHA256,
 	MBEDTLS_TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
 	MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 	MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
@@ -77,10 +78,10 @@ static int ciphersuites[] = {
 	MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 	MBEDTLS_TLS_ECDHE_RSA_WITH_CAMELLIA_256_GCM_SHA384,
 	MBEDTLS_TLS_ECDHE_RSA_WITH_CAMELLIA_128_GCM_SHA256,
-	MBEDTLS_TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-	MBEDTLS_TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
-	MBEDTLS_TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
-	MBEDTLS_TLS_DHE_RSA_WITH_CAMELLIA_256_GCM_SHA384,
+//	MBEDTLS_TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+//	MBEDTLS_TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
+//	MBEDTLS_TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
+//	MBEDTLS_TLS_DHE_RSA_WITH_CAMELLIA_256_GCM_SHA384,
 	0
 };
 
@@ -164,6 +165,11 @@ static int sni_callback(void *param, mbedtls_ssl_context *context, const unsigne
 int init_tls_module(mbedtls_x509_crt *ca_certificates) {
 	char version[16];
 
+void mbedtls_ssl_conf_dbg(mbedtls_ssl_config *conf,
+                          void (*f_dbg)(void *, int, const char *, int, const char *),
+                          void  *p_dbg);
+
+
 	if (mbedtls_version_get_number() < 0x03000000) {
 		mbedtls_version_get_string(version);
 		fprintf(stderr, "This Hiawatha installation requires at least mbed TLS v3.0.0 and you have v%s.\n", version);
@@ -224,7 +230,7 @@ int init_tls_module(mbedtls_x509_crt *ca_certificates) {
 /* Set TLS configuration
  */
 int tls_set_config(mbedtls_ssl_config **tls_config, t_tls_setup *tls_setup) {
-//	psa_status_t psa_status;
+	psa_status_t psa_status;
 
 	if ((*tls_config = (mbedtls_ssl_config*)malloc(sizeof(mbedtls_ssl_config))) == NULL) {
 		return -1;
@@ -236,7 +242,7 @@ int tls_set_config(mbedtls_ssl_config **tls_config, t_tls_setup *tls_setup) {
 	}
 
 	mbedtls_ssl_conf_min_tls_version(*tls_config, MBEDTLS_SSL_VERSION_TLS1_2);
-	mbedtls_ssl_conf_max_tls_version(*tls_config, MBEDTLS_SSL_VERSION_TLS1_2);
+	mbedtls_ssl_conf_max_tls_version(*tls_config, MBEDTLS_SSL_VERSION_TLS1_3);
 
 	mbedtls_ssl_conf_renegotiation(*tls_config, MBEDTLS_SSL_RENEGOTIATION_DISABLED);
 	mbedtls_ssl_conf_rng(*tls_config, tls_random, &ctr_drbg);
@@ -271,13 +277,11 @@ int tls_set_config(mbedtls_ssl_config **tls_config, t_tls_setup *tls_setup) {
 		mbedtls_ssl_conf_dh_param_bin(*tls_config, dhm_p, sizeof(dhm_p), dhm_g, sizeof(dhm_g));
 	}
 
-/*
 	psa_status = psa_crypto_init();
 	if (psa_status != PSA_SUCCESS) {
 		mbedtls_fprintf(stderr, "Failed to initialize PSA Crypto implementation: %d\n", (int)psa_status);
 		return -1;
 	}
-*/
 
 	return 0;
 }

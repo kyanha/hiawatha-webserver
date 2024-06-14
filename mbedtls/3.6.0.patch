@@ -1,0 +1,26 @@
+diff -u library/ssl_tls13_server.c library/ssl_tls13_server.c
+--- /library/ssl_tls13_server.c	2024-06-13 20:53:59.249560179 +0200
++++ /library/ssl_tls13_server.c	2024-06-13 20:56:46.846283324 +0200
+@@ -1266,6 +1266,8 @@
+     mbedtls_ssl_handshake_params *handshake = ssl->handshake;
+     int hrr_required = 0;
+     int no_usable_share_for_key_agreement = 0;
++    unsigned char legacy_compression_methods_len;
++    unsigned char legacy_compression_methods;
+ 
+ #if defined(MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_SOME_PSK_ENABLED)
+     int got_psk = 0;
+@@ -1363,6 +1365,13 @@
+     p += cipher_suites_len;
+     cipher_suites_end = p;
+ 
++    legacy_compression_methods_len = *p;
++    legacy_compression_methods = *(p+1);
++
++    if (legacy_compression_methods_len != 1 || legacy_compression_methods != 0) {
++        return SSL_CLIENT_HELLO_TLS1_2;
++    }
++
+     /*
+      * Search for the supported versions extension and parse it to determine
+      * if the client supports TLS 1.3.

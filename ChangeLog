@@ -1,3 +1,10 @@
+hiawatha (11.6) stable; urgency=low
+
+  * Enabled TLSv1.3.
+  * mbed TLS updated to 3.6.0.
+
+ -- Hugo Leisink <hugo@leisink.net>  Thu, 13 Jun 2024 21:16:34 +0200
+
 hiawatha (11.5) stable; urgency=low
 
   * mbed TLS updated to 3.5.0.
