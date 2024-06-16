@@ -949,7 +949,7 @@ bool file_can_be_compressed(t_session *session) {
 	if (session->mimetype != NULL) {
 		if (strncmp(session->mimetype, "text/", 5) == 0) {
 			return true;
-		} else if (strcmp(session->mimetype, "image/svg+xml") == 0) {
+		} else if (strcmp(session->mimetype, "image/svg+xml") == 0 && strcmp(session->extension, "svgz") != 0) {
 			return true;
 		}
 	}
