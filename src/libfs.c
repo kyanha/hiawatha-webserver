@@ -403,6 +403,7 @@ int gzip_file(char *src, char *dest) {
 	}
 
 	if ((f_out = gzopen(dest, "w9")) == NULL) {
+		close(f_in);
 		return -1;
 	}
 

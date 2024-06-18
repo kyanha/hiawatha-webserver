@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0)
 project(Hiawatha VERSION 11.6 LANGUAGES C)
 
 # Compiler
-set(CMAKE_C_FLAGS "-O2 -Wall -Wextra ${CMAKE_C_FLAGS} -gdwarf-4")
+set(CMAKE_C_FLAGS "-O2 -Wall -Wextra ${CMAKE_C_FLAGS} -g")
 set(CMAKE_BUILD_TYPE "RelWithDebInfo")
 
 # Options
@@ -67,6 +67,7 @@ check_library_exists(crypt crypt "" HAVE_CRYPT_LIBRARY)
 check_library_exists(${ZLIB_LIBRARIES} gzdopen "" HAVE_Z_LIBRARY)
 
 check_symbol_exists("SO_ACCEPTFILTER" "sys/socket.h" HAVE_ACCF)
+check_symbol_exists(__sun "" SUN)
 
 if(HAVE_CRYPT_LIBRARY)
 	set(CRYPT_LIBRARY "crypt")
@@ -75,7 +76,7 @@ if(HAVE_Z_LIBRARY)
 	set(Z_LIBRARY ${ZLIB_LIBRARIES})
 	include_directories(${ZLIB_INCLUDE_DIR})
 endif()
-if(APPLE OR CYGWIN)
+if(APPLE OR CYGWIN OR SUN)
 	set(CIFS 1)
 endif()
 
@@ -129,6 +130,9 @@ foreach(manpage ${manual_pages_in})
 	configure_file(${manpage}.in ${manpage})
 endforeach()
 configure_file(extra/logrotate.in logrotate.d/hiawatha)
+if(SUN)
+	configure_file(extra/illumos/hiawatha.xml.in extra/illumos/hiawatha.xml)
+endif()
 
 # Binaries
 add_executable(cgi-wrapper ${cgi_wrapper_src})

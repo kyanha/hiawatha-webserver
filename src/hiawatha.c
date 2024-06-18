@@ -790,11 +790,12 @@ int run_webserver(t_settings *settings) {
 	/* Set resource limits
 	 */
 	if (config->set_rlimits) {
+		#ifndef __sun
 		resource_limit.rlim_max = resource_limit.rlim_cur = config->total_connections + 3;
 		if (setrlimit(RLIMIT_NPROC, &resource_limit) != 0) {
 			fprintf(stderr, "Error setting RLIMIT_NPROC.\n");
 		}
-
+		#endif
 		/* system: system.log, exploit.log, garbage.log, debug.log, all bindings, tomahawk connections
 		 * per child: socket, access.log, error.log, 3 CGI pipes
 		 */
