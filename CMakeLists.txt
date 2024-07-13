@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0)
 project(Hiawatha VERSION 11.6 LANGUAGES C)
 
 # Compiler
-set(CMAKE_C_FLAGS "-O2 -Wall -Wextra ${CMAKE_C_FLAGS} -gdwarf-4")
+set(CMAKE_C_FLAGS "-O2 -Wall -Wextra ${CMAKE_C_FLAGS} -g")
 set(CMAKE_BUILD_TYPE "RelWithDebInfo")
 
 # Options
