@@ -332,6 +332,12 @@ pid_t fork_cgi_process(t_session *session, t_cgi_info *cgi_info) {
 		case 0:
 			/* Child. Executes CGI program.
 			 */
+			/* Close all other open filedescriptors.
+			 */
+			close_bindings(session->config->binding);
+			close_client_sockets_for_cgi_run();
+			close_logfiles_for_cgi_run(session->config->first_host);
+
 			dup2(post_pipe[0], STDIN_FILENO);
 			dup2(html_pipe[1], STDOUT_FILENO);
 			dup2(error_pipe[1], STDERR_FILENO);
@@ -346,12 +352,6 @@ pid_t fork_cgi_process(t_session *session, t_cgi_info *cgi_info) {
 			fcntl(STDIN_FILENO, F_SETFD, 0);
 			fcntl(STDOUT_FILENO, F_SETFD, 0);
 			fcntl(STDERR_FILENO, F_SETFD, 0);
-
-			/* Close all other open filedescriptors.
-			 */
-			close_bindings(session->config->binding);
-			close_client_sockets_for_cgi_run();
-			close_logfiles_for_cgi_run(session->config->first_host);
 
 			set_environment(session, NULL);
 
